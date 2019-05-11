@@ -25,8 +25,8 @@ import (
 const defaultEtag = "NONE"
 
 var (
-	metadataURL    = "http://metadata.google.internal/computeMetadata/v1"
-	metadataHang   = "/?recursive=true&alt=json&wait_for_change=true&timeout_sec=60&last_etag="
+	metadataURL    = "http://metadata.google.internal/computeMetadata/v1/?recursive=true&alt=json"
+	metadataHang   = "&wait_for_change=true&timeout_sec=60"
 	defaultTimeout = 70 * time.Second
 	etag           = defaultEtag
 )
@@ -49,6 +49,7 @@ type networkInterfacesJSON struct {
 
 type projectJSON struct {
 	Attributes attributesJSON
+	ProjectID  string `json:"projectId"`
 }
 
 type attributesJSON struct {
@@ -72,11 +73,21 @@ func updateEtag(resp *http.Response) bool {
 }
 
 func watchMetadata(ctx context.Context) (*metadataJSON, error) {
+	return getMetadata(ctx, true)
+}
+
+func getMetadata(ctx context.Context, hang bool) (*metadataJSON, error) {
 	client := &http.Client{
 		Timeout: defaultTimeout,
 	}
 
-	req, err := http.NewRequest("GET", metadataURL+metadataHang+etag, nil)
+	finalURL := metadataURL
+	if hang {
+		finalURL += metadataHang
+	}
+	finalURL += ("&last_etag=" + etag)
+
+	req, err := http.NewRequest("GET", finalURL, nil)
 	if err != nil {
 		return nil, err
 	}

@@ -15,7 +15,7 @@
 package main
 
 import (
-	"github.com/GoogleCloudPlatform/compute-image-windows/logger"
+	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 	"golang.org/x/sys/windows/registry"
 )
 
@@ -24,12 +24,12 @@ var errRegNotExist = registry.ErrNotExist
 func init() {
 	key, _, err := registry.CreateKey(registry.LOCAL_MACHINE, regKeyBase, registry.WRITE)
 	if err != nil {
-		logger.Fatal(err)
+		logger.Fatalf(err.Error())
 	}
 	key.Close()
 	key, _, err = registry.CreateKey(registry.LOCAL_MACHINE, addressKey, registry.WRITE)
 	if err != nil {
-		logger.Fatal(err)
+		logger.Fatalf(err.Error())
 	}
 	key.Close()
 }

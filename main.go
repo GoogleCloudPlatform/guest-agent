@@ -21,11 +21,10 @@ import (
 	"net"
 	"net/url"
 	"os"
-	"runtime"
 	"sync"
 	"time"
 
-	"github.com/GoogleCloudPlatform/compute-image-windows/logger"
+	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 	"github.com/go-ini/ini"
 	"github.com/tarm/serial"
 )
@@ -87,7 +86,7 @@ func parseConfig(file string) (*ini.File, error) {
 func runUpdate() {
 	cfg, err := parseConfig(configPath)
 	if err != nil && !os.IsNotExist(err) {
-		logger.Error(err)
+		logger.Errorf(err.Error())
 	}
 	if cfg == nil {
 		cfg, _ = ini.InsensitiveLoad([]byte{})
@@ -104,7 +103,7 @@ func runUpdate() {
 				return
 			}
 			if err := mgr.set(); err != nil {
-				logger.Error(err)
+				logger.Errorf(err.Error())
 			}
 		}(mgr)
 	}
@@ -126,13 +125,13 @@ func run(ctx context.Context) {
 				if webError == 1 {
 					if urlErr, ok := err.(*url.Error); ok {
 						if _, ok := urlErr.Err.(*net.DNSError); ok {
-							logger.Error("DNS error when requesting metadata, check DNS settings and ensure metadata.internal.google is setup in your hosts file.")
+							logger.Errorf("DNS error when requesting metadata, check DNS settings and ensure metadata.internal.google is setup in your hosts file.")
 						}
 						if _, ok := urlErr.Err.(*net.OpError); ok {
-							logger.Error("Network error when requesting metadata, make sure your instance has an active network and can reach the metadata server.")
+							logger.Errorf("Network error when requesting metadata, make sure your instance has an active network and can reach the metadata server.")
 						}
 					}
-					logger.Error(err)
+					logger.Errorf(err.Error())
 				}
 				webError++
 				time.Sleep(5 * time.Second)
@@ -150,7 +149,7 @@ func run(ctx context.Context) {
 	}()
 
 	<-ctx.Done()
-	logger.Info("GCE Agent Stopped")
+	logger.Infof("GCE Agent Stopped")
 }
 
 // TODO: this doesn't get used in this file, doesn't belong here
@@ -164,10 +163,15 @@ func containsString(s string, ss []string) bool {
 }
 
 func main() {
+	opts := logger.LogOpts{LoggerName: "GCEWindowsAgent"}
+
+	var err error
 	ctx := context.Background()
-	if runtime.GOOS == "windows" {
-		logger.Init("GCEWindowsAgent", "COM1")
+	newMetadata, err = getMetadata(ctx, false)
+	if err == nil {
+		opts.ProjectName = newMetadata.Project.ProjectID
 	}
+	logger.Init(ctx, opts)
 
 	var action string
 	if len(os.Args) < 2 {
@@ -184,6 +188,6 @@ func main() {
 
 	// TODO: more argv parsing is handled in register, rather than all in one place
 	if err := register(ctx, "GCEAgent", "GCEAgent", "", run, action); err != nil {
-		logger.Fatal(err)
+		logger.Fatalf(err.Error())
 	}
 }

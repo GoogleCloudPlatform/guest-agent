@@ -21,7 +21,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/GoogleCloudPlatform/compute-image-windows/logger"
+	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 )
 
 const wsfcDefaultAgentPort = "59998"
@@ -142,11 +142,11 @@ type wsfcAgent struct {
 // Start agent and taking tcp request
 func (a *wsfcAgent) run() error {
 	if a.getState() == running {
-		logger.Infoln("wsfc agent is already running")
+		logger.Infof("wsfc agent is already running")
 		return nil
 	}
 
-	logger.Info("Starting wsfc agent...")
+	logger.Infof("Starting wsfc agent...")
 	listenerAddr, err := net.ResolveTCPAddr("tcp", ":"+a.port)
 	if err != nil {
 		return err
@@ -164,11 +164,11 @@ func (a *wsfcAgent) run() error {
 			if err != nil {
 				// if err is not due to listener closed, return
 				if opErr, ok := err.(*net.OpError); ok && strings.Contains(opErr.Error(), "closed") {
-					logger.Info("wsfc agent - tcp listener closed.")
+					logger.Infof("wsfc agent - tcp listener closed.")
 					return
 				}
 
-				logger.Errorln("wsfc agent - error on accepting request: ", err)
+				logger.Errorf("wsfc agent - error on accepting request: %s", err)
 				continue
 			}
 			a.waitGroup.Add(1)
@@ -176,7 +176,7 @@ func (a *wsfcAgent) run() error {
 		}
 	}()
 
-	logger.Infoln("wsfc agent stared. Listening on port:", a.port)
+	logger.Infof("wsfc agent stared. Listening on port: %s", a.port)
 	a.listener = listener
 
 	return nil
@@ -194,14 +194,14 @@ func (a *wsfcAgent) handleHealthCheckRequest(conn net.Conn) {
 	// Read the incoming connection into the buffer.
 	reqLen, err := conn.Read(buf)
 	if err != nil {
-		logger.Errorln("wsfc - error on processing request:", err)
+		logger.Errorf("wsfc - error on processing request: %s", err)
 		return
 	}
 
 	wsfcIP := strings.TrimSpace(string(buf[:reqLen]))
 	reply, err := checkIPExist(wsfcIP)
 	if err != nil {
-		logger.Errorln("wsfc - error on checking local ip:", err)
+		logger.Errorf("wsfc - error on checking local ip: %s", err)
 	}
 	conn.Write([]byte(reply))
 }
@@ -209,17 +209,17 @@ func (a *wsfcAgent) handleHealthCheckRequest(conn net.Conn) {
 // Stop agent. Will wait for all existing request to be completed.
 func (a *wsfcAgent) stop() error {
 	if a.getState() == stopped {
-		logger.Info("wsfc agent already stopped.")
+		logger.Infof("wsfc agent already stopped.")
 		return nil
 	}
 
-	logger.Info("Stopping wsfc agent...")
+	logger.Infof("Stopping wsfc agent...")
 	// close listener first to avoid taking additional request
 	err := a.listener.Close()
 	// wait for exiting request to finish
 	a.waitGroup.Wait()
 	a.listener = nil
-	logger.Info("wsfc agent stopped.")
+	logger.Infof("wsfc agent stopped.")
 	return err
 }
 

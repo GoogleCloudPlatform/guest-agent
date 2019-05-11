@@ -15,44 +15,8 @@
 package main
 
 import (
-	"bytes"
-	"log"
-	"strings"
 	"testing"
-
-	"github.com/GoogleCloudPlatform/compute-image-windows/logger"
 )
-
-func TestRunUpdate(t *testing.T) {
-	logger.Init("TestRunUpdate", "")
-	var buf bytes.Buffer
-	logger.Log = log.New(&buf, "", 0)
-
-	oldMetadata = &metadataJSON{}
-	newMetadata = &metadataJSON{
-		Instance: instanceJSON{
-			Attributes: attributesJSON{
-				WindowsKeys:           "{}",
-				Diagnostics:           "{}",
-				DisableAddressManager: "false",
-				DisableAccountManager: "false",
-				EnableDiagnostics:     "true",
-				EnableWSFC:            "true",
-				WSFCAddresses:         "1.1.1.1",
-				WSFCAgentPort:         "8000",
-			},
-		},
-	}
-	// This test is a bit simplistic, but should catch any unexpected errors or
-	// race conditions.
-	runUpdate()
-
-	for _, line := range strings.Split(buf.String(), "\n") {
-		if strings.Contains(line, "ERROR") {
-			t.Errorf("error in runUpdate(): %s", line)
-		}
-	}
-}
 
 func TestContainsString(t *testing.T) {
 	table := []struct {
