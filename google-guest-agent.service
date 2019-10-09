@@ -1,0 +1,15 @@
+[Unit]
+Description=Google Compute Engine Guest Agent
+After=network-online.target network.target
+After=google-instance-setup.service
+PartOf=network.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/google_guest_agent
+OOMScoreAdjust=-999
+Restart=always
+StandardOutput=journal+console
+
+[Install]
+WantedBy=multi-user.target

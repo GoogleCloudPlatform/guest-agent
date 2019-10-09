@@ -1,0 +1,194 @@
+{
+  "Name": "build-packages",
+  "Sources": {
+    "startup_deb.sh": "./daisy_startupscript_deb.sh",
+    "startup_goo.sh": "./daisy_startupscript_goo.sh",
+    "startup_rpm.sh": "./daisy_startupscript_rpm.sh",
+    "common.sh": "./common.sh"
+  },
+  "Vars": {
+    "gcs_path": {
+      "Value": "${SCRATCHPATH}/packages",
+      "Description": "GCS path to dump the built packages in: gs://my-bucket/packages"
+    },
+    "base_repo": {
+      "Value": "GoogleCloudPlatform",
+      "Description": "Base GitHub repo"
+    },
+    "repo": {
+      "Value": "guest-agent",
+      "Description": "Github Repository"
+    },
+    "pull_ref": {
+      "Value": "master",
+      "Description": "Branch against which agent need to build"
+    }
+  },
+  "Steps": {
+    "build-packages": {
+      "CreateInstances": [
+        {
+          "disks": [
+            {
+              "initializeParams": {
+                "diskType": "pd-ssd",
+                "sourceImage": "projects/debian-cloud/global/images/family/debian-9"
+              }
+            }
+          ],
+          "Metadata": {
+            "base-repo": "${base_repo}",
+            "repo": "${repo}",
+            "pull-ref": "${pull_ref}"
+          },
+          "machineType": "n1-standard-2",
+          "name": "inst-build-deb",
+          "StartupScript": "startup_deb.sh",
+          "Scopes": ["https://www.googleapis.com/auth/devstorage.read_write"]
+        },
+        {
+          "disks": [
+            {
+              "initializeParams": {
+                "diskType": "pd-ssd",
+                "sourceImage": "projects/debian-cloud/global/images/family/debian-9"
+              }
+            }
+          ],
+          "Metadata": {
+            "base-repo": "${base_repo}",
+            "repo": "${repo}",
+            "pull-ref": "${pull_ref}"
+          },
+          "machineType": "n1-standard-2",
+          "name": "inst-build-goo",
+          "StartupScript": "startup_goo.sh",
+	      "Scopes": ["https://www.googleapis.com/auth/devstorage.read_write"]
+        },
+        {
+          "disks": [
+            {
+              "initializeParams": {
+                "diskType": "pd-ssd",
+                "sourceImage": "projects/centos-cloud/global/images/family/centos-6"
+              }
+            }
+          ],
+          "Metadata": {
+            "base-repo": "${base_repo}",
+            "repo": "${repo}",
+            "pull-ref": "${pull_ref}"
+          },
+          "machineType": "n1-standard-2",
+          "name": "inst-build-el6",
+          "StartupScript": "startup_rpm.sh",
+	      "Scopes": ["https://www.googleapis.com/auth/devstorage.read_write"]
+        },
+        {
+          "disks": [
+            {
+              "initializeParams": {
+                "diskType": "pd-ssd",
+                "sourceImage": "projects/centos-cloud/global/images/family/centos-7"
+              }
+            }
+          ],
+          "Metadata": {
+            "base-repo": "${base_repo}",
+            "repo": "${repo}",
+            "pull-ref": "${pull_ref}"
+          },
+          "machineType": "n1-standard-2",
+          "name": "inst-build-el7",
+          "StartupScript": "startup_rpm.sh",
+	      "Scopes": ["https://www.googleapis.com/auth/devstorage.read_write"]
+        },
+        {
+          "disks": [
+            {
+              "initializeParams": {
+                "diskType": "pd-ssd",
+                "sourceImage": "projects/rhel-cloud/global/images/family/rhel-8"
+              }
+            }
+          ],
+          "Metadata": {
+            "base-repo": "${base_repo}",
+            "repo": "${repo}",
+            "pull-ref": "${pull_ref}"
+          },
+          "machineType": "n1-standard-2",
+          "name": "inst-build-el8",
+          "StartupScript": "startup_rpm.sh",
+	      "Scopes": ["https://www.googleapis.com/auth/devstorage.read_write"]
+        }
+      ]
+    },
+    "wait-for-build": {
+      "Timeout": "10m",
+      "WaitForInstancesSignal": [
+        {
+          "Name": "inst-build-deb",
+          "SerialOutput": {
+            "Port": 1,
+            "SuccessMatch": "Package build success",
+            "FailureMatch": "build failed",
+            "StatusMatch": "build status"
+          }
+        },
+        {
+          "Name": "inst-build-goo",
+          "SerialOutput": {
+            "Port": 1,
+            "SuccessMatch": "Package build success",
+            "FailureMatch": "build failed",
+            "StatusMatch": "build status"
+          }
+        },
+        {
+          "Name": "inst-build-el6",
+          "SerialOutput": {
+            "Port": 1,
+            "SuccessMatch": "Package build success",
+            "FailureMatch": "build failed",
+            "StatusMatch": "build status"
+          }
+        },
+        {
+          "Name": "inst-build-el7",
+          "SerialOutput": {
+            "Port": 1,
+            "SuccessMatch": "Package build success",
+            "FailureMatch": "build failed",
+            "StatusMatch": "build status"
+          }
+        },
+        {
+          "Name": "inst-build-el8",
+          "SerialOutput": {
+            "Port": 1,
+            "SuccessMatch": "Package build success",
+            "FailureMatch": "build failed",
+            "StatusMatch": "build status"
+          }
+        }
+      ]
+    },
+    "copy-packages": {
+      "CopyGCSObjects": [
+        {
+          "Source": "${OUTSPATH}/",
+          "Destination": "${gcs_path}/"
+        }
+      ]
+    }
+  },
+  "Dependencies": {
+    "wait-for-build": [
+      "build-packages"
+    ],
+    "copy-packages": [
+      "wait-for-build"
+    ]
+  }
+}
