@@ -1,0 +1,28 @@
+#!/usr/bin/make -f
+
+export PATH := /tmp/go/bin:$(PATH)
+export SHELL := env PATH=$(PATH) /bin/bash
+
+export DH_OPTIONS
+export DH_GOPKG := github.com/GoogleCloudPlatform/guest-agent
+export CGO_ENABLED := 0
+export GOCACHE := /tmp/.cache
+
+%:
+	dh $@  --buildsystem=golang --with=golang,systemd
+
+override_dh_auto_install:
+	# Binary-only package.
+	dh_auto_install -- --no-source
+
+override_dh_golang:
+	# We don't use any packaged dependencies, so skip dh_golang step.
+
+override_dh_auto_build:
+	dh_auto_build -O--buildsystem=golang -- -ldflags="-s -w -X main.version=$(VERSION)" 
+
+override_dh_installinit:
+	dh_installinit --noscripts
+
+override_dh_installsystemd:
+	dh_installsystemd --no-stop-on-upgrade
