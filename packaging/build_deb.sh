@@ -13,8 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set -e
-
 DEBIAN_FRONTEND=noninteractive
 dpkg_working_dir="/tmp/debpackage"
 
@@ -22,7 +20,8 @@ dpkg_working_dir="/tmp/debpackage"
 
 # Install dependencies.
 # golang-go is installed for dh_helpers; we build with custom go below
-apt-get update && apt-get -y install debhelper devscripts build-essential dh-golang dh-systemd golang-go
+try_command apt-get update && apt-get -y install debhelper devscripts \
+  build-essential dh-golang dh-systemd golang-go
 
 # Ensure deps are met
 dpkg-checkbuilddeps packaging/debian/control
