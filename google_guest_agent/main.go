@@ -115,11 +115,12 @@ func runUpdate() {
 	}
 
 	var wg sync.WaitGroup
-	var mgrs []manager
-	if runtime.GOOS == "windows" {
-		mgrs = []manager{newWsfcManager(), &addressMgr{}, &winAccountsMgr{}}
-	} else {
-		mgrs = []manager{&clockskewMgr{}}
+	mgrs := []manager{newWsfcManager(), &addressMgr{}}
+	switch runtime.GOOS {
+	case "windows":
+		mgrs = append(mgrs, &winAccountsMgr{})
+	default:
+		mgrs = append(mgrs, []manager{&clockskewMgr{}, &osloginMgr{}, &accountsMgr{}}...)
 	}
 	for _, mgr := range mgrs {
 		wg.Add(1)
