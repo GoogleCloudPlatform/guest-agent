@@ -75,12 +75,14 @@ func (o *osloginMgr) set() error {
 		logger.Errorf("Error updating PAM config: %v.", err)
 	}
 
-	if err := createOSLoginDirs(); err != nil {
-		logger.Errorf("Error creating OS Login directory: %v.", err)
-	}
+	if enable {
+		if err := createOSLoginDirs(); err != nil {
+			logger.Errorf("Error creating OS Login directory: %v.", err)
+		}
 
-	if err := createOSLoginSudoersFile(); err != nil {
-		logger.Errorf("Error creating OS Login sudoers file: %v.", err)
+		if err := createOSLoginSudoersFile(); err != nil {
+			logger.Errorf("Error creating OS Login sudoers file: %v.", err)
+		}
 	}
 
 	// Services which need to be restarted primarily due to caching issues.

@@ -392,7 +392,7 @@ func createSudoersGroup() error {
 }
 
 func addUserToGroup(user, group string) error {
-	gpasswdadd := config.Section("Accounts").Key("useradd_").MustString("gpasswd -a {user}")
+	gpasswdadd := config.Section("Accounts").Key("gpasswd_add_cmd").MustString("gpasswd -a {user} {group}")
 	return runUserGroupCmd(gpasswdadd, user, group)
 }
 
