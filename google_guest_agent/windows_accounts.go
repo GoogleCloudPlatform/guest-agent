@@ -34,6 +34,7 @@ import (
 
 var (
 	accountRegKey = "PublicKeys"
+	credsWriter   = &serialPort{"COM4"}
 )
 
 // newPwd will generate a random password that meets Windows complexity
@@ -94,7 +95,8 @@ func printCreds(creds *credsJSON) error {
 	if err != nil {
 		return err
 	}
-	return writeSerial("COM4", append(data, []byte("\n")...))
+	_, err = credsWriter.Write(append(data, []byte("\n")...))
+	return err
 }
 
 var badExpire []string

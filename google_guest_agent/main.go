@@ -48,20 +48,19 @@ const (
 	regKeyBase    = `SOFTWARE\Google\ComputeEngine`
 )
 
-func writeSerial(port string, msg []byte) error {
-	c := &serial.Config{Name: port, Baud: 115200}
-	s, err := serial.OpenPort(c)
-	if err != nil {
-		return err
-	}
-	defer closer(s)
+type serialPort struct {
+	port string
+}
 
-	_, err = s.Write(msg)
+func (s *serialPort) Write(b []byte) (int, error) {
+	c := &serial.Config{Name: s.port, Baud: 115200}
+	p, err := serial.OpenPort(c)
 	if err != nil {
-		return err
+		return 0, err
 	}
+	defer p.Close()
 
-	return nil
+	return p.Write(b)
 }
 
 type manager interface {
@@ -145,6 +144,10 @@ func run(ctx context.Context) {
 		logger.Warningf("Couldn't detect OS release")
 	}
 
+	if err := agentInit(); err != nil {
+		logger.Errorf("Error running instance setup: %v", err)
+	}
+
 	go func() {
 		oldMetadata = &metadata{}
 		webError := 0
@@ -220,9 +223,9 @@ func closer(c io.Closer) {
 func main() {
 	var opts logger.LogOpts
 	if runtime.GOOS == "windows" {
-		opts = logger.LogOpts{LoggerName: programName, FormatFunction: logFormat}
+		opts = logger.LogOpts{LoggerName: programName, FormatFunction: logFormat, Writers: []io.Writer{&serialPort{"COM1"}}}
 	} else {
-		opts = logger.LogOpts{LoggerName: programName, Stdout: true}
+		opts = logger.LogOpts{LoggerName: programName, Writers: []io.Writer{os.Stdout}}
 	}
 
 	var err error
@@ -231,7 +234,11 @@ func main() {
 	if err == nil {
 		opts.ProjectName = newMetadata.Project.ProjectID
 	}
-	logger.Init(ctx, opts)
+
+	if err := logger.Init(ctx, opts); err != nil {
+		fmt.Printf("Error initializing logger: %v", err)
+		os.Exit(1)
+	}
 
 	var action string
 	if len(os.Args) < 2 {

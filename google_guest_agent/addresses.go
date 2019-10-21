@@ -15,6 +15,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -31,7 +32,8 @@ var (
 	oldWSFCAddresses  string
 	oldWSFCEnable     bool
 	interfacesEnabled bool
-	protoID           = 66
+
+	protoID = 66
 )
 
 type addressMgr struct{}
@@ -112,7 +114,22 @@ func getInterfaceByMAC(mac string, ifs []net.Interface) (net.Interface, error) {
 	return net.Interface{}, fmt.Errorf("no interface found with MAC %s", mac)
 }
 
-func getRoutes(ifname string) ([]string, error) {
+// https://www.ietf.org/rfc/rfc1354.txt
+// Only fields that we currently care about.
+type ipForwardEntry struct {
+	ipForwardDest    net.IP
+	ipForwardMask    net.IPMask
+	ipForwardNextHop net.IP
+	ipForwardIfIndex int32
+	ipForwardMetric1 int32
+}
+
+// TODO: getLocalRoutes and getIPForwardEntries should be merged.
+func getLocalRoutes(ifname string) ([]string, error) {
+	if runtime.GOOS == "windows" {
+		return nil, errors.New("getLocalRoutes unimplemented on Windows")
+	}
+
 	args := fmt.Sprintf("route list table local type local scope host dev %s proto %d", ifname, protoID)
 	out, err := exec.Command("ip", strings.Split(args, " ")...).Output()
 	if err != nil {
@@ -132,7 +149,13 @@ func getRoutes(ifname string) ([]string, error) {
 	return res, nil
 }
 
-func addRoute(ip, ifname string) error {
+// TODO: addLocalRoute and addRoute should be merged with the addition of ipForwardType to ipForwardEntry.
+func addLocalRoute(ip, ifname string) error {
+	if runtime.GOOS == "windows" {
+		return errors.New("addLocalRoute unimplemented on Windows")
+	}
+
+	// TODO: Subnet size should be parsed from alias IP entries.
 	if !strings.Contains(ip, "/") {
 		ip = ip + "/32"
 	}
@@ -140,7 +163,13 @@ func addRoute(ip, ifname string) error {
 	return runCmd(exec.Command("ip", strings.Split(args, " ")...))
 }
 
-func removeRoute(ip, ifname string) error {
+// TODO: removeLocalRoute should be changed to removeIPForwardEntry and match getIPForwardEntries.
+func removeLocalRoute(ip, ifname string) error {
+	if runtime.GOOS == "windows" {
+		return errors.New("removeLocalRoute unimplemented on Windows")
+	}
+
+	// TODO: Subnet size should be parsed from alias IP entries.
 	if !strings.Contains(ip, "/") {
 		ip = ip + "/32"
 	}
@@ -265,14 +294,28 @@ func (a *addressMgr) set() error {
 		}
 
 		var forwardedIPs []string
+		var configuredIPs []string
 		if runtime.GOOS == "windows" {
-			forwardedIPs, err = getForwardsFromRegistry(ni.Mac)
+			addrs, err := iface.Addrs()
+			if err != nil {
+				logger.Errorf("Error getting addresses for interface %s: %s", iface.Name, err)
+			}
+			for _, addr := range addrs {
+				configuredIPs = append(configuredIPs, strings.TrimSuffix(addr.String(), "/32"))
+			}
+			regFwdIPs, err := getForwardsFromRegistry(ni.Mac)
 			if err != nil {
 				logger.Errorf("Error getting forwards from registry: %s", err)
 				continue
 			}
+			for _, ip := range configuredIPs {
+				// Only add to forwardedIPs if the interface is setup and is in the registry.
+				if containsString(ip, regFwdIPs) {
+					forwardedIPs = append(forwardedIPs, ip)
+				}
+			}
 		} else {
-			forwardedIPs, err = getRoutes(iface.Name)
+			forwardedIPs, err = getLocalRoutes(iface.Name)
 			if err != nil {
 				logger.Errorf("Error getting routes: %v", err)
 				continue
@@ -296,26 +339,21 @@ func (a *addressMgr) set() error {
 			logger.Infof(msg)
 		}
 
-		addrs, err := iface.Addrs()
-		if err != nil {
-			logger.Errorf("Error getting addresses for interface %s: %s", iface.Name, err)
-		}
-
-		var configuredIPs []string
-		for _, addr := range addrs {
-			configuredIPs = append(configuredIPs, strings.TrimSuffix(addr.String(), "/32"))
-		}
-
 		var registryEntries []string
-		for _, ip := range toAdd {
+		for _, ip := range wantIPs {
+			// If the IP is not in the list of ones to add, add to registry list and continue.
+			if !containsString(ip, toAdd) {
+				registryEntries = append(registryEntries, ip)
+				continue
+			}
 			var err error
 			if runtime.GOOS == "windows" {
-				if containsString(ip, configuredIPs) {
-					continue
+				// Don't addAddress if this is already configured.
+				if !containsString(ip, configuredIPs) {
+					err = addAddress(net.ParseIP(ip), net.IPv4Mask(255, 255, 255, 255), uint32(iface.Index))
 				}
-				err = addAddressWindows(net.ParseIP(ip), net.ParseIP("255.255.255.255"), uint32(iface.Index))
 			} else {
-				err = addRoute(ip, iface.Name)
+				err = addLocalRoute(ip, iface.Name)
 			}
 			if err == nil {
 				registryEntries = append(registryEntries, ip)
@@ -330,9 +368,9 @@ func (a *addressMgr) set() error {
 				if !containsString(ip, configuredIPs) {
 					continue
 				}
-				err = removeAddressWindows(net.ParseIP(ip), uint32(iface.Index))
+				err = removeAddress(net.ParseIP(ip), uint32(iface.Index))
 			} else {
-				err = removeRoute(ip, iface.Name)
+				err = removeLocalRoute(ip, iface.Name)
 			}
 			if err != nil {
 				logger.Errorf("error removing route: %v", err)

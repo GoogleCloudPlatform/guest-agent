@@ -21,6 +21,11 @@ import (
 
 var errRegNotExist = registry.ErrNotExist
 
+type (
+	DWORD  uint32
+	LPWSTR *uint16
+)
+
 func init() {
 	key, _, err := registry.CreateKey(registry.LOCAL_MACHINE, regKeyBase, registry.WRITE)
 	if err != nil {
