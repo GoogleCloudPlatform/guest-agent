@@ -9,10 +9,10 @@
     "GCEWindowsAgent.exe": "<ProgramFiles>/Google/Compute Engine/agent/GCEWindowsAgent.exe"
   },
   "install": {
-    "path": "agent_install.ps1"
+    "path": "packaging/googet/agent_install.ps1"
   },
   "uninstall": {
-    "path": "agent_uninstall.ps1"
+    "path": "packaging/googet/agent_uninstall.ps1"
   },
   "releaseNotes": [
     "4.7.0 - Use guest logging library.",
