@@ -12,13 +12,11 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-if (-not (Get-Service 'GCEAgent' -ErrorAction SilentlyContinue)) {
-  New-Service -Name 'GCEAgent' -BinaryPathName '"C:\Program Files\Google\Compute Engine\agent\GCEWindowsAgent.exe"' -StartupType Automatic -Description 'Google Compute Engine Agent'
-}
-
-$config = "${env:ProgramFiles}\Google\Compute Engine\instance_configs.cfg"
-if (-not (Test-Path $config)) {
-  @'
+$name = 'GCEAgent'
+$path = '"C:\Program Files\Google\Compute Engine\agent\GCEWindowsAgent.exe"'
+$display_name = 'Google Compute Engine Agent'
+$description = 'Google Compute Engine Agent'
+$initial_config = @'
 # GCE Instance Configuration
 
 # For details on what can be configured, see:
@@ -29,7 +27,41 @@ if (-not (Test-Path $config)) {
 
 # [addressManager]
 # disable=false
-'@ | Set-Content -Path $config -Encoding ASCII
+'@
+
+function Set-FailureMode {
+  # Restart service after 1s, then 2s. Reset error counter after 60s.
+  sc.exe failure $name reset= 60 actions= restart/1000/restart/2000
 }
 
-Restart-Service GCEAgent -Verbose
+try {
+  if (-not (Get-Service $name -ErrorAction SilentlyContinue)) {
+    New-Service -Name $name `
+                -DisplayName $display_name `
+                -BinaryPathName $path `
+                -StartupType Automatic `
+                -Description $description
+
+    Set-FailureMode
+  } 
+  else {
+    Set-Service -Name $name `
+                -DisplayName $display_name `
+                -Description $description
+    # Set-Service can not set the BinaryPathName.
+    Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Services\${name}" -Name ImagePath -Value $path
+    Set-FailureMode
+  }
+
+  $config = "${env:ProgramFiles}\Google\Compute Engine\instance_configs.cfg"
+  if (-not (Test-Path $config)) {
+    $initial_config | Set-Content -Path $config -Encoding ASCII
+  }
+
+  Restart-Service $name -Verbose
+}
+catch {
+  Write-Output $_.InvocationInfo.PositionMessage
+  Write-Output "Install failed: $($_.Exception.Message)"
+  exit 1
+}

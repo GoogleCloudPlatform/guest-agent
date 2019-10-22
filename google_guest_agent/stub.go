@@ -40,11 +40,11 @@ func writeRegMultiString(key, name string, value []string) error {
 	return nil
 }
 
-func addAddressWindows(ip, mask net.IP, index uint32) error {
+func addAddress(ip net.IP, mask net.IPMask, index uint32) error {
 	return nil
 }
 
-func removeAddressWindows(ip net.IP, index uint32) error {
+func removeAddress(ip net.IP, index uint32) error {
 	return nil
 }
 

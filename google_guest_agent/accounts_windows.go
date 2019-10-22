@@ -31,9 +31,6 @@ var (
 )
 
 type (
-	DWORD  uint32
-	LPWSTR *uint16
-
 	USER_INFO_0 struct {
 		Usri0_name LPWSTR
 	}
@@ -108,7 +105,7 @@ func resetPwd(username, pwd string) error {
 		uintptr(unsafe.Pointer(&USER_INFO_1003{pPtr})),
 		uintptr(0))
 	if ret != 0 {
-		return fmt.Errorf("nonzero return code from NetUserSetInfo: %d", ret)
+		return fmt.Errorf("nonzero return code from NetUserSetInfo: %s", syscall.Errno(ret))
 	}
 	return nil
 }
@@ -134,7 +131,7 @@ func addToGroup(username, group string) error {
 	)
 
 	if ret != 0 {
-		return fmt.Errorf("nonzero return code from NetLocalGroupAddMembers: %d", ret)
+		return fmt.Errorf("nonzero return code from NetLocalGroupAddMembers: %s", syscall.Errno(ret))
 	}
 	return nil
 }
@@ -162,7 +159,7 @@ func createAdminUser(username, pwd string) error {
 		uintptr(0),
 	)
 	if ret != 0 {
-		return fmt.Errorf("nonzero return code from NetUserAdd: %d", ret)
+		return fmt.Errorf("nonzero return code from NetUserAdd: %s", syscall.Errno(ret))
 	}
 	return addToGroup(username, "Administrators")
 }
@@ -179,7 +176,7 @@ func userExists(name string) (bool, error) {
 		uintptr(unsafe.Pointer(&USER_INFO_0{})),
 	)
 	if ret != 0 {
-		return false, fmt.Errorf("nonzero return code from NetUserGetInfo: %d", ret)
+		return false, fmt.Errorf("nonzero return code from NetUserGetInfo: %s", syscall.Errno(ret))
 	}
 
 	return true, nil
