@@ -1,4 +1,4 @@
-google-guest-agent (1:20191009.00-g1) stable; urgency=medium
+google-guest-agent (1:20191021.00-g1) stable; urgency=medium
 
   * Extend windows agent for multi platform.
 

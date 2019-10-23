@@ -1,6 +1,6 @@
 module github.com/GoogleCloudPlatform/guest-agent
 
-go 1.13
+go 1.12
 
 require (
 	github.com/GoogleCloudPlatform/guest-logging-go v0.0.0-20191018162143-d6c1e38c4e8f

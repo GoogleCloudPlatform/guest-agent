@@ -41,7 +41,7 @@ case ${RELEASE} in
     yum install -y git2u
     ;;
   *) 
-    yum install -y git
+    try_command yum install -y git
     ;;
 esac
 

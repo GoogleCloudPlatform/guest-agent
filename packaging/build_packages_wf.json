@@ -32,14 +32,15 @@
             {
               "initializeParams": {
                 "diskType": "pd-ssd",
-                "sourceImage": "projects/debian-cloud/global/images/family/debian-9"
+                "sourceImage": "projects/debian-cloud/global/images/family/debian-10"
               }
             }
           ],
           "Metadata": {
             "base-repo": "${base_repo}",
             "repo": "${repo}",
-            "pull-ref": "${pull_ref}"
+            "pull-ref": "${pull_ref}",
+            "enable-os-inventory": "false"
           },
           "machineType": "n1-standard-2",
           "name": "inst-build-deb",
@@ -51,14 +52,15 @@
             {
               "initializeParams": {
                 "diskType": "pd-ssd",
-                "sourceImage": "projects/debian-cloud/global/images/family/debian-9"
+                "sourceImage": "projects/debian-cloud/global/images/family/debian-10"
               }
             }
           ],
           "Metadata": {
             "base-repo": "${base_repo}",
             "repo": "${repo}",
-            "pull-ref": "${pull_ref}"
+            "pull-ref": "${pull_ref}",
+            "enable-os-inventory": "false"
           },
           "machineType": "n1-standard-2",
           "name": "inst-build-goo",
@@ -77,7 +79,8 @@
           "Metadata": {
             "base-repo": "${base_repo}",
             "repo": "${repo}",
-            "pull-ref": "${pull_ref}"
+            "pull-ref": "${pull_ref}",
+            "enable-os-inventory": "false"
           },
           "machineType": "n1-standard-2",
           "name": "inst-build-el6",
@@ -96,7 +99,8 @@
           "Metadata": {
             "base-repo": "${base_repo}",
             "repo": "${repo}",
-            "pull-ref": "${pull_ref}"
+            "pull-ref": "${pull_ref}",
+            "enable-os-inventory": "false"
           },
           "machineType": "n1-standard-2",
           "name": "inst-build-el7",
@@ -108,14 +112,15 @@
             {
               "initializeParams": {
                 "diskType": "pd-ssd",
-                "sourceImage": "projects/rhel-cloud/global/images/family/rhel-8"
+                "sourceImage": "projects/centos-cloud/global/images/family/centos-8"
               }
             }
           ],
           "Metadata": {
             "base-repo": "${base_repo}",
             "repo": "${repo}",
-            "pull-ref": "${pull_ref}"
+            "pull-ref": "${pull_ref}",
+            "enable-os-inventory": "false"
           },
           "machineType": "n1-standard-2",
           "name": "inst-build-el8",

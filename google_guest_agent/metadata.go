@@ -15,8 +15,10 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"strconv"
@@ -39,6 +41,39 @@ var (
 type metadata struct {
 	Instance instance
 	Project  project
+}
+
+func (m *metadata) UnmarshalJSON(b []byte) error {
+	// We can't unmarshal into metadata directly as it would create an infinite loop.
+	type temp metadata
+	var t temp
+	err := json.Unmarshal(b, &t)
+	if err == nil {
+		*m = metadata(t)
+		return nil
+	}
+
+	// If this is a syntax error return a useful error.
+	sErr, ok := err.(*json.SyntaxError)
+	if !ok {
+		return err
+	}
+
+	// Byte number where the error line starts.
+	start := bytes.LastIndex(b[:sErr.Offset], []byte("\n")) + 1
+	// Assume end byte of error line is EOF unless this isn't the last line.
+	end := len(b)
+	if i := bytes.Index(b[start:], []byte("\n")); i >= 0 {
+		end = start + i
+	}
+
+	// Position of error in line (where to place the '^').
+	pos := int(sErr.Offset) - start
+	if pos != 0 {
+		pos = pos - 1
+	}
+
+	return fmt.Errorf("JSON syntax error: %s \n%s\n%s^", err, b[start:end], strings.Repeat(" ", pos))
 }
 
 type virtualClock struct {
@@ -89,6 +124,27 @@ type windowsKey struct {
 
 type windowsKeys []windowsKey
 
+func (k *windowsKeys) UnmarshalJSON(b []byte) error {
+	var s string
+	if err := json.Unmarshal(b, &s); err != nil {
+		return err
+	}
+	for _, jskey := range strings.Split(s, "\n") {
+		var wk windowsKey
+		if err := json.Unmarshal([]byte(jskey), &wk); err != nil {
+			if !containsString(jskey, badKeys) {
+				logger.Errorf("failed to unmarshal windows key from metadata: %s", err)
+				badKeys = append(badKeys, jskey)
+			}
+			continue
+		}
+		if wk.Exponent != "" && wk.Modulus != "" && wk.UserName != "" && !wk.expired() {
+			*k = append(*k, wk)
+		}
+	}
+	return nil
+}
+
 func (a *attributes) UnmarshalJSON(b []byte) error {
 	var mkbool = func(value bool) *bool {
 		res := new(bool)
@@ -118,6 +174,7 @@ func (a *attributes) UnmarshalJSON(b []byte) error {
 	a.Diagnostics = temp.Diagnostics
 	a.WSFCAddresses = temp.WSFCAddresses
 	a.WSFCAgentPort = temp.WSFCAgentPort
+	a.WindowsKeys = temp.WindowsKeys
 
 	value, err := strconv.ParseBool(temp.BlockProjectKeys)
 	if err == nil {
@@ -154,27 +211,6 @@ func (a *attributes) UnmarshalJSON(b []byte) error {
 	if temp.OldSSHKeys != "" {
 		a.BlockProjectKeys = true
 		a.SSHKeys = append(a.SSHKeys, strings.Split(temp.OldSSHKeys, "\n")...)
-	}
-	return nil
-}
-
-func (wks *windowsKeys) UnmarshalJSON(b []byte) error {
-	var s string
-	if err := json.Unmarshal(b, &s); err != nil {
-		return err
-	}
-	for _, jskey := range strings.Split(s, "\n") {
-		var wk windowsKey
-		if err := json.Unmarshal([]byte(jskey), &wk); err != nil {
-			if !containsString(jskey, badKeys) {
-				logger.Errorf("failed to unmarshal windows key from metadata: %s", err)
-				badKeys = append(badKeys, jskey)
-			}
-			continue
-		}
-		if wk.Exponent != "" && wk.Modulus != "" && wk.UserName != "" && !wk.expired() {
-			*wks = append(*wks, wk)
-		}
 	}
 	return nil
 }

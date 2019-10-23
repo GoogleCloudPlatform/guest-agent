@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -27,13 +28,14 @@ import (
 func TestWatchMetadata(t *testing.T) {
 	etag1, etag2 := "foo", "bar"
 	var req int
+	et := time.Now().Add(10 * time.Second).Format(time.RFC3339)
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if req == 0 {
 			w.Header().Set("etag", etag1)
 		} else {
 			w.Header().Set("etag", etag2)
 		}
-		fmt.Fprintln(w, `{"project":{"attributes":{"wsfc-addrs":"foo"}}}`)
+		fmt.Fprintf(w, `{"instance":{"attributes":{"enable-oslogin":"true","ssh-keys":"name:ssh-rsa [KEY] hostname\nname:ssh-rsa [KEY] hostname","windows-keys":"{}\n{\"expireOn\":\"%s\",\"exponent\":\"exponent\",\"modulus\":\"modulus\",\"username\":\"username\"}","wsfc-addrs":"foo"}}}`, et)
 		req++
 	}))
 	defer ts.Close()
@@ -42,19 +44,25 @@ func TestWatchMetadata(t *testing.T) {
 	// So that the test wont timeout.
 	defaultTimeout = 1 * time.Second
 
-	want := "foo"
+	want := attributes{
+		EnableOSLogin: true,
+		WSFCAddresses: "foo",
+		WindowsKeys:   windowsKeys{windowsKey{Exponent: "exponent", UserName: "username", Modulus: "modulus", ExpireOn: et}},
+		SSHKeys:       []string{"name:ssh-rsa [KEY] hostname", "name:ssh-rsa [KEY] hostname"},
+	}
 	for _, e := range []string{etag1, etag2} {
 		got, err := watchMetadata(context.Background())
 		if err != nil {
-			t.Fatalf("error running getMetadata: %v", err)
+			t.Fatalf("error running watchMetadata: %v", err)
 		}
 
-		if got.Project.Attributes.WSFCAddresses != want {
-			t.Errorf("%q != %q", got.Project.Attributes.WSFCAddresses, want)
+		gotA := got.Instance.Attributes
+		if !reflect.DeepEqual(gotA, want) {
+			t.Fatalf("Did not parse expected metadata.\ngot:\n'%+v'\nwant:\n'%+v'", gotA, want)
 		}
 
 		if etag != e {
-			t.Errorf("etag not updated as expected (%q != %q)", etag, e)
+			t.Fatalf("etag not updated as expected (%q != %q)", etag, e)
 		}
 	}
 }
