@@ -18,6 +18,7 @@ package main
 
 import (
 	"errors"
+	"net"
 )
 
 // TODO: addLocalRoute and addRoute should be merged with the addition of ipForwardType to ipForwardEntry.
@@ -28,4 +29,12 @@ func addIPForwardEntry(route ipForwardEntry) error {
 // TODO: getLocalRoutes and getIPForwardEntries should be merged.
 func getIPForwardEntries() ([]ipForwardEntry, error) {
 	return nil, errors.New("getIPForwardEntries unimplemented on non Windows systems")
+}
+
+func addAddress(ip net.IP, mask net.IPMask, index uint32) error {
+	return errors.New("addAddress unimplemented on non Windows systems")
+}
+
+func removeAddress(ip net.IP, index uint32) error {
+	return errors.New("removeAddress unimplemented on non Windows systems")
 }

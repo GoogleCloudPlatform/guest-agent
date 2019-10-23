@@ -110,7 +110,7 @@ func resetPwd(username, pwd string) error {
 	return nil
 }
 
-func addToGroup(username, group string) error {
+func addUserToGroup(username, group string) error {
 	gPtr, err := syscall.UTF16PtrFromString(group)
 	if err != nil {
 		return fmt.Errorf("error encoding group to UTF16: %v", err)
@@ -130,13 +130,14 @@ func addToGroup(username, group string) error {
 		uintptr(1),
 	)
 
-	if ret != 0 {
+	// Ignore ERROR_MEMBER_IN_ALIAS (1378).
+	if ret != 0 && ret != 1378 {
 		return fmt.Errorf("nonzero return code from NetLocalGroupAddMembers: %s", syscall.Errno(ret))
 	}
 	return nil
 }
 
-func createAdminUser(username, pwd string) error {
+func createUser(username, pwd string) error {
 	uPtr, err := syscall.UTF16PtrFromString(username)
 	if err != nil {
 		return fmt.Errorf("error encoding username to UTF16: %v", err)
@@ -161,7 +162,7 @@ func createAdminUser(username, pwd string) error {
 	if ret != 0 {
 		return fmt.Errorf("nonzero return code from NetUserAdd: %s", syscall.Errno(ret))
 	}
-	return addToGroup(username, "Administrators")
+	return nil
 }
 
 func userExists(name string) (bool, error) {

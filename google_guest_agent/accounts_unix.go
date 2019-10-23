@@ -1,4 +1,4 @@
-//  Copyright 2017 Google Inc. All Rights Reserved.
+//  Copyright 2019 Google Inc. All Rights Reserved.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -16,24 +16,21 @@
 
 package main
 
-import (
-	"errors"
-)
+import "os/user"
 
-var errRegNotExist = errors.New("error")
-
-func resetPwd(username, pwd string) error {
-	return nil
+func createUser(username, _ string) error {
+	useradd := config.Section("Accounts").Key("useradd_cmd").MustString("useradd -m -s /bin/bash -p * {user}")
+	return runUserGroupCmd(useradd, username, "")
 }
 
-func readRegMultiString(key, name string) ([]string, error) {
-	return nil, nil
+func addUserToGroup(user, group string) error {
+	gpasswdadd := config.Section("Accounts").Key("gpasswd_add_cmd").MustString("gpasswd -a {user} {group}")
+	return runUserGroupCmd(gpasswdadd, user, group)
 }
 
-func writeRegMultiString(key, name string, value []string) error {
-	return nil
-}
-
-func deleteRegKey(key, name string) error {
-	return nil
+func userExists(name string) (bool, error) {
+	if _, err := user.Lookup(name); err != nil {
+		return false, err
+	}
+	return true, nil
 }

@@ -323,9 +323,7 @@ func runUserGroupCmd(cmd, user, group string) error {
 // createGoogleUser creates a Google managed user account if needed and adds it
 // to the configured groups.
 func createGoogleUser(user string) error {
-	useradd := config.Section("Accounts").Key("useradd_cmd").MustString("useradd -m -s /bin/bash -p * {user}")
-	err := runUserGroupCmd(useradd, user, "")
-	if err != nil {
+	if err := createUser(user, ""); err != nil {
 		return err
 	}
 	groups := config.Section("Accounts").Key("groups").MustString("adm,dip,docker,lxd,plugdev,video")
@@ -340,25 +338,16 @@ func createGoogleUser(user string) error {
 // permissions are removed but the user remains on the system. Group membership
 // is not changed.
 func removeGoogleUser(user string) error {
-	var err error
 	if config.Section("Accounts").Key("deprovision_remove").MustBool(true) {
 		userdel := config.Section("Accounts").Key("userdel_cmd").MustString("userdel -r {user}")
-		err = runUserGroupCmd(userdel, user, "")
-		if err != nil {
-			return err
-		}
-	} else {
-		err = updateAuthorizedKeysFile(user, []string{})
-		if err != nil {
-			return err
-		}
-		gpasswddel := config.Section("Accounts").Key("gpasswd_remove_cmd").MustString("gpasswd -d {user} {group}")
-		err = runUserGroupCmd(gpasswddel, user, "google-sudoers")
-		if err != nil {
-			return err
-		}
+		return runUserGroupCmd(userdel, user, "")
 	}
-	return nil
+	if err := updateAuthorizedKeysFile(user, []string{}); err != nil {
+		return err
+	}
+	gpasswddel := config.Section("Accounts").Key("gpasswd_remove_cmd").MustString("gpasswd -d {user} {group}")
+	return runUserGroupCmd(gpasswddel, user, "google-sudoers")
+
 }
 
 // createSudoersFile creates the google_sudoers configuration file if it does
@@ -389,11 +378,6 @@ func createSudoersGroup() error {
 	}
 	logger.Infof("Created google sudoers file")
 	return nil
-}
-
-func addUserToGroup(user, group string) error {
-	gpasswdadd := config.Section("Accounts").Key("gpasswd_add_cmd").MustString("gpasswd -a {user} {group}")
-	return runUserGroupCmd(gpasswdadd, user, group)
 }
 
 // updateAuthorizedKeysFile adds provided keys to the user's SSH
