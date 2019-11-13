@@ -44,10 +44,9 @@ func agentInit() error {
 	//  - Add route to metadata server
 	// On Linux:
 	//  - Generate SSH host keys (one time only).
-	//  - Create a Boto config (one time only).
 	//  - Set sysctl values.
 	//  - Set scheduler values.
-	//  - Run `optimize_local_ssd` script.
+	//  - Run `google_optimize_ssd` script.
 	//  - Run `google_set_multiqueue` script.
 	// TODO incorporate these scripts into the agent. liamh@12-11-19
 	if runtime.GOOS == "windows" {
