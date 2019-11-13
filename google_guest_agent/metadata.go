@@ -96,9 +96,8 @@ type networkInterfaces struct {
 }
 
 type project struct {
-	Attributes       attributes
-	ProjectID        string
-	NumericProjectId string
+	Attributes attributes
+	ProjectID  string
 }
 
 type attributes struct {

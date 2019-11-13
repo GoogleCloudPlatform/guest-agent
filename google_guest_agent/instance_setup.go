@@ -93,16 +93,17 @@ func agentInit() error {
 	} else {
 		// Check if instance ID has changed, and if so, consider this
 		// the first boot of the instance.
-		instance_id, err := ioutil.ReadFile("/etc/instance_id")
+		// TODO Also do this for windows. liamh@13-11-19
+		instanceID, err := ioutil.ReadFile("/etc/instance_id")
 		if err != nil && !os.IsNotExist(err) {
 			logger.Warningf("Unable to read /etc/instance_id; won't run first-boot actions")
 		} else {
-			if newMetadata.Instance.ID != string(instance_id) {
+			if newMetadata.Instance.ID != string(instanceID) {
 				logger.Infof("Instance ID changed, running first-boot actions")
 				if err := generateSSHKeys(); err != nil {
 					logger.Warningf("Failed to generate SSH keys: %v", err)
 				}
-				if err := writeInstanceID(newMetadata.Instance.ID); err != nil {
+				if err := ioutil.WriteFile("/etc/instance_id", []byte(newMetadata.Instance.ID), 0644); err != nil {
 					logger.Warningf("Failed to write instance ID file: %v", err)
 				}
 			}
@@ -189,15 +190,6 @@ func writeGuestAttributes(key, value string) error {
 	req.Header.Add("Metadata-Flavor", "Google")
 
 	_, err = client.Do(req)
-	return err
-}
-
-func writeInstanceID(id string) error {
-	file, err := os.Create("/etc/instance_id")
-	if err != nil {
-		return err
-	}
-	_, err = file.Write([]byte(id))
 	return err
 }
 
