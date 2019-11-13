@@ -3,7 +3,7 @@ module github.com/GoogleCloudPlatform/guest-agent
 go 1.12
 
 require (
-	github.com/GoogleCloudPlatform/guest-logging-go v0.0.0-20191018162143-d6c1e38c4e8f
+	github.com/GoogleCloudPlatform/guest-logging-go v0.0.0-20191113181522-f7d3a48944cc
 	github.com/go-ini/ini v1.49.0
 	github.com/gopherjs/gopherjs v0.0.0-20190915194858-d3ddacdb130f // indirect
 	github.com/kardianos/service v1.0.0

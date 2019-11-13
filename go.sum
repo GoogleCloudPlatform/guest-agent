@@ -28,6 +28,8 @@ github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03
 github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802/go.mod h1:IVnqGOEym/WlBOVXweHU+Q+/VP0lqqI8lqeDx9IjBqo=
 github.com/GoogleCloudPlatform/guest-logging-go v0.0.0-20191018162143-d6c1e38c4e8f h1:dN/XE3Oeh5MFqHBWe6fI6gcLdwVTpvnvrwtOjkUTSUw=
 github.com/GoogleCloudPlatform/guest-logging-go v0.0.0-20191018162143-d6c1e38c4e8f/go.mod h1:YWYrZjvs/qwZhDmsDnTaMXcno5Y0MYPN7rhMarLiUmI=
+github.com/GoogleCloudPlatform/guest-logging-go v0.0.0-20191113181522-f7d3a48944cc h1:Rs3eA3azYQaOGmoWnjUvz1UaZk4EptvfTpnTIxrZKKQ=
+github.com/GoogleCloudPlatform/guest-logging-go v0.0.0-20191113181522-f7d3a48944cc/go.mod h1:YWYrZjvs/qwZhDmsDnTaMXcno5Y0MYPN7rhMarLiUmI=
 github.com/client9/misspell v0.3.4/go.mod h1:qj6jICC3Q7zFZvVWo7KLAzC3yx5G7kyvSDkc90ppPyw=
 github.com/go-gl/glfw v0.0.0-20190409004039-e6da0acd62b1/go.mod h1:vR7hzQXu2zJy9AVAgeJqvqgH9Q5CA+iKCZ2gyEVpxRU=
 github.com/go-ini/ini v1.48.0 h1:TvO60hO/2xgaaTWp2P0wUe4CFxwdMzfbkv3+343Xzqw=

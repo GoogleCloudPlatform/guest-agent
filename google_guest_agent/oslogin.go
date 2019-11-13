@@ -174,13 +174,14 @@ func updateNSSwitchConfig(enable bool) error {
 
 	var filtered []string
 	for _, line := range strings.Split(string(nsswitch), "\n") {
-		if strings.HasPrefix(line, "passwd:") {
+		if strings.HasPrefix(line, "passwd:") || strings.HasPrefix(line, "group:") {
 			present := strings.Contains(line, "oslogin")
 			if enable && !present {
 				line += oslogin
 			} else if !enable && present {
 				line = strings.TrimSuffix(line, oslogin)
 			}
+
 			if runtime.GOOS == "freebsd" {
 				line = strings.Replace(line, "compat", "files", 1)
 			}
