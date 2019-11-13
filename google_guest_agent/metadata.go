@@ -81,6 +81,8 @@ type virtualClock struct {
 }
 
 type instance struct {
+	ID                string
+	MachineType       string
 	Attributes        attributes
 	NetworkInterfaces []networkInterfaces
 	VirtualClock      virtualClock
@@ -94,8 +96,9 @@ type networkInterfaces struct {
 }
 
 type project struct {
-	Attributes attributes
-	ProjectID  string
+	Attributes       attributes
+	ProjectID        string
+	NumericProjectId string
 }
 
 type attributes struct {
@@ -239,12 +242,11 @@ func getMetadata(ctx context.Context, hang bool) (*metadata, error) {
 	}
 	finalURL += ("&last_etag=" + etag)
 
-	req, err := http.NewRequest("GET", finalURL, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", finalURL, nil)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Add("Metadata-Flavor", "Google")
-	req = req.WithContext(ctx)
 
 	resp, err := client.Do(req)
 	// Don't return error on a canceled context.

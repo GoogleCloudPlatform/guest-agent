@@ -19,7 +19,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/url"
 	"os"
@@ -82,14 +81,10 @@ func logStatus(name string, disabled bool) {
 }
 
 func parseConfig(file string) (*ini.File, error) {
-	empty, _ := ini.InsensitiveLoad([]byte{})
-	d, err := ioutil.ReadFile(file)
+	// Priority: file.cfg, file.cfg.distro, file.cfg.template
+	cfg, err := ini.LoadSources(ini.LoadOptions{Loose: true, Insensitive: true}, file, file+".distro", file+".template")
 	if err != nil {
-		return empty, err
-	}
-	cfg, err := ini.InsensitiveLoad(d)
-	if err != nil {
-		return empty, err
+		return nil, err
 	}
 	return cfg, nil
 }
@@ -102,17 +97,6 @@ func closeFile(c io.Closer) {
 }
 
 func runUpdate() {
-	cfgPath := configPath
-	if runtime.GOOS == "windows" {
-		cfgPath = winConfigPath
-	}
-
-	var err error
-	config, err = parseConfig(cfgPath)
-	if err != nil && !os.IsNotExist(err) {
-		logger.Errorf("error parsing config %s: %s", cfgPath, err)
-	}
-
 	var wg sync.WaitGroup
 	mgrs := []manager{&addressMgr{}}
 	switch runtime.GOOS {
@@ -138,10 +122,21 @@ func runUpdate() {
 
 func run(ctx context.Context) {
 	logger.Infof("GCE Agent Started (version %s)", version)
+
 	var err error
 	osRelease, err = getRelease()
 	if err != nil && runtime.GOOS != "windows" {
 		logger.Warningf("Couldn't detect OS release")
+	}
+
+	cfgfile := configPath
+	if runtime.GOOS == "windows" {
+		cfgfile = winConfigPath
+	}
+
+	config, err = parseConfig(cfgfile)
+	if err != nil && !os.IsNotExist(err) {
+		logger.Errorf("Error parsing config %s: %s", cfgfile, err)
 	}
 
 	if err := agentInit(); err != nil {
@@ -221,17 +216,19 @@ func closer(c io.Closer) {
 }
 
 func main() {
-	var opts logger.LogOpts
+	opts := logger.LogOpts{LoggerName: programName}
 	if runtime.GOOS == "windows" {
-		opts = logger.LogOpts{LoggerName: programName, FormatFunction: logFormat, Writers: []io.Writer{&serialPort{"COM1"}}}
-	} else {
-		opts = logger.LogOpts{LoggerName: programName, Writers: []io.Writer{os.Stdout}}
+		opts.FormatFunction = logFormat
+		opts.Writers = []io.Writer{&serialPort{"COM1"}}
 	}
 
 	var err error
 	ctx := context.Background()
 	newMetadata, err = getMetadata(ctx, false)
-	if err == nil {
+	if err != nil {
+		logger.Warningf("Couldn't get metadata, disabling cloud logging")
+		opts.DisableCloudLogging = true
+	} else {
 		opts.ProjectName = newMetadata.Project.ProjectID
 	}
 
