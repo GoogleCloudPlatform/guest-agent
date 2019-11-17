@@ -93,6 +93,7 @@ type networkInterfaces struct {
 	TargetInstanceIps []string
 	IPAliases         []string
 	Mac               string
+	DHCPv6Refresh     string
 }
 
 type project struct {

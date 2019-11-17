@@ -19,6 +19,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net"
 	"net/url"
 	"os"
@@ -180,6 +181,25 @@ func run(ctx context.Context) {
 
 	<-ctx.Done()
 	logger.Infof("GCE Agent Stopped")
+}
+
+func runCmdOutput(cmd *exec.Cmd) (string, error) {
+	output, err := cmd.StdoutPipe()
+	if err != nil {
+		return "", err
+	}
+	if err := cmd.Start(); err != nil {
+		return "", err
+	}
+	ret, err := ioutil.ReadAll(output)
+	if err != nil {
+		return "", err
+	}
+	if err := cmd.Wait(); err != nil {
+		return "", err
+	}
+
+	return string(ret), nil
 }
 
 // runCmd is exec.Cmd.Run() with a flattened error return.
