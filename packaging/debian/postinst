@@ -1,0 +1,9 @@
+#!/bin/sh -e
+
+if [ "$1" = "configure" ] ; then
+	if [ ! -f /etc/default/instance_configs.cfg ]; then 
+		cp -a "/usr/share/${DPKG_MAINTSCRIPT_PACKAGE}/instance_configs.cfg" /etc/default/
+	fi
+fi
+
+#DEBHELPER#

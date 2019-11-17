@@ -15,6 +15,8 @@ export GO111MODULE := on
 override_dh_auto_install:
 	# Binary-only package.
 	dh_auto_install -- --no-source
+	install -d debian/google-guest-agent/usr/share/google-guest-agent
+	install -p -m 0644 instance_configs.cfg debian/google-guest-agent/usr/share/google-guest-agent
 
 override_dh_golang:
 	# We don't use any packaged dependencies, so skip dh_golang step.

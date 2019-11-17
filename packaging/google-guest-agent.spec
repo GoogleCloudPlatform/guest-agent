@@ -42,6 +42,8 @@ GOPATH=%{_gopath} CGO_ENABLED=0 %{_go} build -ldflags="-s -w -X main.version=%{_
 %install
 install -d %{buildroot}%{_bindir}
 install -p -m 0755 google_guest_agent/google_guest_agent %{buildroot}%{_bindir}/google_guest_agent
+install -d %{buildroot}/usr/share/google-guest-agent
+install -p -m 0644 instance_configs.cfg %{buildroot}/usr/share/google-guest-agent/instance_configs.cfg
 %if 0%{?el6}
 install -d %{buildroot}/etc/init
 install -p -m 0644 %{name}.conf %{buildroot}/etc/init
@@ -66,11 +68,21 @@ install -p -m 0644 90-%{name}.preset %{buildroot}%{_presetdir}/90-%{name}.preset
 
 %post
 %systemd_post google-guest-agent.service
+if [ $1 -eq 1 ]; then
+  if [ ! -f /etc/default/instance_configs.cfg ]; then
+    cp -a /usr/share/google-guest-agent/instance_configs.cfg /etc/default/
+  fi
+fi
 
 %preun
 %systemd_preun google-guest-agent.service
 
 %postun
 %systemd_postun google-guest-agent.service
+if [ $1 -eq 1 ]; then
+  if [ -f /etc/default/instance_configs.cfg ]; then
+    rm /etc/default/instance_configs.cfg
+  fi
+fi
 
 %endif
