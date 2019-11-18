@@ -97,12 +97,12 @@ func agentInit() error {
 		if err != nil && !os.IsNotExist(err) {
 			logger.Warningf("Unable to read /etc/instance_id; won't run first-boot actions")
 		} else {
-			if newMetadata.Instance.ID != string(instanceID) {
+			if newMetadata.Instance.ID.String() != string(instanceID) {
 				logger.Infof("Instance ID changed, running first-boot actions")
 				if err := generateSSHKeys(); err != nil {
 					logger.Warningf("Failed to generate SSH keys: %v", err)
 				}
-				if err := ioutil.WriteFile("/etc/instance_id", []byte(newMetadata.Instance.ID), 0644); err != nil {
+				if err := ioutil.WriteFile("/etc/instance_id", []byte(newMetadata.Instance.ID.String()), 0644); err != nil {
 					logger.Warningf("Failed to write instance ID file: %v", err)
 				}
 			}
