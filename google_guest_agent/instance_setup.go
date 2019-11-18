@@ -190,7 +190,7 @@ func generateBotoConfig() error {
 	if err != nil {
 		return err
 	}
-	botoCfg.Section("GSUtil").Key("default_project_id").SetValue(newMetadata.Project.NumericProjectID)
+	botoCfg.Section("GSUtil").Key("default_project_id").SetValue(newMetadata.Project.NumericProjectID.String())
 	botoCfg.Section("GSUtil").Key("default_apt_version").SetValue("2")
 	botoCfg.Section("GoogleCompute").Key("service_account").SetValue("default")
 
