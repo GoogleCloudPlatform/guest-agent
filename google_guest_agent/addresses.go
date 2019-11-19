@@ -404,8 +404,11 @@ func (a *addressMgr) set() error {
 
 // Enables or disables IPv6 on the primary interface. On agent start we may make an unnecessary dhclient call to avoid missing a necessary one.
 func configureIPv6() error {
-	ni := newMetadata.Instance.NetworkInterfaces[0]
-	oldNi := oldMetadata.Instance.NetworkInterfaces[0]
+	var ni, oldNi networkInterfaces
+	ni = newMetadata.Instance.NetworkInterfaces[0]
+	if len(oldMetadata.Instance.NetworkInterfaces) > 0 {
+		oldNi = oldMetadata.Instance.NetworkInterfaces[0]
+	}
 	iface, err := getInterfaceByMAC(ni.Mac)
 	if err != nil {
 		return err
