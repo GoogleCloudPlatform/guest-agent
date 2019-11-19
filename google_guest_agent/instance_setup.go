@@ -26,7 +26,6 @@ import (
 	"strings"
 
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
-	"github.com/go-ini/ini"
 )
 
 func forwardEntryExists(fes []ipForwardEntry, fe ipForwardEntry) bool {
@@ -186,7 +185,7 @@ func generateSSHKeys() error {
 
 func generateBotoConfig() error {
 	path := "/etc/boto.cfg"
-	botoCfg, err := ini.LoadSources(ini.LoadOptions{Loose: true, Insensitive: true}, path, path+".template")
+	botoCfg, err := LooseLoad(path, path+".template")
 	if err != nil {
 		return err
 	}
