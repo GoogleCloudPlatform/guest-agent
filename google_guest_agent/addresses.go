@@ -33,7 +33,6 @@ var (
 	oldWSFCAddresses  string
 	oldWSFCEnable     bool
 	interfacesEnabled bool
-	ipv6Enabled       bool
 	interfaces        []net.Interface
 
 	protoID = 66
@@ -402,32 +401,30 @@ func (a *addressMgr) set() error {
 	return nil
 }
 
-// Enables or disables IPv6 on the primary interface. On agent start we may make an unnecessary dhclient call to avoid missing a necessary one.
+// Enables or disables IPv6 on the primary interface.
 func configureIPv6() error {
-	var ni, oldNi networkInterfaces
-	ni = newMetadata.Instance.NetworkInterfaces[0]
+	var newNi, oldNi networkInterfaces
+	if len(newMetadata.Instance.NetworkInterfaces) == 0 {
+		return fmt.Errorf("No interfaces found in metadata")
+	}
+	newNi = newMetadata.Instance.NetworkInterfaces[0]
 	if len(oldMetadata.Instance.NetworkInterfaces) > 0 {
 		oldNi = oldMetadata.Instance.NetworkInterfaces[0]
 	}
-	iface, err := getInterfaceByMAC(ni.Mac)
+	iface, err := getInterfaceByMAC(newNi.Mac)
 	if err != nil {
 		return err
 	}
 	switch {
-	case oldNi.DHCPv6Refresh != "" && ni.DHCPv6Refresh == "",
-		oldNi.DHCPv6Refresh == "" && ni.DHCPv6Refresh == "" && !ipv6Enabled:
+	case oldNi.DHCPv6Refresh != "" && newNi.DHCPv6Refresh == "",
+		newNi.DHCPv6Refresh == "" && len(oldMetadata.Instance.NetworkInterfaces) == 0:
 		// disable
-		// set the flag upfront rather than after success to make IPv6
-		// setup non-blocking, unlike interfacesEnabled flag which
-		// blocks route additions until successfully enabling
-		// interfaces.
-		ipv6Enabled = true
+		// uses empty old interface slice to indicate this is first-run.
 		if err := runCmd(exec.Command("dhclient", "-r", "-6", "-v", iface.Name)); err != nil {
 			return err
 		}
-	case oldNi.DHCPv6Refresh == "" && ni.DHCPv6Refresh != "":
+	case oldNi.DHCPv6Refresh == "" && newNi.DHCPv6Refresh != "":
 		// enable
-		ipv6Enabled = true
 		tentative := exec.Command("ip", "-6", "-o", "a", "s", "dev", iface.Name, "scope", "link", "tentative")
 		for i := 0; i < 5; i++ {
 			res, err := runCmdOutput(tentative)
