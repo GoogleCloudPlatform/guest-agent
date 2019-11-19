@@ -23,6 +23,7 @@ import (
 	"reflect"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 )
@@ -32,6 +33,7 @@ var (
 	oldWSFCAddresses  string
 	oldWSFCEnable     bool
 	interfacesEnabled bool
+	interfaces        []net.Interface
 
 	protoID = 66
 )
@@ -100,13 +102,13 @@ func compareIPs(configuredIPs, desiredIPs []string) (toAdd, toRm []string) {
 
 var badMAC []string
 
-func getInterfaceByMAC(mac string, ifs []net.Interface) (net.Interface, error) {
+func getInterfaceByMAC(mac string) (net.Interface, error) {
 	hwaddr, err := net.ParseMAC(mac)
 	if err != nil {
 		return net.Interface{}, err
 	}
 
-	for _, iface := range ifs {
+	for _, iface := range interfaces {
 		if iface.HardwareAddr.String() == hwaddr.String() {
 			return iface, nil
 		}
@@ -180,6 +182,7 @@ func removeLocalRoute(ip, ifname string) error {
 // Filter out forwarded ips based on WSFC (Windows Failover Cluster Settings).
 // If only EnableWSFC is set, all ips in the ForwardedIps and TargetInstanceIps will be ignored.
 // If WSFCAddresses is set (with or without EnableWSFC), only ips in the list will be filtered out.
+// TODO return a filtered list rather than modifying the metadata object. liamh@15-11-19
 func (a *addressMgr) applyWSFCFilter() {
 	wsfcAddresses := a.parseWSFCAddresses()
 
@@ -267,19 +270,28 @@ func (a *addressMgr) set() error {
 		a.applyWSFCFilter()
 	}
 
-	interfaces, err := net.Interfaces()
+	var err error
+	interfaces, err = net.Interfaces()
 	if err != nil {
 		return err
 	}
+
+	if runtime.GOOS != "windows" {
+		if err := configureIPv6(); err != nil {
+			return err
+		}
+	}
+
 	if runtime.GOOS != "windows" && !interfacesEnabled {
-		if err := enableNetworkInterfaces(interfaces); err != nil {
+		if err := enableNetworkInterfaces(); err != nil {
 			return err
 		}
 		interfacesEnabled = true
 	}
 
+	// Add routes for forwarded and target-instance IPs.
 	for _, ni := range newMetadata.Instance.NetworkInterfaces {
-		iface, err := getInterfaceByMAC(ni.Mac, interfaces)
+		iface, err := getInterfaceByMAC(ni.Mac)
 		if err != nil {
 			if !containsString(ni.Mac, badMAC) {
 				logger.Errorf("Error getting interface: %s", err)
@@ -389,15 +401,58 @@ func (a *addressMgr) set() error {
 	return nil
 }
 
+// Enables or disables IPv6 on the primary interface.
+func configureIPv6() error {
+	var newNi, oldNi networkInterfaces
+	if len(newMetadata.Instance.NetworkInterfaces) == 0 {
+		return fmt.Errorf("No interfaces found in metadata")
+	}
+	newNi = newMetadata.Instance.NetworkInterfaces[0]
+	if len(oldMetadata.Instance.NetworkInterfaces) > 0 {
+		oldNi = oldMetadata.Instance.NetworkInterfaces[0]
+	}
+	iface, err := getInterfaceByMAC(newNi.Mac)
+	if err != nil {
+		return err
+	}
+	switch {
+	case oldNi.DHCPv6Refresh != "" && newNi.DHCPv6Refresh == "",
+		newNi.DHCPv6Refresh == "" && len(oldMetadata.Instance.NetworkInterfaces) == 0:
+		// disable
+		// uses empty old interface slice to indicate this is first-run.
+		if err := runCmd(exec.Command("dhclient", "-r", "-6", "-v", iface.Name)); err != nil {
+			return err
+		}
+	case oldNi.DHCPv6Refresh == "" && newNi.DHCPv6Refresh != "":
+		// enable
+		tentative := exec.Command("ip", "-6", "-o", "a", "s", "dev", iface.Name, "scope", "link", "tentative")
+		for i := 0; i < 5; i++ {
+			res, err := runCmdOutput(tentative)
+			if err == nil && res == "" {
+				break
+			}
+			time.Sleep(1 * time.Second)
+		}
+		val := fmt.Sprintf("net.ipv6.conf.%s.accept_ra_rt_info_max_plen=128", iface.Name)
+		if err := runCmd(exec.Command("sysctl", val)); err != nil {
+			return err
+		}
+		if err := runCmd(exec.Command("dhclient", "-1", "-6", "-v", iface.Name)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 var osrelease release
 
 // enableNetworkInterfaces runs `dhclient -x; dhclient eth1 eth2 ... ethN`.
 // On RHEL7, it also calls disableNM for each interface.
-// On SLES, it instead calls enableSLESInterfaces.
-func enableNetworkInterfaces(interfaces []net.Interface) error {
+// On SLES, it calls enableSLESInterfaces instead of dhclient.
+func enableNetworkInterfaces() error {
 	var googleInterfaces []string
 	for _, ni := range newMetadata.Instance.NetworkInterfaces {
-		iface, err := getInterfaceByMAC(ni.Mac, interfaces)
+		iface, err := getInterfaceByMAC(ni.Mac)
 		if err != nil {
 			if !containsString(ni.Mac, badMAC) {
 				logger.Errorf("Error getting interface: %s", err)

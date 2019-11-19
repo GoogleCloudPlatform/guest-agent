@@ -81,7 +81,7 @@ type virtualClock struct {
 }
 
 type instance struct {
-	ID                string
+	ID                json.Number
 	MachineType       string
 	Attributes        attributes
 	NetworkInterfaces []networkInterfaces
@@ -93,6 +93,7 @@ type networkInterfaces struct {
 	TargetInstanceIps []string
 	IPAliases         []string
 	Mac               string
+	DHCPv6Refresh     string
 }
 
 type project struct {
