@@ -79,7 +79,8 @@ fi
 
 %postun
 %systemd_postun google-guest-agent.service
-if [ $1 -eq 1 ]; then
+if [ $1 -eq 0 ]; then
+  # Uninstall, not upgrade.
   if [ -f /etc/default/instance_configs.cfg ]; then
     rm /etc/default/instance_configs.cfg
   fi
