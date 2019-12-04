@@ -26,6 +26,7 @@ import (
 	"strings"
 
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
+	"github.com/go-ini/ini"
 )
 
 func forwardEntryExists(fes []ipForwardEntry, fe ipForwardEntry) bool {
@@ -44,6 +45,7 @@ func agentInit() error {
 	//  - Add route to metadata server
 	// On Linux:
 	//  - Generate SSH host keys (one time only).
+	//  - Generate boto.cfg (one time only).
 	//  - Set sysctl values.
 	//  - Set scheduler values.
 	//  - Run `google_optimize_ssd` script.
@@ -97,12 +99,23 @@ func agentInit() error {
 		if err != nil && !os.IsNotExist(err) {
 			logger.Warningf("Unable to read /etc/instance_id; won't run first-boot actions")
 		} else {
+			if string(instanceID) == "" {
+				// If the file didn't exist or was empty, try legacy key from instance configs.
+				instanceID = []byte(config.Section("Instance").Key("instance_id").String())
+				if err := ioutil.WriteFile("/etc/instance_id", []byte(newMetadata.Instance.ID.String()), 0644); err != nil {
+					logger.Warningf("Failed to write instance ID file: %v", err)
+				}
+			}
+
 			if newMetadata.Instance.ID.String() != string(instanceID) {
 				logger.Infof("Instance ID changed, running first-boot actions")
 				if err := generateSSHKeys(); err != nil {
 					logger.Warningf("Failed to generate SSH keys: %v", err)
 				}
-				if err := ioutil.WriteFile("/etc/instance_id", []byte(newMetadata.Instance.ID.String()), 0644); err != nil {
+				if err := generateBotoConfig(); err != nil {
+					logger.Warningf("Failed to create boto.cfg: %v", err)
+				}
+				if err := ioutil.WriteFile("/etc/instance_id", []byte(newMetadata.Instance.ID), 0644); err != nil {
 					logger.Warningf("Failed to write instance ID file: %v", err)
 				}
 			}
@@ -177,6 +190,19 @@ func generateSSHKeys() error {
 		}
 	}
 	return nil
+}
+
+func generateBotoConfig() error {
+	path := "/etc/boto.cfg"
+	botoCfg, err := ini.LooseLoad(path, path+".template")
+	if err != nil {
+		return err
+	}
+	botoCfg.Section("GSUtil").Key("default_project_id").SetValue(newMetadata.Project.NumericProjectID.String())
+	botoCfg.Section("GSUtil").Key("default_apt_version").SetValue("2")
+	botoCfg.Section("GoogleCompute").Key("service_account").SetValue("default")
+
+	return botoCfg.SaveTo(path)
 }
 
 func writeGuestAttributes(key, value string) error {
