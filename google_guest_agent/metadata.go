@@ -118,12 +118,13 @@ type attributes struct {
 }
 
 type windowsKey struct {
-	Email        string
-	ExpireOn     string
-	Exponent     string
-	Modulus      string
-	UserName     string
-	HashFunction string
+	Email               string
+	ExpireOn            string
+	Exponent            string
+	Modulus             string
+	UserName            string
+	HashFunction        string
+	AddToAdministrators *bool
 }
 
 type windowsKeys []windowsKey
