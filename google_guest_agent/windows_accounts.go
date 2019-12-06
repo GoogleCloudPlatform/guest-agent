@@ -123,13 +123,20 @@ func (k windowsKey) createOrResetPwd() (*credsJSON, error) {
 		if err := resetPwd(k.UserName, pwd); err != nil {
 			return nil, fmt.Errorf("error running resetPwd: %v", err)
 		}
+		if k.AddToAdministrators != nil && *k.AddToAdministrators == true {
+			if err := addUserToGroup(k.UserName, "Administrators"); err != nil {
+				return nil, fmt.Errorf("error running addUserToGroup: %v", err)
+			}
+		}
 	} else {
 		logger.Infof("Creating user %s", k.UserName)
 		if err := createUser(k.UserName, pwd); err != nil {
-			return nil, fmt.Errorf("error running createAdminUser: %v", err)
+			return nil, fmt.Errorf("error running createUser: %v", err)
 		}
-		if err := addUserToGroup(k.UserName, "Administrators"); err != nil {
-			return nil, fmt.Errorf("error running addUserToGroup: %v", err)
+		if k.AddToAdministrators == nil || *k.AddToAdministrators == true {
+			if err := addUserToGroup(k.UserName, "Administrators"); err != nil {
+				return nil, fmt.Errorf("error running addUserToGroup: %v", err)
+			}
 		}
 	}
 

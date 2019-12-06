@@ -35,7 +35,7 @@ func TestWatchMetadata(t *testing.T) {
 		} else {
 			w.Header().Set("etag", etag2)
 		}
-		fmt.Fprintf(w, `{"instance":{"attributes":{"enable-oslogin":"true","ssh-keys":"name:ssh-rsa [KEY] hostname\nname:ssh-rsa [KEY] hostname","windows-keys":"{}\n{\"expireOn\":\"%s\",\"exponent\":\"exponent\",\"modulus\":\"modulus\",\"username\":\"username\"}","wsfc-addrs":"foo"}}}`, et)
+		fmt.Fprintf(w, `{"instance":{"attributes":{"enable-oslogin":"true","ssh-keys":"name:ssh-rsa [KEY] hostname\nname:ssh-rsa [KEY] hostname","windows-keys":"{}\n{\"expireOn\":\"%[1]s\",\"exponent\":\"exponent\",\"modulus\":\"modulus\",\"username\":\"username\"}\n{\"expireOn\":\"%[1]s\",\"exponent\":\"exponent\",\"modulus\":\"modulus\",\"username\":\"username\",\"addToAdministrators\":true}","wsfc-addrs":"foo"}}}`, et)
 		req++
 	}))
 	defer ts.Close()
@@ -47,8 +47,11 @@ func TestWatchMetadata(t *testing.T) {
 	want := attributes{
 		EnableOSLogin: true,
 		WSFCAddresses: "foo",
-		WindowsKeys:   windowsKeys{windowsKey{Exponent: "exponent", UserName: "username", Modulus: "modulus", ExpireOn: et}},
-		SSHKeys:       []string{"name:ssh-rsa [KEY] hostname", "name:ssh-rsa [KEY] hostname"},
+		WindowsKeys: windowsKeys{
+			windowsKey{Exponent: "exponent", UserName: "username", Modulus: "modulus", ExpireOn: et, AddToAdministrators: nil},
+			windowsKey{Exponent: "exponent", UserName: "username", Modulus: "modulus", ExpireOn: et, AddToAdministrators: func() *bool { ret := true; return &ret }()},
+		},
+		SSHKeys: []string{"name:ssh-rsa [KEY] hostname", "name:ssh-rsa [KEY] hostname"},
 	}
 	for _, e := range []string{etag1, etag2} {
 		got, err := watchMetadata(context.Background())
