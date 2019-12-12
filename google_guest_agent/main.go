@@ -12,14 +12,14 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-// GCEWindowsAgent is the Google Compute Engine Windows agent executable.
+// GCEGuestAgent is the Google Compute Engine guest agent executable.
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/url"
 	"os"
@@ -34,7 +34,7 @@ import (
 )
 
 var (
-	programName              = "GCEWindowsAgent"
+	programName              = "GCEGuestAgent"
 	version                  string
 	ticker                   = time.Tick(70 * time.Second)
 	oldMetadata, newMetadata *metadata
@@ -102,7 +102,7 @@ func runUpdate() {
 	mgrs := []manager{&addressMgr{}}
 	switch runtime.GOOS {
 	case "windows":
-		mgrs = append(mgrs, []manager{newWsfcManager(), &winAccountsMgr{}, &diagnosticsMgr{}}...)
+		mgrs = append(mgrs, []manager{newWsfcManager(), &winAccountsMgr{}}...)
 	default:
 		mgrs = append(mgrs, []manager{&clockskewMgr{}, &osloginMgr{}, &accountsMgr{}}...)
 	}
@@ -183,35 +183,53 @@ func run(ctx context.Context) {
 	logger.Infof("GCE Agent Stopped")
 }
 
-func runCmdOutput(cmd *exec.Cmd) (string, error) {
-	output, err := cmd.StdoutPipe()
-	if err != nil {
-		return "", err
-	}
-	if err := cmd.Start(); err != nil {
-		return "", err
-	}
-	ret, err := ioutil.ReadAll(output)
-	if err != nil {
-		return "", err
-	}
-	if err := cmd.Wait(); err != nil {
-		return "", err
-	}
-
-	return string(ret), nil
+type execResult struct {
+	// Return code. Set to -1 if we failed to run the command.
+	code int
+	// Stderr or err.Error if we failed to run the command.
+	err string
+	// Stdout or "" if we failed to run the command.
+	out string
 }
 
-// runCmd is exec.Cmd.Run() with a flattened error return.
+func (e execResult) Error() string {
+	return e.err
+}
+
+func (e execResult) ExitCode() int {
+	return e.code
+}
+
+func (e execResult) Stdout() string {
+	return e.out
+}
+
+func (e execResult) Stderr() string {
+	return e.err
+}
+
 func runCmd(cmd *exec.Cmd) error {
+	res := runCmdOutput(cmd)
+	if res.ExitCode() != 0 {
+		return res
+	}
+	return nil
+}
+
+func runCmdOutput(cmd *exec.Cmd) *execResult {
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
 	err := cmd.Run()
 	if err != nil {
 		if ee, ok := err.(*exec.ExitError); ok {
-			return fmt.Errorf(string(ee.Stderr))
+			return &execResult{code: ee.ExitCode(), err: stderr.String()}
+		} else {
+			return &execResult{code: -1, err: err.Error()}
 		}
-		return err
 	}
-	return nil
+	return &execResult{code: 0, out: stdout.String()}
 }
 
 func containsString(s string, ss []string) bool {

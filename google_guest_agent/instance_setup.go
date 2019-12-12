@@ -48,7 +48,7 @@ func agentInit() error {
 	//  - Generate boto.cfg (one time only).
 	//  - Set sysctl values.
 	//  - Set scheduler values.
-	//  - Run `google_optimize_ssd` script.
+	//  - Run `google_optimize_local_ssd` script.
 	//  - Run `google_set_multiqueue` script.
 	// TODO incorporate these scripts into the agent. liamh@12-11-19
 	if runtime.GOOS == "windows" {
@@ -94,19 +94,18 @@ func agentInit() error {
 	} else {
 		// Check if instance ID has changed, and if so, consider this
 		// the first boot of the instance.
-		// TODO Also do this for windows. liamh@13-11-19
-		instanceID, err := ioutil.ReadFile("/etc/instance_id")
+		// TODO Also do this for windows. liamh@13-11-2019
+		instanceID, err := ioutil.ReadFile("/etc/google_instance_id")
 		if err != nil && !os.IsNotExist(err) {
-			logger.Warningf("Unable to read /etc/instance_id; won't run first-boot actions")
+			logger.Warningf("Not running first-boot actions, error reading instance ID: %v", err)
 		} else {
 			if string(instanceID) == "" {
 				// If the file didn't exist or was empty, try legacy key from instance configs.
 				instanceID = []byte(config.Section("Instance").Key("instance_id").String())
-				if err := ioutil.WriteFile("/etc/instance_id", []byte(newMetadata.Instance.ID.String()), 0644); err != nil {
+				if err := ioutil.WriteFile("/etc/google_instance_id", []byte(newMetadata.Instance.ID.String()), 0644); err != nil {
 					logger.Warningf("Failed to write instance ID file: %v", err)
 				}
 			}
-
 			if newMetadata.Instance.ID.String() != string(instanceID) {
 				logger.Infof("Instance ID changed, running first-boot actions")
 				if err := generateSSHKeys(); err != nil {
@@ -115,7 +114,7 @@ func agentInit() error {
 				if err := generateBotoConfig(); err != nil {
 					logger.Warningf("Failed to create boto.cfg: %v", err)
 				}
-				if err := ioutil.WriteFile("/etc/instance_id", []byte(newMetadata.Instance.ID), 0644); err != nil {
+				if err := ioutil.WriteFile("/etc/google_instance_id", []byte(newMetadata.Instance.ID.String()), 0644); err != nil {
 					logger.Warningf("Failed to write instance ID file: %v", err)
 				}
 			}
@@ -137,7 +136,7 @@ func agentInit() error {
 			}
 		}
 
-		for _, script := range []string{"google_optimize_ssd", "google_set_multiqueue"} {
+		for _, script := range []string{"google_optimize_local_ssd", "google_set_multiqueue"} {
 			if err := runCmd(exec.Command(script)); err != nil {
 				logger.Warningf("Failed to run %q script: %v", script, err)
 			}
@@ -147,7 +146,6 @@ func agentInit() error {
 }
 
 func generateSSHKeys() error {
-	// First remove existing keys.
 	dir, err := os.Open("/etc/ssh")
 	if err != nil {
 		return err
@@ -158,35 +156,61 @@ func generateSSHKeys() error {
 	if err != nil {
 		return err
 	}
+
+	keytypes := make(map[string]bool)
+
+	// Find keys present on disk, and deduce their type from filename.
+	prefix := "ssh_host_"
+	suffix := "_key"
 	for _, file := range files {
-		if strings.HasPrefix(file, "ssh_host_") && strings.HasSuffix(file, "_key") {
-			if err := os.Remove("/etc/ssh/" + file); err != nil {
-				return err
-			}
+		if strings.HasPrefix(file, prefix) && strings.HasSuffix(file, suffix) && len(file) > len(prefix+suffix) {
+			keytype := file
+			keytype = strings.TrimPrefix(keytype, prefix)
+			keytype = strings.TrimSuffix(keytype, suffix)
+			keytypes[keytype] = true
 		}
 	}
 
+	// List keys we should generate, according to the config.
+	configKeys := config.Section("InstanceSetup").Key("host_key_types").MustString("ecdsa,ed25519,rsa")
+	for _, keytype := range strings.Split(configKeys, ",") {
+		keytypes[keytype] = true
+	}
+
 	// Generate new keys and upload to guest attributes.
-	keyTypes := config.Section("InstanceSetup").Key("host_key_types").MustString("ecdsa,ed25519,rsa")
-	for _, keyType := range strings.Split(keyTypes, ",") {
-		outfile := fmt.Sprintf("/etc/ssh/ssh_host_%s_key", keyType)
-		if err := runCmd(exec.Command("ssh-keygen", "-t", keyType, "-f", outfile, "-N", "", "-q")); err != nil {
-			return fmt.Errorf("Failed to generate SSH host key %q", outfile)
+	for keytype, _ := range keytypes {
+		keyfile := fmt.Sprintf("/etc/ssh/ssh_host_%s_key", keytype)
+		if err := runCmd(exec.Command("ssh-keygen", "-t", keytype, "-f", keyfile+".temp", "-N", "", "-q")); err != nil {
+			logger.Warningf("Failed to generate SSH host key %q: %v", keyfile, err)
+			continue
 		}
-		if err := os.Chmod(outfile, 0600); err != nil {
-			return fmt.Errorf("Failed to chmod SSH host key %q", outfile)
+		if err := os.Chmod(keyfile+".temp", 0600); err != nil {
+			logger.Errorf("Failed to chmod SSH host key %q: %v", keyfile, err)
+			continue
 		}
-		if err := os.Chmod(outfile+".pub", 0644); err != nil {
-			return fmt.Errorf("Failed to chmod SSH host key %q", outfile+".pub")
+		if err := os.Chmod(keyfile+".temp.pub", 0644); err != nil {
+			logger.Errorf("Failed to chmod SSH host key %q: %v", keyfile+".pub", err)
+			continue
 		}
-		pubKey, err := ioutil.ReadFile(outfile + ".pub")
+		if err := os.Rename(keyfile+".temp", keyfile); err != nil {
+			logger.Errorf("Failed to overwrite %q: %v", keyfile, err)
+			continue
+		}
+		if err := os.Rename(keyfile+".temp.pub", keyfile+".pub"); err != nil {
+			logger.Errorf("Failed to overwrite %q: %v", keyfile+".pub", err)
+			continue
+		}
+		pubKey, err := ioutil.ReadFile(keyfile + ".pub")
 		if err != nil {
-			return fmt.Errorf("Can't read %s public key", keyType)
+			logger.Errorf("Can't read %s public key: %v", keytype, err)
+			continue
 		}
-		if vals := strings.Split(string(pubKey), " "); len(vals) == 2 {
+		if vals := strings.Split(string(pubKey), " "); len(vals) >= 2 {
 			if err := writeGuestAttributes("hostkeys/"+vals[0], vals[1]); err != nil {
-				return fmt.Errorf("Failed to upload %s key to guest attributes", keyType)
+				logger.Errorf("Failed to upload %s key to guest attributes: %v", keytype, err)
 			}
+		} else {
+			logger.Warningf("Generated key is malformed, not uploading")
 		}
 	}
 	return nil

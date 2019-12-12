@@ -21,6 +21,7 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 )
@@ -56,8 +57,16 @@ func (o *osloginMgr) set() error {
 	enable := newMetadata.Instance.Attributes.EnableOSLogin || newMetadata.Project.Attributes.EnableOSLogin
 	twofactor := newMetadata.Instance.Attributes.TwoFactor || newMetadata.Project.Attributes.TwoFactor
 
+	var isEnabled bool
+	if nsswitch, err := ioutil.ReadFile("/etc/nsswitch.conf"); err == nil && strings.Contains(string(nsswitch), "oslogin") {
+		isEnabled = true
+	}
+
 	if enable && !oldEnable {
 		logger.Infof("Enabling OS Login")
+		// Erase SSH keys using the accountsMgr.
+		// TODO: how to ensure it is not running already?
+		time.Sleep(5 * time.Second)
 		newMetadata.Instance.Attributes.SSHKeys = nil
 		newMetadata.Project.Attributes.SSHKeys = nil
 		(&accountsMgr{}).set()
@@ -83,17 +92,19 @@ func (o *osloginMgr) set() error {
 		if err := createOSLoginSudoersFile(); err != nil {
 			logger.Errorf("Error creating OS Login sudoers file: %v.", err)
 		}
-	}
 
-	// Services which need to be restarted primarily due to caching issues.
-	for _, svc := range []string{"ssh", "sshd", "nscd", "unscd", "systemd-logind", "cron", "crond"} {
-		if err := restartService(svc); err != nil {
-			logger.Errorf("Error restarting service: %v.", err)
+		// Services which need to be restarted primarily due to caching
+		// issues. Only do this if we think this was enabled during
+		// this run.
+		if !isEnabled {
+			for _, svc := range []string{"ssh", "sshd", "nscd", "unscd", "systemd-logind", "cron", "crond"} {
+				if err := restartService(svc); err != nil {
+					logger.Errorf("Error restarting service: %v.", err)
+				}
+			}
 		}
-	}
 
-	if enable {
-		if err := exec.Command("google_oslogin_nss_cache").Run(); err != nil {
+		if err := runCmd(exec.Command("google_oslogin_nss_cache")); err != nil {
 			logger.Errorf("Error updating NSS cache: %v.", err)
 		}
 	}
@@ -200,6 +211,8 @@ func updateNSSwitchConfig(enable bool) error {
 	return nil
 }
 
+// Adds entries to the PAM config for sshd and su which reflect the current
+// enablements. Only writes files if they have changed from what's on disk.
 func updatePAMConfig(enable, twofactor bool) error {
 	authOSLogin := "auth       [success=done perm_denied=die default=ignore] pam_oslogin_login.so"
 	authGroup := "auth       [default=ignore] pam_group.so"
@@ -263,28 +276,27 @@ func updatePAMConfig(enable, twofactor bool) error {
 	return nil
 }
 
+// Creates necessary OS Login directories if they don't exist.
 func createOSLoginDirs() error {
-	restorecon, err := exec.LookPath("restorecon")
-	if err != nil {
-		restorecon = ""
-	}
+	restorecon, restoreconerr := exec.LookPath("restorecon")
 
 	for _, dir := range []string{"/var/google-sudoers.d", "/var/google-users.d"} {
 		err := os.Mkdir(dir, 0750)
 		if err != nil && !os.IsExist(err) {
 			return err
 		}
-		if restorecon != "" {
-			exec.Command(restorecon, dir).Run()
+		if restoreconerr == nil {
+			runCmd(exec.Command(restorecon, dir))
 		}
 	}
 	return nil
 }
 
+// Creates OS Login sudoers file
 func createOSLoginSudoersFile() error {
 	osloginSudoers := "/etc/sudoers.d/google-oslogin"
 	if runtime.GOOS == "freebsd" {
-		osloginSudoers = "/usr/local/etc/sudoers.d/google-oslogin"
+		osloginSudoers = "/usr/local" + osloginSudoers
 	}
 	sudoFile, err := os.OpenFile(osloginSudoers, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0440)
 	if err != nil {
@@ -307,23 +319,23 @@ func restartService(servicename string) error {
 	init, err := os.Readlink("/sbin/init")
 	if err == nil && strings.Contains(init, "systemd") {
 		if systemctl, err := exec.LookPath("systemctl"); err == nil {
-			if exec.Command(systemctl, "is-active", servicename+".service").Run() == nil {
-				return exec.Command(systemctl, "restart", servicename+".service").Run()
+			if err := runCmd(exec.Command(systemctl, "is-active", servicename+".service")); err == nil {
+				return runCmd(exec.Command(systemctl, "restart", servicename+".service"))
 			}
 			return nil
 		}
 	}
 	service, err := exec.LookPath("service")
 	if err == nil {
-		if exec.Command(service, servicename, "status").Run() == nil {
-			return exec.Command(service, servicename, "restart").Run()
+		if err := runCmd(exec.Command(service, servicename, "status")); err == nil {
+			return runCmd(exec.Command(service, servicename, "restart"))
 		}
 		return nil
 	}
 	initService := "/etc/init.d/" + servicename
 	if _, err := os.Stat(initService); err == nil {
-		if exec.Command(initService, "status").Run() == nil {
-			return exec.Command(initService, "restart").Run()
+		if err := runCmd(exec.Command(initService, "status")); err == nil {
+			return runCmd(exec.Command(initService, "restart"))
 		}
 		return nil
 	}
