@@ -412,6 +412,10 @@ func configureIPv6() error {
 		newNi.DHCPv6Refresh == "" && len(oldMetadata.Instance.NetworkInterfaces) == 0:
 		// disable
 		// uses empty old interface slice to indicate this is first-run.
+
+		// Before obtaining or releasing an IPv6 lease, we wait for
+		// 'tentative' IPs as part of SLAAC. We wait up to 5 seconds
+		// for this condition to automatically resolve.
 		tentative := exec.Command("ip", "-6", "-o", "a", "s", "dev", iface.Name, "scope", "link", "tentative")
 		for i := 0; i < 5; i++ {
 			res := runCmdOutput(tentative)
@@ -454,6 +458,8 @@ func enableNetworkInterfaces() error {
 		return nil
 	}
 	var googleInterfaces []string
+	// The primary (first) interface is managed by the OS, we only handle
+	// secondary interfaces in this code.
 	for _, ni := range newMetadata.Instance.NetworkInterfaces[1:] {
 		iface, err := getInterfaceByMAC(ni.Mac)
 		if err != nil {

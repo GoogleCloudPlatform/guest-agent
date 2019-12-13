@@ -29,6 +29,10 @@ import (
 	"github.com/go-ini/ini"
 )
 
+const (
+	instance_id_file = "/etc/google_instance_id"
+)
+
 func forwardEntryExists(fes []ipForwardEntry, fe ipForwardEntry) bool {
 	for _, e := range fes {
 		if e.ipForwardIfIndex == fe.ipForwardIfIndex && e.ipForwardDest.Equal(fe.ipForwardDest) {
@@ -95,14 +99,14 @@ func agentInit() error {
 		// Check if instance ID has changed, and if so, consider this
 		// the first boot of the instance.
 		// TODO Also do this for windows. liamh@13-11-2019
-		instanceID, err := ioutil.ReadFile("/etc/google_instance_id")
+		instanceID, err := ioutil.ReadFile(instance_id_file)
 		if err != nil && !os.IsNotExist(err) {
 			logger.Warningf("Not running first-boot actions, error reading instance ID: %v", err)
 		} else {
 			if string(instanceID) == "" {
 				// If the file didn't exist or was empty, try legacy key from instance configs.
 				instanceID = []byte(config.Section("Instance").Key("instance_id").String())
-				if err := ioutil.WriteFile("/etc/google_instance_id", []byte(newMetadata.Instance.ID.String()), 0644); err != nil {
+				if err := ioutil.WriteFile(instance_id_file, []byte(newMetadata.Instance.ID.String()), 0644); err != nil {
 					logger.Warningf("Failed to write instance ID file: %v", err)
 				}
 			}
@@ -114,7 +118,7 @@ func agentInit() error {
 				if err := generateBotoConfig(); err != nil {
 					logger.Warningf("Failed to create boto.cfg: %v", err)
 				}
-				if err := ioutil.WriteFile("/etc/google_instance_id", []byte(newMetadata.Instance.ID.String()), 0644); err != nil {
+				if err := ioutil.WriteFile(instance_id_file, []byte(newMetadata.Instance.ID.String()), 0644); err != nil {
 					logger.Warningf("Failed to write instance ID file: %v", err)
 				}
 			}
