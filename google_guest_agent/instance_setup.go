@@ -178,7 +178,7 @@ func generateSSHKeys() error {
 	}
 
 	// Generate new keys and upload to guest attributes.
-	for keytype, _ := range keytypes {
+	for keytype := range keytypes {
 		keyfile := fmt.Sprintf("/etc/ssh/ssh_host_%s_key", keytype)
 		if err := runCmd(exec.Command("ssh-keygen", "-t", keytype, "-f", keyfile+".temp", "-N", "", "-q")); err != nil {
 			logger.Warningf("Failed to generate SSH host key %q: %v", keyfile, err)

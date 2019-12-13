@@ -190,7 +190,7 @@ func TestCompareAccounts(t *testing.T) {
 	for _, tt := range tests {
 		toAdd := compareAccounts(tt.newKeys, tt.oldStrKeys)
 		if !reflect.DeepEqual(tt.wantAdd, toAdd) {
-			t.Errorf("toAdd does not match expected: newKeys: %q, oldStrKeys: %q, got: %q, want: %q", tt.newKeys, tt.oldStrKeys, toAdd, tt.wantAdd)
+			t.Errorf("toAdd does not match expected: newKeys: %v, oldStrKeys: %q, got: %v, want: %v", tt.newKeys, tt.oldStrKeys, toAdd, tt.wantAdd)
 		}
 	}
 }

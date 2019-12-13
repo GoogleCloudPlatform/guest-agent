@@ -225,9 +225,8 @@ func runCmdOutput(cmd *exec.Cmd) *execResult {
 	if err != nil {
 		if ee, ok := err.(*exec.ExitError); ok {
 			return &execResult{code: ee.ExitCode(), err: stderr.String()}
-		} else {
-			return &execResult{code: -1, err: err.Error()}
 		}
+		return &execResult{code: -1, err: err.Error()}
 	}
 	return &execResult{code: 0, out: stdout.String()}
 }
