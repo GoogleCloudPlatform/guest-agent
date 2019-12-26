@@ -133,15 +133,12 @@ func getLocalRoutes(ifname string) ([]string, error) {
 	}
 
 	args := fmt.Sprintf("route list table local type local scope host dev %s proto %d", ifname, protoID)
-	out, err := exec.Command("ip", strings.Split(args, " ")...).Output()
-	if err != nil {
-		if ee, ok := err.(*exec.ExitError); ok {
-			return nil, fmt.Errorf(string(ee.Stderr))
-		}
-		return nil, err
+	out := runCmdOutput(exec.Command("ip", strings.Split(args, " ")...))
+	if out.ExitCode() != 0 {
+		return nil, error(out)
 	}
 	var res []string
-	for _, line := range strings.Split(string(out), "\n") {
+	for _, line := range strings.Split(out.Stdout(), "\n") {
 		line = strings.TrimPrefix(line, "local ")
 		line = strings.TrimSpace(line)
 		if line != "" {
@@ -243,12 +240,7 @@ func (a *addressMgr) diff() bool {
 }
 
 func (a *addressMgr) timeout() bool {
-	select {
-	case <-ticker:
-		return true
-	default:
-		return false
-	}
+	return false
 }
 
 func (a *addressMgr) disabled(os string) (disabled bool) {
@@ -273,7 +265,7 @@ func (a *addressMgr) set() error {
 	var err error
 	interfaces, err = net.Interfaces()
 	if err != nil {
-		return err
+		return fmt.Errorf("error populating interfaces: %v", err)
 	}
 
 	if runtime.GOOS != "windows" {
@@ -420,15 +412,27 @@ func configureIPv6() error {
 		newNi.DHCPv6Refresh == "" && len(oldMetadata.Instance.NetworkInterfaces) == 0:
 		// disable
 		// uses empty old interface slice to indicate this is first-run.
-		if err := runCmd(exec.Command("dhclient", "-r", "-6", "-v", iface.Name)); err != nil {
+
+		// Before obtaining or releasing an IPv6 lease, we wait for
+		// 'tentative' IPs as part of SLAAC. We wait up to 5 seconds
+		// for this condition to automatically resolve.
+		tentative := exec.Command("ip", "-6", "-o", "a", "s", "dev", iface.Name, "scope", "link", "tentative")
+		for i := 0; i < 5; i++ {
+			res := runCmdOutput(tentative)
+			if res.ExitCode() == 0 && res.Stdout() == "" {
+				break
+			}
+			time.Sleep(1 * time.Second)
+		}
+		if err := runCmd(exec.Command("dhclient", "-r", "-6", "-1", "-v", iface.Name)); err != nil {
 			return err
 		}
 	case oldNi.DHCPv6Refresh == "" && newNi.DHCPv6Refresh != "":
 		// enable
 		tentative := exec.Command("ip", "-6", "-o", "a", "s", "dev", iface.Name, "scope", "link", "tentative")
 		for i := 0; i < 5; i++ {
-			res, err := runCmdOutput(tentative)
-			if err == nil && res == "" {
+			res := runCmdOutput(tentative)
+			if res.ExitCode() == 0 && res.Stdout() == "" {
 				break
 			}
 			time.Sleep(1 * time.Second)
@@ -450,8 +454,13 @@ var osrelease release
 // On RHEL7, it also calls disableNM for each interface.
 // On SLES, it calls enableSLESInterfaces instead of dhclient.
 func enableNetworkInterfaces() error {
+	if len(newMetadata.Instance.NetworkInterfaces) < 2 {
+		return nil
+	}
 	var googleInterfaces []string
-	for _, ni := range newMetadata.Instance.NetworkInterfaces {
+	// The primary (first) interface is managed by the OS, we only handle
+	// secondary interfaces in this code.
+	for _, ni := range newMetadata.Instance.NetworkInterfaces[1:] {
 		iface, err := getInterfaceByMAC(ni.Mac)
 		if err != nil {
 			if !containsString(ni.Mac, badMAC) {

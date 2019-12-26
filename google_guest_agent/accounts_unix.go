@@ -20,12 +20,12 @@ import "os/user"
 
 func createUser(username, _ string) error {
 	useradd := config.Section("Accounts").Key("useradd_cmd").MustString("useradd -m -s /bin/bash -p * {user}")
-	return runUserGroupCmd(useradd, username, "")
+	return runCmd(createUserGroupCmd(useradd, username, ""))
 }
 
 func addUserToGroup(user, group string) error {
 	gpasswdadd := config.Section("Accounts").Key("gpasswd_add_cmd").MustString("gpasswd -a {user} {group}")
-	return runUserGroupCmd(gpasswdadd, user, group)
+	return runCmd(createUserGroupCmd(gpasswdadd, user, group))
 }
 
 func userExists(name string) (bool, error) {
