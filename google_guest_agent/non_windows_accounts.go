@@ -26,7 +26,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
@@ -334,11 +333,7 @@ func createUserGroupCmd(cmd, user, group string) *exec.Cmd {
 func createGoogleUser(user string) error {
 	var uid string
 	if config.Section("Accounts").Key("reuse_homedir").MustBool(false) {
-		if dir, err := os.Stat(fmt.Sprintf("/home/%s", user)); err == nil {
-			if stat, ok := dir.Sys().(*syscall.Stat_t); ok {
-				uid = fmt.Sprintf("%d", stat.Uid)
-			}
-		}
+		uid = getUID(fmt.Sprintf("/home/%s", user))
 	}
 
 	if err := createUser(user, uid); err != nil {

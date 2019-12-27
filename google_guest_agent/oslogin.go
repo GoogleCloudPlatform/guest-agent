@@ -68,7 +68,6 @@ func (o *osloginMgr) set() error {
 		(&accountsMgr{}).set()
 	}
 
-	// The following functions update the configurations to the desired state and can be run regardless of setting.
 	if err := updateSSHConfig(enable, twofactor); err != nil {
 		logger.Errorf("Error updating SSH config: %v.", err)
 	}
@@ -81,7 +80,6 @@ func (o *osloginMgr) set() error {
 		logger.Errorf("Error updating PAM config: %v.", err)
 	}
 
-	// Functions only run if enablement is requested.
 	if enable {
 		if err := createOSLoginDirs(); err != nil {
 			logger.Errorf("Error creating OS Login directory: %v.", err)
@@ -94,7 +92,7 @@ func (o *osloginMgr) set() error {
 		// Services which need to be restarted primarily due to caching
 		// issues. Only do this if we think this was not already enabled.
 		// Services are grouped up this way to avoid restarting a
-		// service twice if it exists under two names. First name wins.
+		// service twice if it exists under two names.
 		if !isEnabled {
 			for _, svcs := range [][]string{[]string{"ssh", "sshd"}, []string{"nscd", "unscd"}, []string{"systemd-logind"}, []string{"cron", "crond"}} {
 				for _, svc := range svcs {

@@ -182,3 +182,7 @@ func userExists(name string) (bool, error) {
 
 	return true, nil
 }
+
+func getUID(path string) string {
+	return ""
+}
