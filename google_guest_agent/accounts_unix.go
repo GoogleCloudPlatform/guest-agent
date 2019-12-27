@@ -16,10 +16,16 @@
 
 package main
 
-import "os/user"
+import (
+	"fmt"
+	"os/user"
+)
 
-func createUser(username, _ string) error {
+func createUser(username, uid string) error {
 	useradd := config.Section("Accounts").Key("useradd_cmd").MustString("useradd -m -s /bin/bash -p * {user}")
+	if uid != "" {
+		useradd = fmt.Sprintf("%s -u %s", useradd, uid)
+	}
 	return runCmd(createUserGroupCmd(useradd, username, ""))
 }
 
