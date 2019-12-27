@@ -331,7 +331,12 @@ func createUserGroupCmd(cmd, user, group string) *exec.Cmd {
 // createGoogleUser creates a Google managed user account if needed and adds it
 // to the configured groups.
 func createGoogleUser(user string) error {
-	if err := createUser(user, ""); err != nil {
+	var uid string
+	if config.Section("Accounts").Key("reuse_homedir").MustBool(false) {
+		uid = getUID(fmt.Sprintf("/home/%s", user))
+	}
+
+	if err := createUser(user, uid); err != nil {
 		return err
 	}
 	groups := config.Section("Accounts").Key("groups").MustString("adm,dip,docker,lxd,plugdev,video")

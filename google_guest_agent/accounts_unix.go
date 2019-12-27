@@ -16,10 +16,27 @@
 
 package main
 
-import "os/user"
+import (
+	"fmt"
+	"os"
+	"os/user"
+	"syscall"
+)
 
-func createUser(username, _ string) error {
+func getUID(path string) string {
+	if dir, err := os.Stat(path); err == nil {
+		if stat, ok := dir.Sys().(*syscall.Stat_t); ok {
+			return fmt.Sprintf("%d", stat.Uid)
+		}
+	}
+	return ""
+}
+
+func createUser(username, uid string) error {
 	useradd := config.Section("Accounts").Key("useradd_cmd").MustString("useradd -m -s /bin/bash -p * {user}")
+	if uid != "" {
+		useradd = fmt.Sprintf("%s -u %s", useradd, uid)
+	}
 	return runCmd(createUserGroupCmd(useradd, username, ""))
 }
 

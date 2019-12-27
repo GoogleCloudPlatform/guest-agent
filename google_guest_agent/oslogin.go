@@ -21,7 +21,6 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
-	"time"
 
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 )
@@ -64,9 +63,6 @@ func (o *osloginMgr) set() error {
 
 	if enable && !oldEnable {
 		logger.Infof("Enabling OS Login")
-		// Erase SSH keys using the accountsMgr.
-		// TODO: how to ensure it is not running already?
-		time.Sleep(5 * time.Second)
 		newMetadata.Instance.Attributes.SSHKeys = nil
 		newMetadata.Project.Attributes.SSHKeys = nil
 		(&accountsMgr{}).set()
@@ -94,12 +90,17 @@ func (o *osloginMgr) set() error {
 		}
 
 		// Services which need to be restarted primarily due to caching
-		// issues. Only do this if we think this was enabled during
-		// this run.
+		// issues. Only do this if we think this was not already enabled.
+		// Services are grouped up this way to avoid restarting a
+		// service twice if it exists under two names.
 		if !isEnabled {
-			for _, svc := range []string{"ssh", "sshd", "nscd", "unscd", "systemd-logind", "cron", "crond"} {
-				if err := restartService(svc); err != nil {
-					logger.Errorf("Error restarting service: %v.", err)
+			for _, svcs := range [][]string{[]string{"ssh", "sshd"}, []string{"nscd", "unscd"}, []string{"systemd-logind"}, []string{"cron", "crond"}} {
+				for _, svc := range svcs {
+					if err := restartService(svc); err != nil {
+						logger.Errorf("Error restarting service: %v.", err)
+					} else {
+						break
+					}
 				}
 			}
 		}

@@ -106,7 +106,10 @@ func agentInit() error {
 			if string(instanceID) == "" {
 				// If the file didn't exist or was empty, try legacy key from instance configs.
 				instanceID = []byte(config.Section("Instance").Key("instance_id").String())
-				if err := ioutil.WriteFile(instanceIDFile, []byte(newMetadata.Instance.ID.String()), 0644); err != nil {
+
+				// Write instance ID to file for next time before moving on.
+				towrite := fmt.Sprintf("%s\n", newMetadata.Instance.ID.String())
+				if err := ioutil.WriteFile(instanceIDFile, []byte(towrite), 0644); err != nil {
 					logger.Warningf("Failed to write instance ID file: %v", err)
 				}
 			}
@@ -118,7 +121,10 @@ func agentInit() error {
 				if err := generateBotoConfig(); err != nil {
 					logger.Warningf("Failed to create boto.cfg: %v", err)
 				}
-				if err := ioutil.WriteFile(instanceIDFile, []byte(newMetadata.Instance.ID.String()), 0644); err != nil {
+
+				// Write instance ID to file.
+				towrite := fmt.Sprintf("%s\n", newMetadata.Instance.ID.String())
+				if err := ioutil.WriteFile(instanceIDFile, []byte(towrite), 0644); err != nil {
 					logger.Warningf("Failed to write instance ID file: %v", err)
 				}
 			}
