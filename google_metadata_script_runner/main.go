@@ -16,7 +16,7 @@
 // Engine instances.
 package main
 
-// TODO: compare log outputs in this utility to linux. incorporate config from guest-agent.
+// TODO: compare log outputs in this utility to linux.
 // TODO: standardize and consolidate retries.
 
 import (
@@ -39,6 +39,7 @@ import (
 
 	"cloud.google.com/go/storage"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
+	"github.com/go-ini/ini"
 )
 
 var (
@@ -49,6 +50,7 @@ var (
 	defaultTimeout = 20 * time.Second
 	powerShellArgs = []string{"-NoProfile", "-NoLogo", "-ExecutionPolicy", "Unrestricted", "-File"}
 	usageError     = fmt.Errorf("No valid arguments specified. Specify one of \"startup\", \"shutdown\" or \"specialize\"")
+	config         *ini.File
 
 	storageURL = "storage.googleapis.com"
 
@@ -80,6 +82,11 @@ var (
 	gsHTTPRegex3 = regexp.MustCompile(fmt.Sprintf(`^http[s]?://(?:commondata)?storage\.googleapis\.com/%s/%s$`, bucket, object))
 
 	testStorageClient *storage.Client
+)
+
+const (
+	winConfigPath = `C:\Program Files\Google\Compute Engine\instance_configs.cfg`
+	configPath    = `/etc/default/instance_configs.cfg`
 )
 
 func newStorageClient(ctx context.Context) (*storage.Client, error) {
@@ -243,8 +250,7 @@ func runScript(ctx context.Context, key, value string) error {
 	}
 
 	// Make temp directory.
-	// dir, err := ioutil.TempDir(config.Section("MetadataScripts").Key("run_dir"), "metadata-scripts")
-	dir, err := ioutil.TempDir("", "metadata-scripts")
+	dir, err := ioutil.TempDir(config.Section("MetadataScripts").Key("run_dir").String(), "metadata-scripts")
 	if err != nil {
 		return err
 	}
@@ -287,8 +293,7 @@ func runScript(ctx context.Context, key, value string) error {
 		if runtime.GOOS == "windows" {
 			c = exec.Command(tmpFile)
 		} else {
-			//c = exec.Command(config.Section("MetadataScripts").Key("default_shell").MustString("/bin/bash"), "-c", tmpFile)
-			c = exec.Command("/bin/bash", "-c", tmpFile)
+			c = exec.Command(config.Section("MetadataScripts").Key("default_shell").MustString("/bin/bash"), "-c", tmpFile)
 		}
 	}
 
@@ -335,9 +340,9 @@ func getWantedKeys(args []string, os string) ([]string, error) {
 		if os == "windows" {
 			prefix = "windows-" + prefix
 		}
-		// if !config.Section("MetadataScripts").Key(prefix).MustBool(true) {
-		// 	return nil, fmt.Errorf("%s scripts disabled in instance config.", prefix)
-		// }
+		if !config.Section("MetadataScripts").Key(prefix).MustBool(true) {
+			return nil, fmt.Errorf("%s scripts disabled in instance config.", prefix)
+		}
 	default:
 		return nil, usageError
 	}
@@ -392,6 +397,15 @@ func logFormat(e logger.LogEntry) string {
 	return fmt.Sprintf("%s %s: %s", now, programName, e.Message)
 }
 
+func parseConfig(file string) (*ini.File, error) {
+	// Priority: file.cfg, file.cfg.distro, file.cfg.template
+	cfg, err := ini.LoadSources(ini.LoadOptions{Loose: true, Insensitive: true}, file, file+".distro", file+".template")
+	if err != nil {
+		return nil, err
+	}
+	return cfg, nil
+}
+
 func main() {
 	ctx := context.Background()
 	opts := logger.LogOpts{
@@ -410,11 +424,18 @@ func main() {
 	projectID, err := getMetadataKey("/project/project-id")
 	if err == nil {
 		opts.ProjectName = projectID
-	} else {
-		// TODO: just consider it disabled if no project is set..
-		opts.DisableCloudLogging = true
 	}
 	logger.Init(ctx, opts)
+
+	cfgfile := configPath
+	if runtime.GOOS == "windows" {
+		cfgfile = winConfigPath
+	}
+
+	config, err = parseConfig(cfgfile)
+	if err != nil && !os.IsNotExist(err) {
+		logger.Errorf("Error parsing instance config %s: %s", cfgfile, err)
+	}
 
 	logger.Infof("Starting %s scripts (version %s).", os.Args[1], version)
 
