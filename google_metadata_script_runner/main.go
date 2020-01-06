@@ -414,6 +414,17 @@ func main() {
 		Writers:        []io.Writer{os.Stdout},
 	}
 
+	cfgfile := configPath
+	if runtime.GOOS == "windows" {
+		cfgfile = winConfigPath
+	}
+
+	var err error
+	config, err = parseConfig(cfgfile)
+	if err != nil && !os.IsNotExist(err) {
+		fmt.Printf("Error parsing instance config %s: %s\n", cfgfile, err.Error())
+	}
+
 	// The keys to check vary based on the argument and the OS. Also functions to validate arguments.
 	wantedKeys, err := getWantedKeys(os.Args, runtime.GOOS)
 	if err != nil {
@@ -426,16 +437,6 @@ func main() {
 		opts.ProjectName = projectID
 	}
 	logger.Init(ctx, opts)
-
-	cfgfile := configPath
-	if runtime.GOOS == "windows" {
-		cfgfile = winConfigPath
-	}
-
-	config, err = parseConfig(cfgfile)
-	if err != nil && !os.IsNotExist(err) {
-		logger.Errorf("Error parsing instance config %s: %s", cfgfile, err)
-	}
 
 	logger.Infof("Starting %s scripts (version %s).", os.Args[1], version)
 

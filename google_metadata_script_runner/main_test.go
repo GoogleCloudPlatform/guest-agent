@@ -18,9 +18,15 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"reflect"
 	"testing"
 )
+
+func TestMain(m *testing.M) {
+	config, _ = parseConfig("")
+	os.Exit(m.Run())
+}
 
 func TestGetWantedArgs(t *testing.T) {
 	getWantedTests := []struct {
