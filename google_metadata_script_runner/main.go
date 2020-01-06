@@ -49,7 +49,7 @@ var (
 	metadataHang   = "/?recursive=true&alt=json&timeout_sec=10&last_etag=NONE"
 	defaultTimeout = 20 * time.Second
 	powerShellArgs = []string{"-NoProfile", "-NoLogo", "-ExecutionPolicy", "Unrestricted", "-File"}
-	usageError     = fmt.Errorf("No valid arguments specified. Specify one of \"startup\", \"shutdown\" or \"specialize\"")
+	errUsage       = fmt.Errorf("No valid arguments specified. Specify one of \"startup\", \"shutdown\" or \"specialize\"")
 	config         *ini.File
 
 	storageURL = "storage.googleapis.com"
@@ -330,7 +330,7 @@ func runCmd(c *exec.Cmd, name string) error {
 // getWantedKeys returns the list of keys to check for a given type of script and OS.
 func getWantedKeys(args []string, os string) ([]string, error) {
 	if len(args) != 2 {
-		return nil, usageError
+		return nil, errUsage
 	}
 	prefix := args[1]
 	switch prefix {
@@ -341,10 +341,10 @@ func getWantedKeys(args []string, os string) ([]string, error) {
 			prefix = "windows-" + prefix
 		}
 		if !config.Section("MetadataScripts").Key(prefix).MustBool(true) {
-			return nil, fmt.Errorf("%s scripts disabled in instance config.", prefix)
+			return nil, fmt.Errorf("%s scripts disabled in instance config", prefix)
 		}
 	default:
-		return nil, usageError
+		return nil, errUsage
 	}
 
 	var mdkeys []string
