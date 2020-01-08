@@ -140,7 +140,7 @@ func run(ctx context.Context) {
 		logger.Errorf("Error parsing config %s: %s", cfgfile, err)
 	}
 
-	if err := agentInit(); err != nil {
+	if err := agentInit(ctx); err != nil {
 		logger.Errorf("Error running instance setup: %v", err)
 	}
 
@@ -259,13 +259,11 @@ func main() {
 		opts.Writers = []io.Writer{&serialPort{"COM1"}}
 	}
 
-	var err error
 	ctx := context.Background()
+
+	var err error
 	newMetadata, err = getMetadata(ctx, false)
-	if err != nil {
-		logger.Warningf("Couldn't get metadata, disabling cloud logging")
-		opts.DisableCloudLogging = true
-	} else {
+	if err == nil {
 		opts.ProjectName = newMetadata.Project.ProjectID
 	}
 

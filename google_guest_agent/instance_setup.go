@@ -15,6 +15,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -24,6 +25,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 	"github.com/go-ini/ini"
@@ -42,7 +44,7 @@ func forwardEntryExists(fes []ipForwardEntry, fe ipForwardEntry) bool {
 	return false
 }
 
-func agentInit() error {
+func agentInit(ctx context.Context) error {
 	// Actions to take on agent startup.
 	//
 	// On Windows:
@@ -96,6 +98,15 @@ func agentInit() error {
 			break
 		}
 	} else {
+		// The below actions require metadata to be set, so if it
+		// hasn't yet been set, wait on it here. In instances without
+		// network access, this will become an indefinite wait.
+		// TODO: split agentInit into needs-network and no-network functions.
+		for newMetadata == nil {
+			newMetadata, _ = getMetadata(ctx, false)
+			time.Sleep(1 * time.Second)
+		}
+
 		// Check if instance ID has changed, and if so, consider this
 		// the first boot of the instance.
 		// TODO Also do this for windows. liamh@13-11-2019
