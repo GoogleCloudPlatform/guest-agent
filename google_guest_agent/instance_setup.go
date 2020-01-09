@@ -98,6 +98,20 @@ func agentInit(ctx context.Context) error {
 			break
 		}
 	} else {
+		// These scripts are run regardless of metadata/network access and config options.
+		for _, script := range []string{"optimize_local_ssd", "set_multiqueue"} {
+			if config.Section("InstanceSetup").Key(script).MustBool(true) {
+				if err := runCmd(exec.Command("google_" + script)); err != nil {
+					logger.Warningf("Failed to run %q script: %v", "google_"+script, err)
+				}
+			}
+		}
+
+		// Allow users to opt out of below instance setup actions.
+		if !config.Section("InstanceSetup").Key("network_enabled").MustBool(true) {
+			logger.Infof("InstanceSetup.network_enabled is false, skipping setup actions that require metadata")
+			return nil
+		}
 		// The below actions require metadata to be set, so if it
 		// hasn't yet been set, wait on it here. In instances without
 		// network access, this will become an indefinite wait.
@@ -126,11 +140,15 @@ func agentInit(ctx context.Context) error {
 			}
 			if newMetadata.Instance.ID.String() != string(instanceID) {
 				logger.Infof("Instance ID changed, running first-boot actions")
-				if err := generateSSHKeys(); err != nil {
-					logger.Warningf("Failed to generate SSH keys: %v", err)
+				if config.Section("InstanceSetup").Key("set_host_keys").MustBool(true) {
+					if err := generateSSHKeys(); err != nil {
+						logger.Warningf("Failed to generate SSH keys: %v", err)
+					}
 				}
-				if err := generateBotoConfig(); err != nil {
-					logger.Warningf("Failed to create boto.cfg: %v", err)
+				if config.Section("InstanceSetup").Key("set_boto_config").MustBool(true) {
+					if err := generateBotoConfig(); err != nil {
+						logger.Warningf("Failed to create boto.cfg: %v", err)
+					}
 				}
 
 				// Write instance ID to file.
