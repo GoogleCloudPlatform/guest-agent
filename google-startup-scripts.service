@@ -1,0 +1,15 @@
+[Unit]
+Description=Google Compute Engine Startup Scripts
+Wants=network-online.target rsyslog.service
+After=network-online.target rsyslog.service google-guest-agent.service
+Before=apt-daily.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/google_metadata_script_runner startup
+#TimeoutStartSec is ignored for Type=oneshot service units.
+KillMode=process
+StandardOutput=journal+console
+
+[Install]
+WantedBy=multi-user.target
