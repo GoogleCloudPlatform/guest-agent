@@ -8,7 +8,7 @@
   "files": {
     "google_metadata_script_runner/GCEMetadataScripts.exe": "<ProgramFiles>/Google/Compute Engine/metadata_scripts/GCEMetadataScripts.exe",
     "packaging/googet/run_shutdown_scripts.cmd": "<ProgramFiles>/Google/Compute Engine/metadata_scripts/run_shutdown_scripts.cmd",
-    "packaging/googet/run_startup_scripts.cmd": "<ProgramFiles>/Google/Compute Engine/metadata_scripts/run_startup_scripts.cmd",
+    "packaging/googet/run_startup_scripts.cmd": "<ProgramFiles>/Google/Compute Engine/metadata_scripts/run_startup_scripts.cmd"
   },
  "install": {
     "path": "packaging/googet/metadata_scripts_install.ps1"
