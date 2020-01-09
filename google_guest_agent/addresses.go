@@ -35,7 +35,7 @@ var (
 	interfacesEnabled bool
 	interfaces        []net.Interface
 
-	protoID = 66
+	defaultProtoID = "66"
 )
 
 type addressMgr struct{}
@@ -132,7 +132,8 @@ func getLocalRoutes(ifname string) ([]string, error) {
 		return nil, errors.New("getLocalRoutes unimplemented on Windows")
 	}
 
-	args := fmt.Sprintf("route list table local type local scope host dev %s proto %d", ifname, protoID)
+	protoID := config.Section("IpForwarding").Key("ethernet_proto_id").MustString(defaultProtoID)
+	args := fmt.Sprintf("route list table local type local scope host dev %s proto %s", ifname, protoID)
 	out := runCmdOutput(exec.Command("ip", strings.Split(args, " ")...))
 	if out.ExitCode() != 0 {
 		return nil, error(out)
@@ -158,7 +159,8 @@ func addLocalRoute(ip, ifname string) error {
 	if !strings.Contains(ip, "/") {
 		ip = ip + "/32"
 	}
-	args := fmt.Sprintf("route add to local %s scope host dev %s proto %d", ip, ifname, protoID)
+	protoID := config.Section("IpForwarding").Key("ethernet_proto_id").MustString(defaultProtoID)
+	args := fmt.Sprintf("route add to local %s scope host dev %s proto %s", ip, ifname, protoID)
 	return runCmd(exec.Command("ip", strings.Split(args, " ")...))
 }
 
@@ -172,7 +174,8 @@ func removeLocalRoute(ip, ifname string) error {
 	if !strings.Contains(ip, "/") {
 		ip = ip + "/32"
 	}
-	args := fmt.Sprintf("route delete to local %s scope host dev %s proto %d", ip, ifname, protoID)
+	protoID := config.Section("IpForwarding").Key("ethernet_proto_id").MustString(defaultProtoID)
+	args := fmt.Sprintf("route delete to local %s scope host dev %s proto %s", ip, ifname, protoID)
 	return runCmd(exec.Command("ip", strings.Split(args, " ")...))
 }
 
@@ -291,9 +294,12 @@ func (a *addressMgr) set() error {
 			}
 			continue
 		}
-		wantIPs := append(ni.ForwardedIps, ni.TargetInstanceIps...)
-		if runtime.GOOS != "windows" {
-			// IP Aliases are not supported on windows.
+		wantIPs := ni.ForwardedIps
+		if config.Section("IpForwarding").Key("target_instance_ips").MustBool(true) {
+			wantIPs = append(wantIPs, ni.TargetInstanceIps...)
+		}
+		// IP Aliases are not supported on windows.
+		if runtime.GOOS != "windows" && config.Section("IpForwarding").Key("ip_aliases").MustBool(true) {
 			wantIPs = append(wantIPs, ni.IPAliases...)
 		}
 
