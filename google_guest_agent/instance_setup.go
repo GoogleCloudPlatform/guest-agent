@@ -98,6 +98,8 @@ func agentInit(ctx context.Context) error {
 			break
 		}
 	} else {
+		// Linux instance setup.
+
 		// These scripts are run regardless of metadata/network access and config options.
 		for _, script := range []string{"optimize_local_ssd", "set_multiqueue"} {
 			if config.Section("InstanceSetup").Key(script).MustBool(true) {
@@ -107,11 +109,28 @@ func agentInit(ctx context.Context) error {
 			}
 		}
 
+		// Below actions happen on every agent start. They only need to
+		// run once per boot, but it's harmless to run them on every
+		// boot. If this changes, we will hook these to an explicit
+		// on-boot signal.
+		if err := setIOScheduler(); err != nil {
+			logger.Warningf("Failed to set IO scheduler: %v", err)
+		}
+
+		// Disable overcommit accounting; e2 instances only.
+		parts := strings.Split(newMetadata.Instance.MachineType, "/")
+		if strings.HasPrefix(parts[len(parts)-1], "e2-") {
+			if err := runCmd(exec.Command("sysctl", "vm.overcommit_memory=1")); err != nil {
+				logger.Warningf("Failed to run 'sysctl vm.overcommit_memory=1': %v", err)
+			}
+		}
+
 		// Allow users to opt out of below instance setup actions.
 		if !config.Section("InstanceSetup").Key("network_enabled").MustBool(true) {
 			logger.Infof("InstanceSetup.network_enabled is false, skipping setup actions that require metadata")
 			return nil
 		}
+
 		// The below actions require metadata to be set, so if it
 		// hasn't yet been set, wait on it here. In instances without
 		// network access, this will become an indefinite wait.
@@ -159,27 +178,6 @@ func agentInit(ctx context.Context) error {
 			}
 		}
 
-		// Below actions happen on every agent start. They only need to
-		// run once per boot, but it's harmless to run them on every
-		// boot. If this changes, we will hook these to an explicit
-		// on-boot signal.
-		if err = setIOScheduler(); err != nil {
-			logger.Warningf("Failed to set IO scheduler: %v", err)
-		}
-
-		// Disable overcommit accounting; e2 instances only.
-		parts := strings.Split(newMetadata.Instance.MachineType, "/")
-		if strings.HasPrefix(parts[len(parts)-1], "e2-") {
-			if err := runCmd(exec.Command("sysctl", "vm.overcommit_memory=1")); err != nil {
-				logger.Warningf("Failed to run 'sysctl vm.overcommit_memory=1': %v", err)
-			}
-		}
-
-		for _, script := range []string{"google_optimize_local_ssd", "google_set_multiqueue"} {
-			if err := runCmd(exec.Command(script)); err != nil {
-				logger.Warningf("Failed to run %q script: %v", script, err)
-			}
-		}
 	}
 	return nil
 }
