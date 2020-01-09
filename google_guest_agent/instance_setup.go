@@ -15,6 +15,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -24,6 +25,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 	"github.com/go-ini/ini"
@@ -42,7 +44,7 @@ func forwardEntryExists(fes []ipForwardEntry, fe ipForwardEntry) bool {
 	return false
 }
 
-func agentInit() error {
+func agentInit(ctx context.Context) error {
 	// Actions to take on agent startup.
 	//
 	// On Windows:
@@ -96,6 +98,48 @@ func agentInit() error {
 			break
 		}
 	} else {
+		// Linux instance setup.
+
+		// These scripts are run regardless of metadata/network access and config options.
+		for _, script := range []string{"optimize_local_ssd", "set_multiqueue"} {
+			if config.Section("InstanceSetup").Key(script).MustBool(true) {
+				if err := runCmd(exec.Command("google_" + script)); err != nil {
+					logger.Warningf("Failed to run %q script: %v", "google_"+script, err)
+				}
+			}
+		}
+
+		// Below actions happen on every agent start. They only need to
+		// run once per boot, but it's harmless to run them on every
+		// boot. If this changes, we will hook these to an explicit
+		// on-boot signal.
+		if err := setIOScheduler(); err != nil {
+			logger.Warningf("Failed to set IO scheduler: %v", err)
+		}
+
+		// Disable overcommit accounting; e2 instances only.
+		parts := strings.Split(newMetadata.Instance.MachineType, "/")
+		if strings.HasPrefix(parts[len(parts)-1], "e2-") {
+			if err := runCmd(exec.Command("sysctl", "vm.overcommit_memory=1")); err != nil {
+				logger.Warningf("Failed to run 'sysctl vm.overcommit_memory=1': %v", err)
+			}
+		}
+
+		// Allow users to opt out of below instance setup actions.
+		if !config.Section("InstanceSetup").Key("network_enabled").MustBool(true) {
+			logger.Infof("InstanceSetup.network_enabled is false, skipping setup actions that require metadata")
+			return nil
+		}
+
+		// The below actions require metadata to be set, so if it
+		// hasn't yet been set, wait on it here. In instances without
+		// network access, this will become an indefinite wait.
+		// TODO: split agentInit into needs-network and no-network functions.
+		for newMetadata == nil {
+			newMetadata, _ = getMetadata(ctx, false)
+			time.Sleep(1 * time.Second)
+		}
+
 		// Check if instance ID has changed, and if so, consider this
 		// the first boot of the instance.
 		// TODO Also do this for windows. liamh@13-11-2019
@@ -115,11 +159,15 @@ func agentInit() error {
 			}
 			if newMetadata.Instance.ID.String() != string(instanceID) {
 				logger.Infof("Instance ID changed, running first-boot actions")
-				if err := generateSSHKeys(); err != nil {
-					logger.Warningf("Failed to generate SSH keys: %v", err)
+				if config.Section("InstanceSetup").Key("set_host_keys").MustBool(true) {
+					if err := generateSSHKeys(); err != nil {
+						logger.Warningf("Failed to generate SSH keys: %v", err)
+					}
 				}
-				if err := generateBotoConfig(); err != nil {
-					logger.Warningf("Failed to create boto.cfg: %v", err)
+				if config.Section("InstanceSetup").Key("set_boto_config").MustBool(true) {
+					if err := generateBotoConfig(); err != nil {
+						logger.Warningf("Failed to create boto.cfg: %v", err)
+					}
 				}
 
 				// Write instance ID to file.
@@ -130,27 +178,6 @@ func agentInit() error {
 			}
 		}
 
-		// Below actions happen on every agent start. They only need to
-		// run once per boot, but it's harmless to run them on every
-		// boot. If this changes, we will hook these to an explicit
-		// on-boot signal.
-		if err = setIOScheduler(); err != nil {
-			logger.Warningf("Failed to set IO scheduler: %v", err)
-		}
-
-		// Disable overcommit accounting; e2 instances only.
-		parts := strings.Split(newMetadata.Instance.MachineType, "/")
-		if strings.HasPrefix(parts[len(parts)-1], "e2-") {
-			if err := runCmd(exec.Command("sysctl", "vm.overcommit_memory=1")); err != nil {
-				logger.Warningf("Failed to run 'sysctl vm.overcommit_memory=1': %v", err)
-			}
-		}
-
-		for _, script := range []string{"google_optimize_local_ssd", "google_set_multiqueue"} {
-			if err := runCmd(exec.Command(script)); err != nil {
-				logger.Warningf("Failed to run %q script: %v", script, err)
-			}
-		}
 	}
 	return nil
 }
