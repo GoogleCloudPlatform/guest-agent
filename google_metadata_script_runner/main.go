@@ -40,6 +40,7 @@ import (
 	"cloud.google.com/go/storage"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 	"github.com/go-ini/ini"
+	"github.com/tarm/serial"
 )
 
 var (
@@ -260,9 +261,7 @@ func runScript(ctx context.Context, key, value string) error {
 	// on other systems though.
 	tmpFile := filepath.Join(dir, key)
 	for _, ext := range []string{"bat", "cmd", "ps1"} {
-		switch {
-		case strings.HasSuffix(key, fmt.Sprintf("-%s", ext)),
-			u != nil && strings.HasSuffix(u.Path, fmt.Sprintf(".%s", ext)):
+		if strings.HasSuffix(key, "-"+ext) || (u != nil && strings.HasSuffix(u.Path, "."+ext)) {
 			tmpFile = fmt.Sprintf("%s.%s", tmpFile, ext)
 			break
 		}
@@ -278,10 +277,12 @@ func runScript(ctx context.Context, key, value string) error {
 			file.Close()
 			return err
 		}
-		file.Close()
+		if err := file.Close(); err != nil {
+			return fmt.Errorf("error closing temp file: %v", err)
+		}
 	} else {
 		if err := ioutil.WriteFile(tmpFile, []byte(value), 0755); err != nil {
-			return err
+			return fmt.Errorf("error writing temp file: %v", err)
 		}
 	}
 
@@ -392,6 +393,21 @@ func getExistingKeys(wanted []string) (map[string]string, error) {
 	return nil, nil
 }
 
+type serialPort struct {
+	port string
+}
+
+func (s *serialPort) Write(b []byte) (int, error) {
+	c := &serial.Config{Name: s.port, Baud: 115200}
+	p, err := serial.OpenPort(c)
+	if err != nil {
+		return 0, err
+	}
+	defer p.Close()
+
+	return p.Write(b)
+}
+
 func logFormat(e logger.LogEntry) string {
 	now := time.Now().Format("2006/01/02 15:04:05")
 	return fmt.Sprintf("%s %s: %s", now, programName, e.Message)
@@ -408,15 +424,16 @@ func parseConfig(file string) (*ini.File, error) {
 
 func main() {
 	ctx := context.Background()
+
 	opts := logger.LogOpts{
 		LoggerName:     programName,
 		FormatFunction: logFormat,
-		Writers:        []io.Writer{os.Stdout},
 	}
 
 	cfgfile := configPath
 	if runtime.GOOS == "windows" {
 		cfgfile = winConfigPath
+		opts.Writers = []io.Writer{&serialPort{"COM1"}, os.Stdout}
 	}
 
 	var err error
@@ -436,6 +453,7 @@ func main() {
 	if err == nil {
 		opts.ProjectName = projectID
 	}
+
 	logger.Init(ctx, opts)
 
 	logger.Infof("Starting %s scripts (version %s).", os.Args[1], version)
