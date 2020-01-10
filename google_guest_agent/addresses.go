@@ -263,7 +263,7 @@ func (a *addressMgr) disabled(os string) (disabled bool) {
 
 	// This is the linux config key, defaulting to true. On Linux, the
 	// config file has lower priority since we ship a file with defaults.
-	return config.Section("Daemons").Key("network_daemon").MustBool(true)
+	return !config.Section("Daemons").Key("network_daemon").MustBool(true)
 }
 
 func (a *addressMgr) set() error {
@@ -502,22 +502,22 @@ func enableNetworkInterfaces() error {
 		}
 		fallthrough
 	default:
-		dhcp_command := config.Section("NetworkInterfaces").Key("dhcp_command").String()
-		if dhcp_command != "" {
-			return runCmd(exec.Command(dhcp_command))
+		dhcpCommand := config.Section("NetworkInterfaces").Key("dhcp_command").String()
+		if dhcpCommand != "" {
+			return runCmd(exec.Command(dhcpCommand))
 		}
 
 		err := runCmd(exec.Command("dhclient", "-x"))
 		if err != nil {
 			logger.Warningf("Error running 'dhclient -x': %v.", err)
 		}
-		dhclient_args := []string{}
+		dhclientArgs := []string{}
 		// The dhclient_script key has historically only been supported on EL6.
 		if (osrelease.os == "rhel" || osrelease.os == "centos") && osrelease.version.major == 6 {
-			dhclient_args = append(dhclient_args, "-sf", config.Section("NetworkInterfaces").Key("dhclient_script").MustString("/sbin/google-dhclient-script"))
+			dhclientArgs = append(dhclientArgs, "-sf", config.Section("NetworkInterfaces").Key("dhclient_script").MustString("/sbin/google-dhclient-script"))
 		}
-		dhclient_args = append(dhclient_args, googleInterfaces...)
-		return runCmd(exec.Command("dhclient", dhclient_args...))
+		dhclientArgs = append(dhclientArgs, googleInterfaces...)
+		return runCmd(exec.Command("dhclient", dhclientArgs...))
 	}
 }
 
