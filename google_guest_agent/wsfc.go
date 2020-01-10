@@ -52,7 +52,7 @@ func newWsfcManager() *wsfcManager {
 	newState := stopped
 
 	if func() bool {
-		enabled, err := config.Section("wsfc").Key("enabled").Bool()
+		enabled, err := config.Section("wsfc").Key("enable").Bool()
 		if err == nil {
 			return enabled
 		}

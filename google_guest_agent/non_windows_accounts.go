@@ -88,9 +88,9 @@ func (a *accountsMgr) timeout() bool {
 func (a *accountsMgr) disabled(os string) bool {
 	return false ||
 		os == "windows" ||
-		!config.Section("Daemons").Key("accounts_daemon").MustBool(true) ||
 		newMetadata.Instance.Attributes.EnableOSLogin ||
-		newMetadata.Project.Attributes.EnableOSLogin
+		newMetadata.Project.Attributes.EnableOSLogin ||
+		!config.Section("Daemons").Key("accounts_daemon").MustBool(true)
 }
 
 func (a *accountsMgr) set() error {
