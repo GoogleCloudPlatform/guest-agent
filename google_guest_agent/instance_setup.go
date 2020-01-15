@@ -117,14 +117,6 @@ func agentInit(ctx context.Context) error {
 			logger.Warningf("Failed to set IO scheduler: %v", err)
 		}
 
-		// Disable overcommit accounting; e2 instances only.
-		parts := strings.Split(newMetadata.Instance.MachineType, "/")
-		if strings.HasPrefix(parts[len(parts)-1], "e2-") {
-			if err := runCmd(exec.Command("sysctl", "vm.overcommit_memory=1")); err != nil {
-				logger.Warningf("Failed to run 'sysctl vm.overcommit_memory=1': %v", err)
-			}
-		}
-
 		// Allow users to opt out of below instance setup actions.
 		if !config.Section("InstanceSetup").Key("network_enabled").MustBool(true) {
 			logger.Infof("InstanceSetup.network_enabled is false, skipping setup actions that require metadata")
@@ -138,6 +130,14 @@ func agentInit(ctx context.Context) error {
 		for newMetadata == nil {
 			newMetadata, _ = getMetadata(ctx, false)
 			time.Sleep(1 * time.Second)
+		}
+
+		// Disable overcommit accounting; e2 instances only.
+		parts := strings.Split(newMetadata.Instance.MachineType, "/")
+		if strings.HasPrefix(parts[len(parts)-1], "e2-") {
+			if err := runCmd(exec.Command("sysctl", "vm.overcommit_memory=1")); err != nil {
+				logger.Warningf("Failed to run 'sysctl vm.overcommit_memory=1': %v", err)
+			}
 		}
 
 		// Check if instance ID has changed, and if so, consider this
