@@ -18,6 +18,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -40,6 +41,9 @@ var (
 	oldMetadata, newMetadata *metadata
 	config                   *ini.File
 	osRelease                release
+	action                   string
+	snapshotServiceIP        string
+	snapshotServicePort      int
 )
 
 const (
@@ -247,6 +251,16 @@ func runCmdOutput(cmd *exec.Cmd) *execResult {
 	return &execResult{code: 0, out: stdout.String()}
 }
 
+func runCmdOutputWithTimeout(timeoutSec time.Duration, name string, args ...string) *execResult {
+	ctx, cancel := context.WithTimeout(context.Background(), timeoutSec)
+	defer cancel()
+	execResult := runCmdOutput(exec.CommandContext(ctx, name, args...))
+	if ctx.Err() != nil && errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		execResult.code = 124 // By convention
+	}
+	return execResult
+}
+
 func containsString(s string, ss []string) bool {
 	for _, a := range ss {
 		if a == s {
@@ -270,6 +284,7 @@ func closer(c io.Closer) {
 
 func main() {
 	ctx := context.Background()
+
 	var action string
 	if len(os.Args) < 2 {
 		action = "run"
