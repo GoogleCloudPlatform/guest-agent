@@ -35,7 +35,7 @@ var (
 	interfacesEnabled bool
 	interfaces        []net.Interface
 
-	protoID = 66
+	defaultProtoID = "66"
 )
 
 type addressMgr struct{}
@@ -132,7 +132,8 @@ func getLocalRoutes(ifname string) ([]string, error) {
 		return nil, errors.New("getLocalRoutes unimplemented on Windows")
 	}
 
-	args := fmt.Sprintf("route list table local type local scope host dev %s proto %d", ifname, protoID)
+	protoID := config.Section("IpForwarding").Key("ethernet_proto_id").MustString(defaultProtoID)
+	args := fmt.Sprintf("route list table local type local scope host dev %s proto %s", ifname, protoID)
 	out := runCmdOutput(exec.Command("ip", strings.Split(args, " ")...))
 	if out.ExitCode() != 0 {
 		return nil, error(out)
@@ -158,7 +159,8 @@ func addLocalRoute(ip, ifname string) error {
 	if !strings.Contains(ip, "/") {
 		ip = ip + "/32"
 	}
-	args := fmt.Sprintf("route add to local %s scope host dev %s proto %d", ip, ifname, protoID)
+	protoID := config.Section("IpForwarding").Key("ethernet_proto_id").MustString(defaultProtoID)
+	args := fmt.Sprintf("route add to local %s scope host dev %s proto %s", ip, ifname, protoID)
 	return runCmd(exec.Command("ip", strings.Split(args, " ")...))
 }
 
@@ -172,7 +174,8 @@ func removeLocalRoute(ip, ifname string) error {
 	if !strings.Contains(ip, "/") {
 		ip = ip + "/32"
 	}
-	args := fmt.Sprintf("route delete to local %s scope host dev %s proto %d", ip, ifname, protoID)
+	protoID := config.Section("IpForwarding").Key("ethernet_proto_id").MustString(defaultProtoID)
+	args := fmt.Sprintf("route delete to local %s scope host dev %s proto %s", ip, ifname, protoID)
 	return runCmd(exec.Command("ip", strings.Split(args, " ")...))
 }
 
@@ -246,15 +249,21 @@ func (a *addressMgr) timeout() bool {
 func (a *addressMgr) disabled(os string) (disabled bool) {
 	disabled, err := config.Section("addressManager").Key("disable").Bool()
 	if err == nil {
+		// This is the windows config key. On windows, finding a key in
+		// the config file takes priority over metadata.
 		return disabled
 	}
+
 	if newMetadata.Instance.Attributes.DisableAddressManager != nil {
 		return *newMetadata.Instance.Attributes.DisableAddressManager
 	}
 	if newMetadata.Project.Attributes.DisableAddressManager != nil {
 		return *newMetadata.Project.Attributes.DisableAddressManager
 	}
-	return false
+
+	// This is the linux config key, defaulting to true. On Linux, the
+	// config file has lower priority since we ship a file with defaults.
+	return !config.Section("Daemons").Key("network_daemon").MustBool(true)
 }
 
 func (a *addressMgr) set() error {
@@ -268,20 +277,26 @@ func (a *addressMgr) set() error {
 		return fmt.Errorf("error populating interfaces: %v", err)
 	}
 
-	if runtime.GOOS != "windows" {
-		if err := configureIPv6(); err != nil {
-			return err
+	if config.Section("NetworkInterfaces").Key("setup").MustBool(true) {
+		if runtime.GOOS != "windows" {
+			if err := configureIPv6(); err != nil {
+				return err
+			}
+		}
+
+		if runtime.GOOS != "windows" && !interfacesEnabled {
+			if err := enableNetworkInterfaces(); err != nil {
+				return err
+			}
+			interfacesEnabled = true
 		}
 	}
 
-	if runtime.GOOS != "windows" && !interfacesEnabled {
-		if err := enableNetworkInterfaces(); err != nil {
-			return err
-		}
-		interfacesEnabled = true
+	if !config.Section("NetworkInterfaces").Key("ip_forwarding").MustBool(true) {
+		return nil
 	}
 
-	// Add routes for forwarded and target-instance IPs.
+	// Add routes for IP aliases, forwarded and target-instance IPs.
 	for _, ni := range newMetadata.Instance.NetworkInterfaces {
 		iface, err := getInterfaceByMAC(ni.Mac)
 		if err != nil {
@@ -291,9 +306,12 @@ func (a *addressMgr) set() error {
 			}
 			continue
 		}
-		wantIPs := append(ni.ForwardedIps, ni.TargetInstanceIps...)
-		if runtime.GOOS != "windows" {
-			// IP Aliases are not supported on windows.
+		wantIPs := ni.ForwardedIps
+		if config.Section("IpForwarding").Key("target_instance_ips").MustBool(true) {
+			wantIPs = append(wantIPs, ni.TargetInstanceIps...)
+		}
+		// IP Aliases are not supported on windows.
+		if runtime.GOOS != "windows" && config.Section("IpForwarding").Key("ip_aliases").MustBool(true) {
 			wantIPs = append(wantIPs, ni.IPAliases...)
 		}
 
@@ -484,11 +502,22 @@ func enableNetworkInterfaces() error {
 		}
 		fallthrough
 	default:
+		dhcpCommand := config.Section("NetworkInterfaces").Key("dhcp_command").String()
+		if dhcpCommand != "" {
+			return runCmd(exec.Command(dhcpCommand))
+		}
+
 		err := runCmd(exec.Command("dhclient", "-x"))
 		if err != nil {
 			logger.Warningf("Error running 'dhclient -x': %v.", err)
 		}
-		return runCmd(exec.Command("dhclient", googleInterfaces...))
+		dhclientArgs := []string{}
+		// The dhclient_script key has historically only been supported on EL6.
+		if (osrelease.os == "rhel" || osrelease.os == "centos") && osrelease.version.major == 6 {
+			dhclientArgs = append(dhclientArgs, "-sf", config.Section("NetworkInterfaces").Key("dhclient_script").MustString("/sbin/google-dhclient-script"))
+		}
+		dhclientArgs = append(dhclientArgs, googleInterfaces...)
+		return runCmd(exec.Command("dhclient", dhclientArgs...))
 	}
 }
 
