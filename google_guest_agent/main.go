@@ -122,9 +122,25 @@ func runUpdate() {
 }
 
 func run(ctx context.Context) {
-	logger.Infof("GCE Agent Started (version %s)", version)
+	opts := logger.LogOpts{LoggerName: programName}
+	if runtime.GOOS == "windows" {
+		opts.FormatFunction = logFormat
+		opts.Writers = []io.Writer{&serialPort{"COM1"}}
+	}
 
 	var err error
+	newMetadata, err = getMetadata(ctx, false)
+	if err == nil {
+		opts.ProjectName = newMetadata.Project.ProjectID
+	}
+
+	if err := logger.Init(ctx, opts); err != nil {
+		fmt.Printf("Error initializing logger: %v", err)
+		os.Exit(1)
+	}
+
+	logger.Infof("GCE Agent Started (version %s)", version)
+
 	osRelease, err = getRelease()
 	if err != nil && runtime.GOOS != "windows" {
 		logger.Warningf("Couldn't detect OS release")
@@ -253,25 +269,7 @@ func closer(c io.Closer) {
 }
 
 func main() {
-	opts := logger.LogOpts{LoggerName: programName}
-	if runtime.GOOS == "windows" {
-		opts.FormatFunction = logFormat
-		opts.Writers = []io.Writer{&serialPort{"COM1"}}
-	}
-
 	ctx := context.Background()
-
-	var err error
-	newMetadata, err = getMetadata(ctx, false)
-	if err == nil {
-		opts.ProjectName = newMetadata.Project.ProjectID
-	}
-
-	if err := logger.Init(ctx, opts); err != nil {
-		fmt.Printf("Error initializing logger: %v", err)
-		os.Exit(1)
-	}
-
 	var action string
 	if len(os.Args) < 2 {
 		action = "run"
