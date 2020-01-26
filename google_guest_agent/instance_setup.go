@@ -157,7 +157,7 @@ func agentInit(ctx context.Context) error {
 					logger.Warningf("Failed to write instance ID file: %v", err)
 				}
 			}
-			if newMetadata.Instance.ID.String() != string(instanceID) {
+			if newMetadata.Instance.ID.String() != strings.TrimSuffix(string(instanceID), "\n") {
 				logger.Infof("Instance ID changed, running first-boot actions")
 				if config.Section("InstanceSetup").Key("set_host_keys").MustBool(true) {
 					if err := generateSSHKeys(); err != nil {
