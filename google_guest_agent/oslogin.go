@@ -90,17 +90,14 @@ func (o *osloginMgr) set() error {
 		}
 
 		// Services which need to be restarted primarily due to caching
-		// issues. Only do this if we think this was not already enabled.
-		// Services are grouped up this way to avoid restarting a
-		// service twice if it exists under two names.
+		// issues or config changes. Only do this if we think OS Login
+		// was not already enabled.
 		if !isEnabled {
-			for _, svcs := range [][]string{[]string{"ssh", "sshd"}, []string{"nscd", "unscd"}, []string{"systemd-logind"}, []string{"cron", "crond"}} {
-				for _, svc := range svcs {
-					if err := restartService(svc); err != nil {
-						logger.Errorf("Error restarting service: %v.", err)
-					} else {
-						break
-					}
+			for _, svc := range []string{"ssh", "sshd", "nscd", "unscd", "systemd-logind", "cron", "crond"} {
+				if err := restartService(svc); err != nil {
+					logger.Errorf("Error restarting service: %v.", err)
+				} else {
+					break
 				}
 			}
 		}
