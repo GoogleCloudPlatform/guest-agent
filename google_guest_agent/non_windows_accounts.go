@@ -476,5 +476,6 @@ func updateAuthorizedKeysFile(user string, keys []string) error {
 		os.Remove(tempPath)
 		return fmt.Errorf("error setting ownership of new keys file: %v", err)
 	}
+	runCmd(exec.Command("restorecon", tempPath))
 	return os.Rename(tempPath, akpath)
 }
