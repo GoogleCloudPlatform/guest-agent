@@ -96,8 +96,6 @@ func (o *osloginMgr) set() error {
 			for _, svc := range []string{"ssh", "sshd", "nscd", "unscd", "systemd-logind", "cron", "crond"} {
 				if err := restartService(svc); err != nil {
 					logger.Errorf("Error restarting service: %v.", err)
-				} else {
-					break
 				}
 			}
 		}
