@@ -75,7 +75,8 @@ func agentInit(ctx context.Context) error {
 
 		for _, iface := range interfaces {
 			// Only take action on interfaces that are up, are not Loopback, and are not vEtherent (commonly setup by docker).
-			if strings.Contains(iface.Name, "vEthernet") || iface.Flags&net.FlagLoopback != 0 || iface.Flags&net.FlagUp == 0 {
+			if strings.Contains(iface.Name, "vEthernet") || strings.Contains(iface.Name, "Teredo Tunneling") ||
+				iface.Flags&net.FlagLoopback != 0 || iface.Flags&net.FlagUp == 0 {
 				continue
 			}
 
