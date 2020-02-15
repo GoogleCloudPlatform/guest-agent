@@ -44,8 +44,10 @@ func TestWatchMetadata(t *testing.T) {
 	// So that the test wont timeout.
 	defaultTimeout = 1 * time.Second
 
+	truebool := new(bool)
+	*truebool = true
 	want := attributes{
-		EnableOSLogin: true,
+		EnableOSLogin: truebool,
 		WSFCAddresses: "foo",
 		WindowsKeys: windowsKeys{
 			windowsKey{Exponent: "exponent", UserName: "username", Modulus: "modulus", ExpireOn: et, AddToAdministrators: nil},

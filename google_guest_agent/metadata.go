@@ -104,8 +104,8 @@ type project struct {
 
 type attributes struct {
 	BlockProjectKeys      bool
-	EnableOSLogin         bool
-	TwoFactor             bool
+	EnableOSLogin         *bool
+	TwoFactor             *bool
 	SSHKeys               []string
 	WindowsKeys           windowsKeys
 	Diagnostics           string
@@ -199,7 +199,7 @@ func (a *attributes) UnmarshalJSON(b []byte) error {
 	}
 	value, err = strconv.ParseBool(temp.EnableOSLogin)
 	if err == nil {
-		a.EnableOSLogin = value
+		a.EnableOSLogin = mkbool(value)
 	}
 	value, err = strconv.ParseBool(temp.EnableWSFC)
 	if err == nil {
@@ -207,7 +207,7 @@ func (a *attributes) UnmarshalJSON(b []byte) error {
 	}
 	value, err = strconv.ParseBool(temp.TwoFactor)
 	if err == nil {
-		a.TwoFactor = value
+		a.TwoFactor = mkbool(value)
 	}
 	// So SSHKeys will be nil instead of []string{}
 	if temp.SSHKeys != "" {

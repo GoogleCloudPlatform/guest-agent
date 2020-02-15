@@ -33,14 +33,33 @@ var (
 
 type osloginMgr struct{}
 
+// We also read project keys first, letting instance-level keys take
+// precedence.
+func getOSLoginEnabled(md *metadata) (bool, bool) {
+	var enable bool
+	if md.Project.Attributes.EnableOSLogin != nil {
+		enable = *md.Project.Attributes.EnableOSLogin
+	}
+	if md.Instance.Attributes.EnableOSLogin != nil {
+		enable = *md.Instance.Attributes.EnableOSLogin
+	}
+	var twofactor bool
+	if md.Project.Attributes.TwoFactor != nil {
+		twofactor = *md.Project.Attributes.TwoFactor
+	}
+	if md.Instance.Attributes.TwoFactor != nil {
+		twofactor = *md.Instance.Attributes.TwoFactor
+	}
+	return enable, twofactor
+}
+
 func (o *osloginMgr) diff() bool {
-	// True on first run.
+	oldEnable, oldTwoFactor := getOSLoginEnabled(oldMetadata)
+	enable, twofactor := getOSLoginEnabled(newMetadata)
 	return oldMetadata.Project.ProjectID == "" ||
-		// True if any value has changed.
-		(oldMetadata.Instance.Attributes.EnableOSLogin != newMetadata.Instance.Attributes.EnableOSLogin) ||
-		(oldMetadata.Instance.Attributes.TwoFactor != newMetadata.Instance.Attributes.TwoFactor) ||
-		(oldMetadata.Project.Attributes.EnableOSLogin != newMetadata.Project.Attributes.EnableOSLogin) ||
-		(oldMetadata.Project.Attributes.TwoFactor != newMetadata.Project.Attributes.TwoFactor)
+		// True on first run or if any value has changed.
+		(oldTwoFactor != twofactor) ||
+		(oldEnable != enable)
 }
 
 func (o *osloginMgr) timeout() bool {
@@ -52,10 +71,14 @@ func (o *osloginMgr) disabled(os string) bool {
 }
 
 func (o *osloginMgr) set() error {
-	oldEnable := oldMetadata.Instance.Attributes.EnableOSLogin || oldMetadata.Project.Attributes.EnableOSLogin
-	enable := newMetadata.Instance.Attributes.EnableOSLogin || newMetadata.Project.Attributes.EnableOSLogin
-	twofactor := newMetadata.Instance.Attributes.TwoFactor || newMetadata.Project.Attributes.TwoFactor
+	// We need to know if it was previously enabled for the clearing of
+	// metadata-based SSH keys.
+	oldEnable, _ := getOSLoginEnabled(oldMetadata)
+	enable, twofactor := getOSLoginEnabled(newMetadata)
 
+	// Proxy for detecting whether we think it is currently enabled. We
+	// read files instead of any variables for this because we want to
+	// handle agent being down during transitions.
 	var isEnabled bool
 	if nsswitch, err := ioutil.ReadFile("/etc/nsswitch.conf"); err == nil && strings.Contains(string(nsswitch), "oslogin") {
 		isEnabled = true

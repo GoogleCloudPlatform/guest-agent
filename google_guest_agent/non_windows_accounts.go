@@ -86,10 +86,9 @@ func (a *accountsMgr) timeout() bool {
 }
 
 func (a *accountsMgr) disabled(os string) bool {
+	oslogin, _ := getOSLoginEnabled(newMetadata)
 	return false ||
-		os == "windows" ||
-		newMetadata.Instance.Attributes.EnableOSLogin ||
-		newMetadata.Project.Attributes.EnableOSLogin ||
+		os == "windows" || oslogin ||
 		!config.Section("Daemons").Key("accounts_daemon").MustBool(true)
 }
 
