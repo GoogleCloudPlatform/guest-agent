@@ -415,53 +415,37 @@ func TestUpdatePAMsu(t *testing.T) {
 }
 
 func TestGetOSLoginEnabled(t *testing.T) {
-	var template string
-	template = `{
-  "instance": {
-    "attributes": {__INSTANCE_ATTRIBUTES__}
-  },
-  "project": {
-    "attributes": {__PROJECT_ATTRIBUTES__}
-  }
-}`
 	var tests = []struct {
-		instance, project string
+		md                string
 		enable, twofactor bool
 	}{
 		{
-			instance:  `"enable-oslogin": "true","enable-oslogin-2fa": "true"`,
-			project:   ``,
+			md:        `{"instance": {"attributes": {"enable-oslogin": "true", "enable-oslogin-2fa": "true"}}}`,
 			enable:    true,
 			twofactor: true,
 		},
 		{
-			instance:  ``,
-			project:   `"enable-oslogin": "true","enable-oslogin-2fa": "true"`,
-			enable:    true,
-			twofactor: true,
-		},
-		{
-			// Instance keys take precedence
-			instance:  `"enable-oslogin": "true","enable-oslogin-2fa": "true"`,
-			project:   `"enable-oslogin": "false","enable-oslogin-2fa": "false"`,
+			md:        `{"project": {"attributes": {"enable-oslogin": "true", "enable-oslogin-2fa": "true"}}}`,
 			enable:    true,
 			twofactor: true,
 		},
 		{
 			// Instance keys take precedence
-			instance:  `"enable-oslogin": "false","enable-oslogin-2fa": "false"`,
-			project:   `"enable-oslogin": "true","enable-oslogin-2fa": "true"`,
+			md:        `{"project": {"attributes": {"enable-oslogin": "false", "enable-oslogin-2fa": "false"}}, "instance": {"attributes": {"enable-oslogin": "true", "enable-oslogin-2fa": "true"}}}`,
+			enable:    true,
+			twofactor: true,
+		},
+		{
+			// Instance keys take precedence
+			md:        `{"project": {"attributes": {"enable-oslogin": "true", "enable-oslogin-2fa": "true"}}, "instance": {"attributes": {"enable-oslogin": "false", "enable-oslogin-2fa": "false"}}}`,
 			enable:    false,
 			twofactor: false,
 		},
 	}
 
 	for idx, tt := range tests {
-		js := strings.ReplaceAll(template, "__INSTANCE_ATTRIBUTES__", tt.instance)
-		js = strings.ReplaceAll(js, "__PROJECT_ATTRIBUTES__", tt.project)
-
 		var md metadata
-		if err := json.Unmarshal([]byte(js), &md); err != nil {
+		if err := json.Unmarshal([]byte(tt.md), &md); err != nil {
 			t.Errorf("Failed to unmarshal metadata JSON for test %v: %v", idx, err)
 		}
 		enable, twofactor := getOSLoginEnabled(&md)
