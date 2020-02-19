@@ -33,14 +33,33 @@ var (
 
 type osloginMgr struct{}
 
+// We also read project keys first, letting instance-level keys take
+// precedence.
+func getOSLoginEnabled(md *metadata) (bool, bool) {
+	var enable bool
+	if md.Project.Attributes.EnableOSLogin != nil {
+		enable = *md.Project.Attributes.EnableOSLogin
+	}
+	if md.Instance.Attributes.EnableOSLogin != nil {
+		enable = *md.Instance.Attributes.EnableOSLogin
+	}
+	var twofactor bool
+	if md.Project.Attributes.TwoFactor != nil {
+		twofactor = *md.Project.Attributes.TwoFactor
+	}
+	if md.Instance.Attributes.TwoFactor != nil {
+		twofactor = *md.Instance.Attributes.TwoFactor
+	}
+	return enable, twofactor
+}
+
 func (o *osloginMgr) diff() bool {
-	// True on first run.
+	oldEnable, oldTwoFactor := getOSLoginEnabled(oldMetadata)
+	enable, twofactor := getOSLoginEnabled(newMetadata)
 	return oldMetadata.Project.ProjectID == "" ||
-		// True if any value has changed.
-		(oldMetadata.Instance.Attributes.EnableOSLogin != newMetadata.Instance.Attributes.EnableOSLogin) ||
-		(oldMetadata.Instance.Attributes.TwoFactor != newMetadata.Instance.Attributes.TwoFactor) ||
-		(oldMetadata.Project.Attributes.EnableOSLogin != newMetadata.Project.Attributes.EnableOSLogin) ||
-		(oldMetadata.Project.Attributes.TwoFactor != newMetadata.Project.Attributes.TwoFactor)
+		// True on first run or if any value has changed.
+		(oldTwoFactor != twofactor) ||
+		(oldEnable != enable)
 }
 
 func (o *osloginMgr) timeout() bool {
@@ -52,10 +71,14 @@ func (o *osloginMgr) disabled(os string) bool {
 }
 
 func (o *osloginMgr) set() error {
-	oldEnable := oldMetadata.Instance.Attributes.EnableOSLogin || oldMetadata.Project.Attributes.EnableOSLogin
-	enable := newMetadata.Instance.Attributes.EnableOSLogin || newMetadata.Project.Attributes.EnableOSLogin
-	twofactor := newMetadata.Instance.Attributes.TwoFactor || newMetadata.Project.Attributes.TwoFactor
+	// We need to know if it was previously enabled for the clearing of
+	// metadata-based SSH keys.
+	oldEnable, _ := getOSLoginEnabled(oldMetadata)
+	enable, twofactor := getOSLoginEnabled(newMetadata)
 
+	// Proxy for detecting whether we think it is currently enabled. We
+	// read files instead of any variables for this because we want to
+	// handle agent being down during transitions.
 	var isEnabled bool
 	if nsswitch, err := ioutil.ReadFile("/etc/nsswitch.conf"); err == nil && strings.Contains(string(nsswitch), "oslogin") {
 		isEnabled = true
@@ -68,15 +91,15 @@ func (o *osloginMgr) set() error {
 		(&accountsMgr{}).set()
 	}
 
-	if err := updateSSHConfig(enable, twofactor); err != nil {
+	if err := writeSSHConfig(enable, twofactor); err != nil {
 		logger.Errorf("Error updating SSH config: %v.", err)
 	}
 
-	if err := updateNSSwitchConfig(enable); err != nil {
+	if err := writeNSSwitchConfig(enable); err != nil {
 		logger.Errorf("Error updating NSS config: %v.", err)
 	}
 
-	if err := updatePAMConfig(enable, twofactor); err != nil {
+	if err := writePAMConfig(enable, twofactor); err != nil {
 		logger.Errorf("Error updating PAM config: %v.", err)
 	}
 
@@ -113,14 +136,15 @@ func filterGoogleLines(contents string) []string {
 	var filtered []string
 	for _, line := range strings.Split(contents, "\n") {
 		switch {
-		case strings.Contains(line, googleComment):
+		case strings.Contains(line, googleComment) && !isgoogleblock:
 			isgoogle = true
-		case isgoogle:
+		case strings.Contains(line, googleBlockEnd):
+			isgoogleblock = false
 			isgoogle = false
 		case isgoogleblock, strings.Contains(line, googleBlockStart):
 			isgoogleblock = true
-		case strings.Contains(line, googleBlockEnd):
-			isgoogleblock = false
+		case isgoogle:
+			isgoogle = false
 		default:
 			filtered = append(filtered, line)
 		}
@@ -128,7 +152,17 @@ func filterGoogleLines(contents string) []string {
 	return filtered
 }
 
-func updateSSHConfig(enable, twofactor bool) error {
+func writeConfigFile(path, contents string) error {
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_TRUNC, 0777)
+	if err != nil {
+		return err
+	}
+	defer closeFile(file)
+	file.WriteString(contents)
+	return nil
+}
+
+func updateSSHConfig(sshConfig string, enable, twofactor bool) string {
 	// TODO: this feels like a case for a text/template
 	challengeResponseEnable := "ChallengeResponseAuthentication yes"
 	authorizedKeysCommand := "AuthorizedKeysCommand /usr/bin/google_authorized_keys"
@@ -142,42 +176,34 @@ func updateSSHConfig(enable, twofactor bool) error {
 		twoFactorAuthMethods = "RequiredAuthentications2 publickey,keyboard-interactive"
 	}
 
-	sshConfig, err := ioutil.ReadFile("/etc/ssh/sshd_config")
-	if err != nil {
-		return err
-	}
-
 	filtered := filterGoogleLines(string(sshConfig))
 
 	if enable {
 		osLoginBlock := []string{googleBlockStart, authorizedKeysCommand, authorizedKeysUser}
-		twofactorblock := []string{twoFactorAuthMethods, challengeResponseEnable}
 		if twofactor {
-			osLoginBlock = append(osLoginBlock, twofactorblock...)
+			osLoginBlock = append(osLoginBlock, twoFactorAuthMethods, challengeResponseEnable)
 		}
 		osLoginBlock = append(osLoginBlock, googleBlockEnd)
 		filtered = append(osLoginBlock, filtered...)
 	}
-	proposed := strings.Join(filtered, "\n")
-	if proposed != string(sshConfig) {
-		file, err := os.OpenFile("/etc/ssh/sshd_config", os.O_WRONLY|os.O_TRUNC, 0777)
-		if err != nil {
-			return err
-		}
-		defer closeFile(file)
-		file.WriteString(proposed)
-	}
 
-	return nil
+	return strings.Join(filtered, "\n")
 }
 
-func updateNSSwitchConfig(enable bool) error {
-	oslogin := " cache_oslogin oslogin"
-
-	nsswitch, err := ioutil.ReadFile("/etc/nsswitch.conf")
+func writeSSHConfig(enable, twofactor bool) error {
+	sshConfig, err := ioutil.ReadFile("/etc/ssh/sshd_config")
 	if err != nil {
 		return err
 	}
+	proposed := updateSSHConfig(string(sshConfig), enable, twofactor)
+	if proposed == string(sshConfig) {
+		return nil
+	}
+	return writeConfigFile("/etc/ssh/sshd_config", proposed)
+}
+
+func updateNSSwitchConfig(nsswitch string, enable bool) string {
+	oslogin := " cache_oslogin oslogin"
 
 	var filtered []string
 	for _, line := range strings.Split(string(nsswitch), "\n") {
@@ -195,21 +221,24 @@ func updateNSSwitchConfig(enable bool) error {
 		}
 		filtered = append(filtered, line)
 	}
-	proposed := strings.Join(filtered, "\n")
-	if proposed != string(nsswitch) {
-		file, err := os.OpenFile("/etc/nsswitch.conf", os.O_WRONLY|os.O_TRUNC, 0777)
-		if err != nil {
-			return err
-		}
-		defer closeFile(file)
-		file.WriteString(proposed)
+	return strings.Join(filtered, "\n")
+}
+
+func writeNSSwitchConfig(enable bool) error {
+	nsswitch, err := ioutil.ReadFile("/etc/nsswitch.conf")
+	if err != nil {
+		return err
 	}
-	return nil
+	proposed := updateNSSwitchConfig(string(nsswitch), enable)
+	if proposed == string(nsswitch) {
+		return nil
+	}
+	return writeConfigFile("/etc/nsswitch.conf", proposed)
 }
 
 // Adds entries to the PAM config for sshd and su which reflect the current
 // enablements. Only writes files if they have changed from what's on disk.
-func updatePAMConfig(enable, twofactor bool) error {
+func updatePAMsshd(pamsshd string, enable, twofactor bool) string {
 	authOSLogin := "auth       [success=done perm_denied=die default=ignore] pam_oslogin_login.so"
 	authGroup := "auth       [default=ignore] pam_group.so"
 	accountOSLogin := "account    [success=ok ignore=ignore default=die] pam_oslogin_login.so"
@@ -224,49 +253,52 @@ func updatePAMConfig(enable, twofactor bool) error {
 		sessionHomeDir = "session    optional pam_mkhomedir.so"
 	}
 
-	pamsshd, err := ioutil.ReadFile("/etc/pam.d/sshd")
-	if err != nil {
-		return err
-	}
 	filtered := filterGoogleLines(string(pamsshd))
 	if enable {
 		topOfFile := []string{googleBlockStart}
 		if twofactor {
 			topOfFile = append(topOfFile, authOSLogin)
 		}
-		topOfFile = append(topOfFile, []string{authGroup, googleBlockEnd}...)
+		topOfFile = append(topOfFile, authGroup, googleBlockEnd)
 		bottomOfFile := []string{googleBlockStart, accountOSLogin, accountOSLoginAdmin, sessionHomeDir, googleBlockEnd}
 		filtered = append(topOfFile, filtered...)
 		filtered = append(filtered, bottomOfFile...)
 	}
-	proposed := strings.Join(filtered, "\n")
-	if proposed != string(pamsshd) {
-		file, err := os.OpenFile("/etc/pam.d/sshd", os.O_WRONLY|os.O_TRUNC, 0777)
-		if err != nil {
-			return err
-		}
-		defer closeFile(file)
-		file.WriteString(proposed)
+	return strings.Join(filtered, "\n")
+}
+
+func updatePAMsu(pamsu string, enable bool) string {
+	accountSu := "account    [success=bad ignore=ignore] pam_oslogin_login.so"
+
+	filtered := filterGoogleLines(pamsu)
+	if enable {
+		filtered = append([]string{googleComment, accountSu}, filtered...)
 	}
 
-	accountSu := "account    [success=bad ignore=ignore] pam_oslogin_login.so"
+	return strings.Join(filtered, "\n")
+}
+
+func writePAMConfig(enable, twofactor bool) error {
+	pamsshd, err := ioutil.ReadFile("/etc/pam.d/sshd")
+	if err != nil {
+		return err
+	}
+	proposed := updatePAMsshd(string(pamsshd), enable, twofactor)
+	if proposed != string(pamsshd) {
+		if err := writeConfigFile("/etc/pam.d/sshd", proposed); err != nil {
+			return err
+		}
+	}
 
 	pamsu, err := ioutil.ReadFile("/etc/pam.d/su")
 	if err != nil {
 		return err
 	}
-	filtered = filterGoogleLines(string(pamsu))
-	if enable {
-		filtered = append([]string{googleComment, accountSu}, filtered...)
-	}
-	proposed = strings.Join(filtered, "\n")
+	proposed = updatePAMsu(string(pamsu), enable)
 	if proposed != string(pamsu) {
-		file2, err := os.OpenFile("/etc/pam.d/su", os.O_WRONLY|os.O_TRUNC, 0777)
-		if err != nil {
+		if err := writeConfigFile("/etc/pam.d/su", proposed); err != nil {
 			return err
 		}
-		defer closeFile(file2)
-		file2.WriteString(proposed)
 	}
 
 	return nil
@@ -288,7 +320,6 @@ func createOSLoginDirs() error {
 	return nil
 }
 
-// Creates OS Login sudoers file
 func createOSLoginSudoersFile() error {
 	osloginSudoers := "/etc/sudoers.d/google-oslogin"
 	if runtime.GOOS == "freebsd" {
