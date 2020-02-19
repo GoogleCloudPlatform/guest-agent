@@ -447,6 +447,12 @@ func TestGetOSLoginEnabled(t *testing.T) {
 			enable:    true,
 			twofactor: false,
 		},
+		{
+			// Mixed test
+			md:        `{"project": {"attributes": {"enable-oslogin": "true", "enable-oslogin-2fa": "true"}}, "instance": {"attributes": {"enable-oslogin-2fa": "false"}}}`,
+			enable:    true,
+			twofactor: false,
+		},
 	}
 
 	for idx, tt := range tests {
