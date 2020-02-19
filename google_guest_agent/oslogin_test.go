@@ -441,6 +441,12 @@ func TestGetOSLoginEnabled(t *testing.T) {
 			enable:    false,
 			twofactor: false,
 		},
+		{
+			// Handle weird values
+			md:        `{"instance": {"attributes": {"enable-oslogin": "TRUE", "enable-oslogin-2fa": "foobar"}}}`,
+			enable:    true,
+			twofactor: false,
+		},
 	}
 
 	for idx, tt := range tests {
