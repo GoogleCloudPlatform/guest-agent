@@ -76,14 +76,6 @@ func (o *osloginMgr) set() error {
 	oldEnable, _ := getOSLoginEnabled(oldMetadata)
 	enable, twofactor := getOSLoginEnabled(newMetadata)
 
-	// Proxy for detecting whether we think it is currently enabled. We
-	// read files instead of any variables for this because we want to
-	// handle agent being down during transitions.
-	var isEnabled bool
-	if nsswitch, err := ioutil.ReadFile("/etc/nsswitch.conf"); err == nil && strings.Contains(string(nsswitch), "oslogin") {
-		isEnabled = true
-	}
-
 	if enable && !oldEnable {
 		logger.Infof("Enabling OS Login")
 		newMetadata.Instance.Attributes.SSHKeys = nil
@@ -103,6 +95,12 @@ func (o *osloginMgr) set() error {
 		logger.Errorf("Error updating PAM config: %v.", err)
 	}
 
+	for _, svc := range []string{"ssh", "sshd", "nscd", "unscd", "systemd-logind", "cron", "crond"} {
+		if err := restartService(svc); err != nil {
+			logger.Errorf("Error restarting service: %v.", err)
+		}
+	}
+
 	if enable {
 		if err := createOSLoginDirs(); err != nil {
 			logger.Errorf("Error creating OS Login directory: %v.", err)
@@ -112,20 +110,10 @@ func (o *osloginMgr) set() error {
 			logger.Errorf("Error creating OS Login sudoers file: %v.", err)
 		}
 
-		// Services which need to be restarted primarily due to caching
-		// issues or config changes. Only do this if we think OS Login
-		// was not already enabled.
-		if !isEnabled {
-			for _, svc := range []string{"ssh", "sshd", "nscd", "unscd", "systemd-logind", "cron", "crond"} {
-				if err := restartService(svc); err != nil {
-					logger.Errorf("Error restarting service: %v.", err)
-				}
-			}
-		}
-
 		if err := runCmd(exec.Command("google_oslogin_nss_cache")); err != nil {
 			logger.Errorf("Error updating NSS cache: %v.", err)
 		}
+
 	}
 
 	return nil
