@@ -196,13 +196,29 @@ func TestCompareAccounts(t *testing.T) {
 }
 
 func TestRemoveExpiredKeys(t *testing.T) {
-	keys := []string{
-		`user:ssh-rsa [KEY] google-ssh {"userName":"user@email.com", "expireOn":"2028-11-08T19:30:47+0000"}`,
-		`user:ssh-rsa [KEY] google-ssh {"userName":"user@email.com", "expireOn":"2018-11-08T19:30:46+0000"}`,
-		`user:ssh-rsa [KEY] google-ssh {"userName":"user@email.com", "expireOn":"2018-11-08T19:30:46+0700"}`,
-		`user:ssh-rsa [KEY] hostname`}
-	res := removeExpiredKeys(keys)
-	if count := len(res); count != 2 {
-		t.Fatalf("expected 2 fields, got %d\n", count)
+	var tests = []struct {
+		key   string
+		valid bool
+	}{
+		{`user:ssh-rsa [KEY] google-ssh {"userName":"user@email.com", "expireOn":"2028-11-08T19:30:47+0000"}`, true},
+		{`user:ssh-rsa [KEY] google-ssh {"userName":"user@email.com", "expireOn":"2028-11-08T19:30:47+0700"}`, true},
+		{`user:ssh-rsa [KEY] google-ssh {"userName":"user@email.com", "expireOn":"2018-11-08T19:30:46+0000"}`, false},
+		{`user:ssh-rsa [KEY] google-ssh {"userName":"user@email.com", "expireOn":"2018-11-08T19:30:46+0700"}`, false},
+		{`user:ssh-rsa [KEY] hostname`, true},
+		{`user:ssh-rsa [KEY] google-ssh`, false},
+		{`user:ssh-rsa [KEY]`, false},
+		{},
+	}
+
+	for _, tt := range tests {
+		ret := removeExpiredKeys([]string{tt.key})
+		if tt.valid {
+			if len(ret) == 0 || ret[0] != tt.key {
+				t.Errorf("valid key was removed: %q", tt.key)
+			}
+		}
+		if !tt.valid && len(ret) == 1 {
+			t.Errorf("invalid key was kept: %q", tt.key)
+		}
 	}
 }
