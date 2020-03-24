@@ -202,6 +202,9 @@ func getPasswd(user string) (*passwdEntry, error) {
 		}
 		// kevin:x:1005:1006::/home/kevin:/usr/bin/zsh
 		parts := strings.SplitN(string(line), ":", 7)
+		if len(parts) < 7 {
+			return nil, fmt.Errorf("invalid passwd entry for %s", user)
+		}
 		uid, err := strconv.Atoi(parts[2])
 		if err != nil {
 			return nil, fmt.Errorf("invalid passwd entry for %s", user)
@@ -292,6 +295,11 @@ func (k linuxKey) expired() bool {
 }
 
 // removeExpiredKeys returns the provided list of keys with expired keys removed.
+// valid formats are:
+// ssh-rsa [KEY_VALUE] [USERNAME]
+// or
+// ssh-rsa [KEY_VALUE] google-ssh {"userName":"[USERNAME]","expireOn":"[EXPIRE_TIME]"}
+// see: https://cloud.google.com/compute/docs/instances/adding-removing-ssh-keys#sshkeyformat
 func removeExpiredKeys(keys []string) []string {
 	var res []string
 	for i := 0; i < len(keys); i++ {
@@ -300,13 +308,21 @@ func removeExpiredKeys(keys []string) []string {
 			continue
 		}
 		fields := strings.SplitN(key, " ", 4)
+		if len(fields) < 3 {
+			continue
+		}
 		if fields[2] != "google-ssh" {
+			// non-expiring key, add it.
 			res = append(res, key)
 			continue
 		}
-		jsonkey := fields[len(fields)-1]
+		if len(fields) < 4 {
+			// expiring key without expiration format.
+			continue
+		}
 		lkey := linuxKey{}
-		if err := json.Unmarshal([]byte(jsonkey), &lkey); err != nil {
+		if err := json.Unmarshal([]byte(fields[3]), &lkey); err != nil {
+			// invalid expiration format.
 			continue
 		}
 		if !lkey.expired() {
