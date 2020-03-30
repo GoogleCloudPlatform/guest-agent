@@ -7,6 +7,8 @@ require (
 	cloud.google.com/go/storage v1.5.0
 	github.com/GoogleCloudPlatform/guest-logging-go v0.0.0-20191226203445-d798144cee48
 	github.com/go-ini/ini v1.51.1
+	github.com/golang/groupcache v0.0.0-20191227052852-215e87163ea7
+	github.com/golang/protobuf v1.3.2
 	github.com/google/go-cmp v0.4.0 // indirect
 	github.com/gopherjs/gopherjs v0.0.0-20190915194858-d3ddacdb130f // indirect
 	github.com/kardianos/service v1.0.0
@@ -16,5 +18,6 @@ require (
 	golang.org/x/oauth2 v0.0.0-20200107190931-bf48bf16ab8d // indirect
 	golang.org/x/sys v0.0.0-20200107162124-548cf772de50
 	google.golang.org/genproto v0.0.0-20200108215221-bd8f9a0ef82f // indirect
+	google.golang.org/grpc v1.26.0
 	gopkg.in/ini.v1 v1.49.0 // indirect
 )

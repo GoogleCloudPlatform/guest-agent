@@ -1,0 +1,99 @@
+//  Copyright 2019 Google Inc. All Rights Reserved.
+//
+//  Licensed under the Apache License, Version 2.0 (the "License");
+//  you may not use this file except in compliance with the License.
+//  You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+//  Unless required by applicable law or agreed to in writing, software
+//  distributed under the License is distributed on an "AS IS" BASIS,
+//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+//  See the License for the specific language governing permissions and
+//  limitations under the License.
+
+syntax = "proto3";
+
+package cloud.vmm;
+
+enum OperationType {
+  NOT_SET = 0;
+  PRE_SNAPSHOT = 1;
+  POST_SNAPSHOT = 2;
+}
+
+enum SupportedFeatures {
+  NONE = 0;
+  SNAPSHOTS = 1;
+}
+
+message SnapshotRequest {
+  // The operation id of the snapshot.
+  int32 operation_id = 1;
+
+  // A list of comma separated target/lun values, e.g "1/2,3/4".
+  string disk_list = 2;
+
+  // The operation type.
+  OperationType type = 3;
+}
+
+message ServerInfo {
+  repeated SupportedFeatures supported_features = 1;
+}
+
+enum AgentErrorCode {
+  NO_ERROR = 0;
+
+  // The snapshot config was improper in some way.
+  INVALID_CONFIG = 1;
+
+  // The pre or post snapshot script was not found on disk.
+  SCRIPT_NOT_FOUND = 2;
+
+  // The pre or post snapshot script timed out.
+  SCRIPT_TIMED_OUT = 3;
+
+  // The pre or post snapshot script returned an error, but the "continue on
+  // error" flag was not set.
+  UNHANDLED_SCRIPT_ERROR = 4;
+}
+
+message SnapshotResponse {
+  // The operation id of the snapshot.
+  int32 operation_id = 1;
+
+  // The return code of the scripts run by the guest. If this is non-zero, then
+  // agent_return_code should be UNHANDLED_SCRIPT_ERROR.
+  int32 scripts_return_code = 2;
+
+  // The agent return code.
+  AgentErrorCode agent_return_code = 3;
+
+  // The operation type.
+  OperationType type = 4;
+}
+
+message GuestReady {
+  bool request_server_info = 1;
+}
+
+message GuestMessage {
+  oneof msg {
+    SnapshotRequest snapshot_request = 1;
+    ServerInfo server_info = 2;
+  }
+}
+
+message ServerAck {}
+
+// Service to handle pre and post snapshot requests from vanadium.
+service SnapshotService {
+  // The client is expected to first send a "GuestReady" message, indicating
+  // they are available and establishing the connection that vanadium writes
+  // requests to the agent on.
+  rpc CreateConnection(GuestReady) returns (stream GuestMessage) {}
+
+  // Handles the agent's responses to the above requests.
+  rpc HandleResponsesFromGuest(SnapshotResponse) returns (ServerAck) {}
+}
