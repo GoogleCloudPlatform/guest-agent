@@ -42,8 +42,6 @@ var (
 	config                   *ini.File
 	osRelease                release
 	action                   string
-	snapshotServiceIP        string
-	snapshotServicePort      int
 )
 
 const (

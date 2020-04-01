@@ -36,8 +36,6 @@ type snapshotConfig struct {
 	preSnapshotScriptURL  string
 	postSnapshotScriptURL string
 	enabled               bool
-	snapshotServiceIP     string
-	snapshotServicePort   int
 }
 
 type invalidSnapshotConfig struct {
@@ -53,8 +51,6 @@ func getSnapshotConfig() (snapshotConfig, error) {
 	conf.timeout = time.Duration(config.Section("Snapshots").Key("timeout_in_seconds").MustInt(60)) * time.Second
 	conf.preSnapshotScriptURL = config.Section("Snapshots").Key("pre_snapshot_script").String()
 	conf.postSnapshotScriptURL = config.Section("Snapshots").Key("post_snapshot_script").String()
-	conf.snapshotServiceIP = config.Section("Snapshots").Key("snapshot_service_ip").MustString("169.254.169.254")
-	conf.snapshotServicePort = config.Section("Snapshots").Key("snapshot_service_port").MustInt(8081)
 
 	if conf.preSnapshotScriptURL == "" && conf.postSnapshotScriptURL == "" {
 		return conf, &invalidSnapshotConfig{"neither pre or post snapshot script has been configured"}
