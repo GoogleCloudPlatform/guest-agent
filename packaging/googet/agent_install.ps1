@@ -29,29 +29,31 @@ $initial_config = @'
 # disable=false
 '@
 
-function Set-FailureMode {
+function Set-ServiceConfig {
   # Restart service after 1s, then 2s. Reset error counter after 60s.
   sc.exe failure $name reset= 60 actions= restart/1000/restart/2000
+  # Set dependency and delayed start
+  sc.exe config $name depend= "lsm/samss" start= delayed-auto binpath= $path
+  # Create trigger to start the service on first IP address
+  sc.exe triggerinfo $name start/networkon
 }
 
 try {
+
   if (-not (Get-Service $name -ErrorAction SilentlyContinue)) {
     New-Service -Name $name `
                 -DisplayName $display_name `
                 -BinaryPathName $path `
                 -StartupType Automatic `
                 -Description $description
-
-    Set-FailureMode
   } 
   else {
     Set-Service -Name $name `
                 -DisplayName $display_name `
                 -Description $description
-    # Set-Service can not set the BinaryPathName.
-    Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Services\${name}" -Name ImagePath -Value $path
-    Set-FailureMode
   }
+
+  Set-ServiceConfig
 
   $config = "${env:ProgramFiles}\Google\Compute Engine\instance_configs.cfg"
   if (-not (Test-Path $config)) {
