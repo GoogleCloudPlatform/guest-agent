@@ -206,7 +206,7 @@ func TestRemoveExpiredKeys(t *testing.T) {
 		{`user:ssh-rsa [KEY] google-ssh {"userName":"user@email.com", "expireOn":"2018-11-08T19:30:46+0700"}`, false},
 		{`user:ssh-rsa [KEY] hostname`, true},
 		{`user:ssh-rsa [KEY] google-ssh`, false},
-		{`user:ssh-rsa [KEY]`, false},
+		{`user:ssh-rsa [KEY]`, true},
 		{},
 	}
 
