@@ -297,8 +297,9 @@ func (k linuxKey) expired() bool {
 // removeExpiredKeys returns the provided list of keys with expired keys removed.
 // valid formats are:
 // ssh-rsa [KEY_VALUE] [USERNAME]
-// or
+// ssh-rsa [KEY_VALUE]
 // ssh-rsa [KEY_VALUE] google-ssh {"userName":"[USERNAME]","expireOn":"[EXPIRE_TIME]"}
+//
 // see: https://cloud.google.com/compute/docs/instances/adding-removing-ssh-keys#sshkeyformat
 func removeExpiredKeys(keys []string) []string {
 	var res []string
@@ -308,10 +309,7 @@ func removeExpiredKeys(keys []string) []string {
 			continue
 		}
 		fields := strings.SplitN(key, " ", 4)
-		if len(fields) < 3 {
-			continue
-		}
-		if fields[2] != "google-ssh" {
+		if len(fields) < 3 || fields[2] != "google-ssh" {
 			// non-expiring key, add it.
 			res = append(res, key)
 			continue
