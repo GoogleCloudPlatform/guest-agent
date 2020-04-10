@@ -190,7 +190,8 @@ func agentInit(ctx context.Context) error {
 }
 
 func generateSSHKeys() error {
-	dir, err := os.Open("/etc/ssh")
+	hostKeyDir := config.Section("InstanceSetup").Key("host_key_dir").MustString("/etc/ssh")
+	dir, err := os.Open(hostKeyDir)
 	if err != nil {
 		return err
 	}
@@ -223,7 +224,7 @@ func generateSSHKeys() error {
 
 	// Generate new keys and upload to guest attributes.
 	for keytype := range keytypes {
-		keyfile := fmt.Sprintf("/etc/ssh/ssh_host_%s_key", keytype)
+		keyfile := fmt.Sprintf("%s/ssh_host_%s_key", hostKeyDir, keytype)
 		if err := runCmd(exec.Command("ssh-keygen", "-t", keytype, "-f", keyfile+".temp", "-N", "", "-q")); err != nil {
 			logger.Warningf("Failed to generate SSH host key %q: %v", keyfile, err)
 			continue
