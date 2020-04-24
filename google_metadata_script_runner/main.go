@@ -281,6 +281,8 @@ func runScript(ctx context.Context, key, value string) error {
 			return fmt.Errorf("error closing temp file: %v", err)
 		}
 	} else {
+		// Trim leading spaces and newlines.
+		value = strings.TrimLeft(value, " \n\v\f\t\r")
 		if err := ioutil.WriteFile(tmpFile, []byte(value), 0755); err != nil {
 			return fmt.Errorf("error writing temp file: %v", err)
 		}
