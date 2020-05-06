@@ -33,7 +33,7 @@ function Set-ServiceConfig {
   # Restart service after 1s, then 2s. Reset error counter after 60s.
   sc.exe failure $name reset= 60 actions= restart/1000/restart/2000
   # Set dependency and delayed start
-  sc.exe config $name depend= "lsm/samss" start= delayed-auto binpath= $path
+  sc.exe config $name depend= "samss" start= delayed-auto binpath= $path
   # Create trigger to start the service on first IP address
   sc.exe triggerinfo $name start/networkon
 }
