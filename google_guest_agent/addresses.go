@@ -85,16 +85,24 @@ func getForwardsFromRegistry(mac string) ([]string, error) {
 	return regFwdIPs, nil
 }
 
-func compareIPs(configuredIPs, desiredIPs []string) (toAdd, toRm []string) {
-	for _, desiredIP := range desiredIPs {
-		if !containsString(desiredIP, configuredIPs) {
-			toAdd = append(toAdd, desiredIP)
+func compareRoutes(configuredRoutes, desiredRoutes []string) (toAdd, toRm []string) {
+	for _, desiredRoute := range desiredRoutes {
+		if !strings.Contains(desiredRoute, "/") {
+			logger.Errorf("requested route %q missing mask, skipping.", desiredRoute)
+			continue
+		}
+		if !containsString(desiredRoute, configuredRoutes) {
+			toAdd = append(toAdd, desiredRoute)
 		}
 	}
 
-	for _, configuredIP := range configuredIPs {
-		if !containsString(configuredIP, desiredIPs) {
-			toRm = append(toRm, configuredIP)
+	for _, configuredRoute := range configuredRoutes {
+		if !strings.Contains(configuredRoute, "/") {
+			logger.Errorf("local route %q missing mask, skipping.", configuredRoute)
+			continue
+		}
+		if !containsString(configuredRoute, desiredRoutes) {
+			toRm = append(toRm, configuredRoute)
 		}
 	}
 	return toAdd, toRm
@@ -348,7 +356,7 @@ func (a *addressMgr) set() error {
 			}
 		}
 
-		toAdd, toRm := compareIPs(forwardedIPs, wantIPs)
+		toAdd, toRm := compareRoutes(forwardedIPs, wantIPs)
 
 		if len(toAdd) != 0 || len(toRm) != 0 {
 			var msg string
