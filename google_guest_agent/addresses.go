@@ -143,6 +143,9 @@ func getLocalRoutes(ifname string) ([]string, error) {
 		line = strings.TrimPrefix(line, "local ")
 		line = strings.TrimSpace(line)
 		if line != "" {
+			if !strings.Contains(line, "/") {
+				line = line + "/32"
+			}
 			res = append(res, line)
 		}
 	}
@@ -280,7 +283,8 @@ func (a *addressMgr) set() error {
 	if config.Section("NetworkInterfaces").Key("setup").MustBool(true) {
 		if runtime.GOOS != "windows" {
 			if err := configureIPv6(); err != nil {
-				return err
+				// Continue through IPv6 configuration errors.
+				logger.Errorf("Error configuring IPv6: %v", err)
 			}
 		}
 
