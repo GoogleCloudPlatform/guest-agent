@@ -158,9 +158,7 @@ func run(ctx context.Context) {
 		logger.Errorf("Error parsing config %s: %s", cfgfile, err)
 	}
 
-	if err := agentInit(ctx); err != nil {
-		logger.Errorf("Error running instance setup: %v", err)
-	}
+	agentInit(ctx)
 
 	go func() {
 		oldMetadata = &metadata{}
