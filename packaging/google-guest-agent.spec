@@ -113,7 +113,7 @@ if [ $1 -eq 0 ]; then
   systemctl --no-reload disable google-guest-agent.service >/dev/null 2>&1 || :
   systemctl --no-reload disable google-startup-scripts.service >/dev/null 2>&1 || :
   systemctl --no-reload disable google-shutdown-scripts.service >/dev/null 2>&1 || :
-  if [-d /run/systemd/system ]; then
+  if [ -d /run/systemd/system ]; then
     systemctl stop google-guest-agent.service >/dev/null 2>&1 || :
   fi
 fi
