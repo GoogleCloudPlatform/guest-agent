@@ -28,18 +28,19 @@ func TestCompareRoutes(t *testing.T) {
 	}{
 		// These should return toAdd:
 		// In Md, not present
-		{nil, []string{"1.2.3.4/32"}, []string{"1.2.3.4/32"}, nil},
-		{nil, []string{"1.2.3.4/32", "5.6.7.8/32"}, []string{"1.2.3.4/32", "5.6.7.8/32"}, nil},
+		{nil, []string{"1.2.3.4/32"}, []string{"1.2.3.4"}, nil},
+		{nil, []string{"1.2.3.4", "5.6.7.8/32"}, []string{"1.2.3.4", "5.6.7.8"}, nil},
 
 		// These should return toRm:
 		// Present, not in Md
-		{[]string{"1.2.3.4/32"}, nil, nil, []string{"1.2.3.4/32"}},
-		{[]string{"1.2.3.4/32", "5.6.7.8/32"}, []string{"5.6.7.8/32"}, nil, []string{"1.2.3.4/32"}},
+		{[]string{"1.2.3.4/32"}, nil, nil, []string{"1.2.3.4"}},
+		{[]string{"1.2.3.4/32", "5.6.7.8"}, []string{"5.6.7.8"}, nil, []string{"1.2.3.4"}},
 
 		// These should return nil, nil:
 		// Present, in Md
-		{[]string{"1.2.3.4/32"}, []string{"1.2.3.4/32"}, nil, nil},
-		{[]string{"1.2.3.4/32", "5.6.7.8/32"}, []string{"1.2.3.4/32", "5.6.7.8/32"}, nil, nil},
+		{[]string{"1.2.3.4/32"}, []string{"1.2.3.4"}, nil, nil},
+		{[]string{"1.2.3.4", "5.6.7.8"}, []string{"1.2.3.4", "5.6.7.8"}, nil, nil},
+		{[]string{"1.2.3.4/32", "5.6.7.8/32"}, []string{"1.2.3.4", "5.6.7.8"}, nil, nil},
 	}
 
 	for idx, tt := range tests {

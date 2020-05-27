@@ -87,20 +87,12 @@ func getForwardsFromRegistry(mac string) ([]string, error) {
 
 func compareRoutes(configuredRoutes, desiredRoutes []string) (toAdd, toRm []string) {
 	for _, desiredRoute := range desiredRoutes {
-		if !strings.Contains(desiredRoute, "/") {
-			logger.Errorf("requested route %q missing mask, skipping.", desiredRoute)
-			continue
-		}
 		if !containsString(desiredRoute, configuredRoutes) {
 			toAdd = append(toAdd, desiredRoute)
 		}
 	}
 
 	for _, configuredRoute := range configuredRoutes {
-		if !strings.Contains(configuredRoute, "/") {
-			logger.Errorf("local route %q missing mask, skipping.", configuredRoute)
-			continue
-		}
 		if !containsString(configuredRoute, desiredRoutes) {
 			toRm = append(toRm, configuredRoute)
 		}
@@ -151,9 +143,6 @@ func getLocalRoutes(ifname string) ([]string, error) {
 		line = strings.TrimPrefix(line, "local ")
 		line = strings.TrimSpace(line)
 		if line != "" {
-			if !strings.Contains(line, "/") {
-				line = line + "/32"
-			}
 			res = append(res, line)
 		}
 	}
@@ -343,7 +332,7 @@ func (a *addressMgr) set() error {
 				continue
 			}
 			for _, ip := range configuredIPs {
-				// Only add to forwardedIPs if the interface is setup and is in the registry.
+				// Only add to `forwardedIPs` if it is recorded in the registry.
 				if containsString(ip, regFwdIPs) {
 					forwardedIPs = append(forwardedIPs, ip)
 				}
@@ -355,6 +344,17 @@ func (a *addressMgr) set() error {
 				continue
 			}
 		}
+
+		// Trims any '/32' suffix for consistency.
+		trimSuffix := func(entries []string) []string {
+			var res []string
+			for _, entry := range entries {
+				res = append(res, strings.TrimSuffix(entry, "/32"))
+			}
+			return res
+		}
+		forwardedIPs = trimSuffix(forwardedIPs)
+		wantIPs = trimSuffix(wantIPs)
 
 		toAdd, toRm := compareRoutes(forwardedIPs, wantIPs)
 
@@ -375,7 +375,7 @@ func (a *addressMgr) set() error {
 
 		var registryEntries []string
 		for _, ip := range wantIPs {
-			// If the IP is not in the list of ones to add, add to registry list and continue.
+			// If the IP is not in toAdd, add to registry list and continue.
 			if !containsString(ip, toAdd) {
 				registryEntries = append(registryEntries, ip)
 				continue
