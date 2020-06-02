@@ -478,8 +478,6 @@ func configureIPv6() error {
 	return nil
 }
 
-var osrelease release
-
 // enableNetworkInterfaces runs `dhclient -x; dhclient eth1 eth2 ... ethN`.
 // On RHEL7, it also calls disableNM for each interface.
 // On SLES, it calls enableSLESInterfaces instead of dhclient.
@@ -503,9 +501,9 @@ func enableNetworkInterfaces() error {
 	}
 
 	switch {
-	case osrelease.os == "sles":
+	case osRelease.os == "sles":
 		return enableSLESInterfaces(googleInterfaces)
-	case osrelease.os == "rhel" && osrelease.version.major == 7:
+	case (osRelease.os == "rhel" || osRelease.os == "centos") && osRelease.version.major >= 7:
 		for _, iface := range googleInterfaces {
 			err := disableNM(iface)
 			if err != nil {
@@ -525,7 +523,7 @@ func enableNetworkInterfaces() error {
 		}
 		dhclientArgs := []string{}
 		// The dhclient_script key has historically only been supported on EL6.
-		if (osrelease.os == "rhel" || osrelease.os == "centos") && osrelease.version.major == 6 {
+		if (osRelease.os == "rhel" || osRelease.os == "centos") && osRelease.version.major == 6 {
 			dhclientArgs = append(dhclientArgs, "-sf", config.Section("NetworkInterfaces").Key("dhclient_script").MustString("/sbin/google-dhclient-script"))
 		}
 		dhclientArgs = append(dhclientArgs, googleInterfaces...)
