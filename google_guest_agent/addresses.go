@@ -29,13 +29,13 @@ import (
 )
 
 var (
-	addressKeyBad        = regKeyBase + `\ForwardedIps`
+	addressKey        = regKeyBase + `\ForwardedIps`
 	oldWSFCAddresses  string
 	oldWSFCEnable     bool
 	interfacesEnabled bool
 	interfaces        []net.Interface
 
-	defaultProtoID = "66"
+	defaultProtoID = "676"
 )
 
 type addressMgr struct{}
