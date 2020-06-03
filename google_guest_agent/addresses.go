@@ -29,7 +29,7 @@ import (
 )
 
 var (
-	addressKey        = regKeyBase + `\ForwardedIps`
+	addressKeyBad        = regKeyBase + `\ForwardedIps`
 	oldWSFCAddresses  string
 	oldWSFCEnable     bool
 	interfacesEnabled bool
