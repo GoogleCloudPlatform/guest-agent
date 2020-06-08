@@ -437,6 +437,18 @@ func configureIPv6() error {
 	if err != nil {
 		return err
 	}
+	// check if IPv6 stack is disabled for all interfaces
+	allIpv6 := exec.Command("sysctl", "net.ipv6.conf.all.disable_ipv6")
+	res := runCmdOutput(allIpv6)
+	if res.ExitCode() == 0 && res.Stdout() == "net.ipv6.conf.all.disable_ipv6 = 1" {
+		return fmt.Errorf("IPv6 is disabled for all interfaces")
+	}
+	// check if IPv6 stack is disabled for specific interface
+	ifaceIpv6 := exec.Command("sysctl", fmt.Sprintf("net.ipv6.conf.%s.disable_ipv6", iface.Name))
+	res := runCmdOutput(ifaceIpv6)
+	if res.ExitCode() == 0 && res.Stdout() == fmt.Sprintf("net.ipv6.conf.%s.disable_ipv6 = 1", iface.Name) {
+		return fmt.Errorf("IPv6 is disabled for interface %s", iface.Name)
+	}
 	switch {
 	case oldNi.DHCPv6Refresh != "" && newNi.DHCPv6Refresh == "",
 		newNi.DHCPv6Refresh == "" && len(oldMetadata.Instance.NetworkInterfaces) == 0:
