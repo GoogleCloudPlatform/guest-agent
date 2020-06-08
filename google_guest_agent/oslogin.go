@@ -95,6 +95,10 @@ func (o *osloginMgr) set() error {
 		logger.Errorf("Error updating PAM config: %v.", err)
 	}
 
+	if err := writeGroupConf(enable); err != nil {
+		logger.Errorf("Error updating group.conf: %v.", err)
+	}
+
 	for _, svc := range []string{"ssh", "sshd", "nscd", "unscd", "systemd-logind", "cron", "crond"} {
 		if err := restartService(svc); err != nil {
 			logger.Errorf("Error restarting service: %v.", err)
@@ -289,6 +293,31 @@ func writePAMConfig(enable, twofactor bool) error {
 		}
 	}
 
+	return nil
+}
+
+func updateGroupConf(groupconf string, enable bool) string {
+	config := "sshd;*;*;Al0000-2400;video"
+
+	filtered := filterGoogleLines(groupconf)
+	if enable {
+		filtered = append(filtered, []string{googleComment, config}...)
+	}
+
+	return strings.Join(filtered, "\n")
+}
+
+func writeGroupConf(enable bool) error {
+	groupconf, err := ioutil.ReadFile("/etc/security/group.conf")
+	if err != nil {
+		return err
+	}
+	proposed := updateGroupConf(string(groupconf), enable)
+	if proposed != string(groupconf) {
+		if err := writeConfigFile("/etc/security/group.conf", proposed); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
