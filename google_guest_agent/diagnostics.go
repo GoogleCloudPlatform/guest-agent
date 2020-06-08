@@ -34,7 +34,7 @@ var (
 type diagnosticsEntry struct {
 	SignedURL string
 	ExpireOn  string
-	TraceFlag bool
+	Trace     bool
 }
 
 func (k diagnosticsEntry) expired() bool {
@@ -112,7 +112,7 @@ func (d *diagnosticsMgr) set() error {
 		"-signedUrl",
 		entry.SignedURL,
 	}
-	if entry.TraceFlag {
+	if entry.Trace {
 		args = append(args, "-trace")
 	}
 
