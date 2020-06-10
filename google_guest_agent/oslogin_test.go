@@ -414,6 +414,77 @@ func TestUpdatePAMsu(t *testing.T) {
 	}
 }
 
+func TestUpdateGroupConf(t *testing.T) {
+	config := "sshd;*;*;Al0000-2400;video"
+
+	var tests = []struct {
+		contents, want []string
+		enable         bool
+	}{
+		{
+			contents: []string{
+				"line1",
+				"line2",
+			},
+			want: []string{
+				"line1",
+				"line2",
+				googleComment,
+				config,
+			},
+			enable: true,
+		},
+		{
+			contents: []string{
+				"line1",
+				"line2",
+			},
+			want: []string{
+				"line1",
+				"line2",
+			},
+			enable: false,
+		},
+		{
+			contents: []string{
+				"line1",
+				"line2",
+				googleComment,
+				"line3", // not the right line
+			},
+			want: []string{
+				"line1",
+				"line2",
+				googleComment,
+				config,
+			},
+			enable: true,
+		},
+		{
+			contents: []string{
+				"line1",
+				"line2",
+				googleComment,
+				"line3",
+			},
+			want: []string{
+				"line1",
+				"line2",
+			},
+			enable: false,
+		},
+	}
+
+	for idx, tt := range tests {
+		contents := strings.Join(tt.contents, "\n")
+		want := strings.Join(tt.want, "\n")
+
+		if res := updateGroupConf(contents, tt.enable); res != want {
+			t.Errorf("test %v\nwant:\n%v\ngot:\n%v\n", idx, want, res)
+		}
+	}
+}
+
 func TestGetOSLoginEnabled(t *testing.T) {
 	var tests = []struct {
 		md                string
