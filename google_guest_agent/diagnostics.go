@@ -28,7 +28,7 @@ const diagnosticsCmd = `C:\Program Files\Google\Compute Engine\diagnostics\diagn
 
 var (
 	diagnosticsRegKey   = "Diagnostics"
-	diagnosticsDisabled = true
+	diagnosticsDisabled = false
 )
 
 type diagnosticsEntry struct {
@@ -70,7 +70,7 @@ func (d *diagnosticsMgr) disabled(os string) (disabled bool) {
 		}
 	}()
 
-	// Diagnostics are opt-in and disabled by default.
+	// Diagnostics are opt-in and enabled by default.
 	var err error
 	var enabled bool
 	enabled, err = strconv.ParseBool(config.Section("diagnostics").Key("enable").String())

@@ -46,7 +46,7 @@ func TestDiagnosticsDisabled(t *testing.T) {
 		md   *metadata
 		want bool
 	}{
-		{"not explicitly enabled", []byte(""), &metadata{}, true},
+		{"not explicitly enabled", []byte(""), &metadata{}, false},
 		{"enabled in cfg only", []byte("[diagnostics]\nenable=true"), &metadata{}, false},
 		{"disabled in cfg only", []byte("[diagnostics]\nenable=false"), &metadata{}, true},
 		{"disabled in cfg, enabled in instance metadata", []byte("[diagnostics]\nenable=false"), &metadata{Instance: instance{Attributes: attributes{EnableDiagnostics: mkptr(true)}}}, true},
