@@ -89,6 +89,7 @@ func (d *diagnosticsMgr) disabled(os string) (disabled bool) {
 }
 
 func (d *diagnosticsMgr) set() error {
+	logger.Infof("Diagnostics: logs export requested.")
 	diagnosticsEntries, err := readRegMultiString(regKeyBase, diagnosticsRegKey)
 	if err != nil && err != errRegNotExist {
 		return err
@@ -118,7 +119,7 @@ func (d *diagnosticsMgr) set() error {
 
 	cmd := exec.Command(diagnosticsCmd, args...)
 	go func() {
-		logger.Infof("Collecting logs from the system:")
+		logger.Infof("Diagnostics: collecting logs from the system.")
 		out, err := cmd.CombinedOutput()
 		logger.Infof(string(out[:]))
 		if err != nil {
