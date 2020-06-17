@@ -65,11 +65,11 @@ func agentInit(ctx context.Context) {
 		}
 
 		// Choose the index that has the default route setup.
-		// This is equivalent to
+		// This is equivalent to how route.exe works when interface is not provided.
 		var index int32
 		var found bool
 		for _, fe := range fes {
-			if fe.ipForwardNextHop == net.ParseIP("0.0.0.0") {
+			if fe.ipForwardNextHop.Equal(net.ParseIP("0.0.0.0")) {
 				index = fe.ipForwardIfIndex
 				found = true
 				break
@@ -77,11 +77,11 @@ func agentInit(ctx context.Context) {
 		}
 
 		if found == false {
-			logger.Errorf("%s, could not find the default route in IPForwardEntries: %+q", msg, fes)
+			logger.Errorf("%s, could not find the default route in IPForwardEntries: %+v", msg, fes)
 			return
 		}
 
-		iface, err := net.InterfaceByIndex(index)
+		iface, err := net.InterfaceByIndex(int(index))
 		if err != nil {
 			logger.Errorf("%s, error from net.InterfaceByIndex(%d): %v", msg, index, err)
 			return
@@ -130,7 +130,7 @@ func agentInit(ctx context.Context) {
 		// Allow users to opt out of below instance setup actions.
 		if !config.Section("InstanceSetup").Key("network_enabled").MustBool(true) {
 			logger.Infof("InstanceSetup.network_enabled is false, skipping setup actions that require metadata")
-			return nil
+			return
 		}
 
 		// The below actions require metadata to be set, so if it
