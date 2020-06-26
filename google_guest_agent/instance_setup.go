@@ -34,15 +34,6 @@ const (
 	instanceIDFile = "/etc/google_instance_id"
 )
 
-func forwardEntryExists(fes []ipForwardEntry, fe ipForwardEntry) bool {
-	for _, e := range fes {
-		if e.ipForwardIfIndex == fe.ipForwardIfIndex && e.ipForwardDest.Equal(fe.ipForwardDest) {
-			return true
-		}
-	}
-	return false
-}
-
 func agentInit(ctx context.Context) {
 	// Actions to take on agent startup.
 	//
