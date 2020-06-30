@@ -19,6 +19,7 @@ import (
 	"os/exec"
 	"reflect"
 	"strconv"
+	"sync/atomic"
 	"time"
 
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
@@ -29,6 +30,9 @@ const diagnosticsCmd = `C:\Program Files\Google\Compute Engine\diagnostics\diagn
 var (
 	diagnosticsRegKey   = "Diagnostics"
 	diagnosticsDisabled = false
+	// Indicate whether an existing job is runing to collect logs
+	// 0 -> not running, 1 -> running
+	isDiagnosticsRunning int32 = 0
 )
 
 type diagnosticsEntry struct {
@@ -116,7 +120,11 @@ func (d *diagnosticsMgr) set() error {
 	if entry.Trace {
 		args = append(args, "-trace")
 	}
-
+	// If no existing running job, set it to 1 and block other requests
+	if !atomic.CompareAndSwapInt32(&isDiagnosticsRunning, 0, 1) {
+		logger.Infof("Diagnostics: reject the request, as an existing process is collecting logs from the system")
+		return nil
+	}
 	cmd := exec.Command(diagnosticsCmd, args...)
 	go func() {
 		logger.Infof("Diagnostics: collecting logs from the system.")
@@ -125,6 +133,8 @@ func (d *diagnosticsMgr) set() error {
 		if err != nil {
 			logger.Infof("Error collecting logs: %v", err)
 		}
+		// Job is done, unblock the following requests
+		atomic.SwapInt32(&isDiagnosticsRunning, 0)
 	}()
 
 	return writeRegMultiString(regKeyBase, diagnosticsRegKey, diagnosticsEntries)
