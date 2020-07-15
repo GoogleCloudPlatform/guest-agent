@@ -503,7 +503,7 @@ func enableNetworkInterfaces() error {
 	switch {
 	case osRelease.os == "sles":
 		return enableSLESInterfaces(googleInterfaces)
-	case (osRelease.os == "rhel" || osRelease.os == "centos") && osRelease.version.major >= 7:
+	case isNetworkManagerRunning():
 		for _, iface := range googleInterfaces {
 			err := disableNM(iface)
 			if err != nil {
@@ -529,6 +529,11 @@ func enableNetworkInterfaces() error {
 		dhclientArgs = append(dhclientArgs, googleInterfaces...)
 		return runCmd(exec.Command("dhclient", dhclientArgs...))
 	}
+}
+
+func isNetworkManagerRunning() bool {
+	res := runCmd(exec.Command("systemctl", "is-active", "--quiet", "NetworkManager"))
+	return res == nil
 }
 
 // enableSLESInterfaces writes one ifcfg file for each interface, then
