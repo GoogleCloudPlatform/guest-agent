@@ -532,8 +532,22 @@ func enableNetworkInterfaces() error {
 }
 
 func isNetworkManagerRunning() bool {
-	res := runCmd(exec.Command("systemctl", "is-active", "--quiet", "NetworkManager"))
-	return res == nil
+	// SystemD
+	if systemctl, err := exec.LookPath("systemctl"); err == nil {
+		return runCmd(exec.Command(systemctl, "is-active", "--quiet", "NetworkManager")) == nil
+	}
+	// Upstart
+	if runCmd(exec.Command("/sbin/init", "--version")) == nil {
+		outString :=runCmdOutput(exec.Command("status", "network-manager")).out
+		return strings.Contains(outString, "running")
+	}
+	// Sysvinit
+	if _, err := os.Stat("/etc/init.d/network"); err == nil {
+		return runCmd(exec.Command("service  ", "network", "status")) == nil
+	}
+
+	logger.Errorf("Unknown init system for os release %s and version %s", osRelease.os, osRelease.version)
+	return false
 }
 
 // enableSLESInterfaces writes one ifcfg file for each interface, then
