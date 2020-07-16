@@ -23,7 +23,6 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
-	"sort"
 	"strings"
 	"time"
 
@@ -35,16 +34,7 @@ const (
 	instanceIDFile = "/etc/google_instance_id"
 )
 
-func forwardEntryExists(fes []ipForwardEntry, fe ipForwardEntry) bool {
-	for _, e := range fes {
-		if e.ipForwardIfIndex == fe.ipForwardIfIndex && e.ipForwardDest.Equal(fe.ipForwardDest) {
-			return true
-		}
-	}
-	return false
-}
-
-func agentInit(ctx context.Context) error {
+func agentInit(ctx context.Context) {
 	// Actions to take on agent startup.
 	//
 	// On Windows:
@@ -58,44 +48,48 @@ func agentInit(ctx context.Context) error {
 	//  - Run `google_set_multiqueue` script.
 	// TODO incorporate these scripts into the agent. liamh@12-11-19
 	if runtime.GOOS == "windows" {
+		msg := "Could not set default route to metadata"
 		fes, err := getIPForwardEntries()
 		if err != nil {
-			return err
+			logger.Errorf("%s, error listing IPForwardEntries: %v", msg, err)
+			return
 		}
 
-		interfaces, err := net.Interfaces()
-		if err != nil {
-			return err
-		}
-
-		// We only want to set this for the first adapter, pre Windows 10 (2016) this was not guaranteed to be in metric order.
-		sort.SliceStable(interfaces, func(i, j int) bool {
-			return interfaces[i].Index < interfaces[j].Index
-		})
-
-		for _, iface := range interfaces {
-			// Only take action on interfaces that are up, are not Loopback, and are not vEtherent (commonly setup by docker).
-			if strings.Contains(iface.Name, "vEthernet") || iface.Flags&net.FlagLoopback != 0 || iface.Flags&net.FlagUp == 0 {
-				continue
-			}
-
-			fe := ipForwardEntry{
-				ipForwardDest:    net.ParseIP("169.254.169.254"),
-				ipForwardMask:    net.IPv4Mask(255, 255, 255, 255),
-				ipForwardNextHop: net.ParseIP("0.0.0.0"),
-				ipForwardMetric1: 1,
-				ipForwardIfIndex: int32(iface.Index),
-			}
-
-			if forwardEntryExists(fes, fe) {
+		// Choose the index that has the default route setup.
+		// This is equivalent to how route.exe works when interface is not provided.
+		var index int32
+		var found bool
+		for _, fe := range fes {
+			if fe.ipForwardNextHop.Equal(net.ParseIP("0.0.0.0")) {
+				index = fe.ipForwardIfIndex
+				found = true
 				break
 			}
+		}
 
-			logger.Infof("Adding route to metadata server on %q (index: %d)", iface.Name, iface.Index)
-			if err := addIPForwardEntry(fe); err != nil {
-				logger.Errorf("Error adding route to metadata server on %q (index: %d): %v", iface.Name, iface.Index, err)
-			}
-			break
+		if found == false {
+			logger.Errorf("%s, could not find the default route in IPForwardEntries: %+v", msg, fes)
+			return
+		}
+
+		iface, err := net.InterfaceByIndex(int(index))
+		if err != nil {
+			logger.Errorf("%s, error from net.InterfaceByIndex(%d): %v", msg, index, err)
+			return
+		}
+
+		fe := ipForwardEntry{
+			ipForwardDest:    net.ParseIP("169.254.169.254"),
+			ipForwardMask:    net.IPv4Mask(255, 255, 255, 255),
+			ipForwardNextHop: net.ParseIP("0.0.0.0"),
+			ipForwardMetric1: 1,
+			ipForwardIfIndex: int32(iface.Index),
+		}
+
+		logger.Infof("Adding route to metadata server on %q (index: %d)", iface.Name, iface.Index)
+		if err := addIPForwardEntry(fe); err != nil {
+			logger.Errorf("%s, error adding IPForwardEntry on %q (index: %d): %v", msg, iface.Name, iface.Index, err)
+			return
 		}
 	} else {
 		// Linux instance setup.
@@ -127,7 +121,7 @@ func agentInit(ctx context.Context) error {
 		// Allow users to opt out of below instance setup actions.
 		if !config.Section("InstanceSetup").Key("network_enabled").MustBool(true) {
 			logger.Infof("InstanceSetup.network_enabled is false, skipping setup actions that require metadata")
-			return nil
+			return
 		}
 
 		// The below actions require metadata to be set, so if it
@@ -186,7 +180,6 @@ func agentInit(ctx context.Context) error {
 		}
 
 	}
-	return nil
 }
 
 func generateSSHKeys() error {
