@@ -5,6 +5,7 @@
   "authors": "Google Inc.",
   "license": "http://www.apache.org/licenses/LICENSE-2.0",
   "description": "Google Compute Engine metadata scripts",
+  "source": "https://github.com/GoogleCloudPlatform/guest-agent/",
   "files": {
     "google_metadata_script_runner/GCEMetadataScripts.exe": "<ProgramFiles>/Google/Compute Engine/metadata_scripts/GCEMetadataScripts.exe",
     "packaging/googet/run_shutdown_scripts.cmd": "<ProgramFiles>/Google/Compute Engine/metadata_scripts/run_shutdown_scripts.cmd",
