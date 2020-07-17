@@ -538,7 +538,7 @@ func isNetworkManagerRunning() bool {
 	}
 	// Upstart
 	if runCmd(exec.Command("/sbin/init", "--version")) == nil {
-		outString :=runCmdOutput(exec.Command("status", "network-manager")).out
+		outString := runCmdOutput(exec.Command("status", "network-manager")).out
 		return strings.Contains(outString, "running")
 	}
 	// Sysvinit
