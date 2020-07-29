@@ -297,7 +297,7 @@ func writePAMConfig(enable, twofactor bool) error {
 }
 
 func updateGroupConf(groupconf string, enable bool) string {
-	config := "sshd;*;*;Al0000-2400;video"
+	config := "sshd;*;*;Al0000-2400;video\n"
 
 	filtered := filterGoogleLines(groupconf)
 	if enable {
