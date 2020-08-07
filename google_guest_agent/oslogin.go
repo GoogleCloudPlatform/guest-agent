@@ -259,17 +259,6 @@ func updatePAMsshd(pamsshd string, enable, twofactor bool) string {
 	return strings.Join(filtered, "\n")
 }
 
-func updatePAMsu(pamsu string, enable bool) string {
-	accountSu := "account    [success=bad ignore=ignore] pam_oslogin_login.so"
-
-	filtered := filterGoogleLines(pamsu)
-	if enable {
-		filtered = append([]string{googleComment, accountSu}, filtered...)
-	}
-
-	return strings.Join(filtered, "\n")
-}
-
 func writePAMConfig(enable, twofactor bool) error {
 	pamsshd, err := ioutil.ReadFile("/etc/pam.d/sshd")
 	if err != nil {
@@ -278,17 +267,6 @@ func writePAMConfig(enable, twofactor bool) error {
 	proposed := updatePAMsshd(string(pamsshd), enable, twofactor)
 	if proposed != string(pamsshd) {
 		if err := writeConfigFile("/etc/pam.d/sshd", proposed); err != nil {
-			return err
-		}
-	}
-
-	pamsu, err := ioutil.ReadFile("/etc/pam.d/su")
-	if err != nil {
-		return err
-	}
-	proposed = updatePAMsu(string(pamsu), enable)
-	if proposed != string(pamsu) {
-		if err := writeConfigFile("/etc/pam.d/su", proposed); err != nil {
 			return err
 		}
 	}
