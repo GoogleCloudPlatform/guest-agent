@@ -354,65 +354,6 @@ func TestUpdatePAMsshd(t *testing.T) {
 		}
 	}
 }
-func TestUpdatePAMsu(t *testing.T) {
-	accountSu := "account    [success=bad ignore=ignore] pam_oslogin_login.so"
-
-	var tests = []struct {
-		contents, want []string
-		enable         bool
-	}{
-		{
-			contents: []string{
-				"line1",
-				"line2",
-			},
-			want: []string{
-				googleComment,
-				accountSu,
-				"line1",
-				"line2",
-			},
-			enable: true,
-		},
-		{
-			contents: []string{
-				"line1",
-				googleComment,
-				accountSu,
-				"line2",
-			},
-			want: []string{
-				googleComment,
-				accountSu,
-				"line1",
-				"line2",
-			},
-			enable: true,
-		},
-		{
-			contents: []string{
-				"line1",
-				googleComment,
-				accountSu,
-				"line2",
-			},
-			want: []string{
-				"line1",
-				"line2",
-			},
-			enable: false,
-		},
-	}
-
-	for idx, tt := range tests {
-		contents := strings.Join(tt.contents, "\n")
-		want := strings.Join(tt.want, "\n")
-
-		if res := updatePAMsu(contents, tt.enable); res != want {
-			t.Errorf("test %v\nwant:\n%v\ngot:\n%v\n", idx, want, res)
-		}
-	}
-}
 
 func TestUpdateGroupConf(t *testing.T) {
 	config := "sshd;*;*;Al0000-2400;video"
