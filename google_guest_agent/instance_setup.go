@@ -23,6 +23,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"sort"
 	"strings"
 	"time"
 
@@ -55,12 +56,13 @@ func agentInit(ctx context.Context) {
 			return
 		}
 
-		// Choose the index that has the default route setup.
+		// Choose the first adapter index that has the default route setup.
 		// This is equivalent to how route.exe works when interface is not provided.
 		var index int32
 		var found bool
+		sort.Slice(fes, func(i, j int) bool { return fes[i].ipForwardIfIndex < fes[j].ipForwardIfIndex })
 		for _, fe := range fes {
-			if fe.ipForwardNextHop.Equal(net.ParseIP("0.0.0.0")) {
+			if fe.ipForwardDest.Equal(net.ParseIP("0.0.0.0")) {
 				index = fe.ipForwardIfIndex
 				found = true
 				break
