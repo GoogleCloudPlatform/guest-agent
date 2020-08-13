@@ -287,15 +287,15 @@ func addIPForwardEntry(fe ipForwardEntry) error {
 		dwForwardPolicy:    0, // unused
 		dwForwardNextHop:   binary.LittleEndian.Uint32(fe.ipForwardNextHop.To4()),
 		dwForwardIfIndex:   IF_INDEX(fe.ipForwardIfIndex),
-		dwForwardType:      0, // unused
+		dwForwardType:      MIB_IPROUTE_TYPE_INDIRECT, // unused
 		dwForwardProto:     MIB_IPPROTO_NETMGMT,
-		dwForwardAge:       0,                                         // unused
-		dwForwardNextHopAS: 0,                                         // unused
-		dwForwardMetric1:   fe.ipForwardMetric1 + fe.ipForwardIfIndex, // See remarks.
-		dwForwardMetric2:   -1,                                        // unused
-		dwForwardMetric3:   -1,                                        // unused
-		dwForwardMetric4:   -1,                                        // unused
-		dwForwardMetric5:   -1,                                        // unused
+		dwForwardAge:       0, // unused
+		dwForwardNextHopAS: 0, // unused
+		dwForwardMetric1:   fe.ipForwardMetric1,
+		dwForwardMetric2:   -1, // unused
+		dwForwardMetric3:   -1, // unused
+		dwForwardMetric4:   -1, // unused
+		dwForwardMetric5:   -1, // unused
 	}
 
 	if ret, _, _ := procCreateIpForwardEntry.Call(uintptr(unsafe.Pointer(fr))); ret != 0 {
