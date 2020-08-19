@@ -83,6 +83,10 @@ func (o *osloginMgr) set() error {
 		(&accountsMgr{}).set()
 	}
 
+	if !enable && oldEnable {
+		logger.Infof("Disabling OS Login")
+	}
+
 	if err := writeSSHConfig(enable, twofactor); err != nil {
 		logger.Errorf("Error updating SSH config: %v.", err)
 	}
