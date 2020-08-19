@@ -77,6 +77,12 @@ func (a *accountsMgr) diff() bool {
 			return true
 		}
 	}
+	// If we've just disabled OS Login.
+	old, _ := getOSLoginEnabled(oldMetadata)
+	new, _ := getOSLoginEnabled(newMetadata)
+	if old && !new {
+		return true
+	}
 
 	return false
 }
@@ -124,7 +130,6 @@ func (a *accountsMgr) set() error {
 		mdKeyMap[user] = userKeys
 	}
 
-	var writeFile bool
 	gUsers, err := readGoogleUsersFile()
 	if err != nil {
 		// TODO: is this OK to continue past?
@@ -140,7 +145,6 @@ func (a *accountsMgr) set() error {
 				continue
 			}
 			gUsers[user] = ""
-			writeFile = true
 		}
 		if _, ok := gUsers[user]; !ok {
 			logger.Infof("Adding existing user %s to google-sudoers group.", user)
@@ -167,15 +171,12 @@ func (a *accountsMgr) set() error {
 				logger.Errorf("Error removing user: %v.", err)
 			}
 			delete(sshKeys, user)
-			writeFile = true
 		}
 	}
 
 	// Update the google_users file if we've added or removed any users.
-	if writeFile {
-		if err := writeGoogleUsersFile(); err != nil {
-			logger.Errorf("Error writing google_users file: %v.", err)
-		}
+	if err := writeGoogleUsersFile(); err != nil {
+		logger.Errorf("Error writing google_users file: %v.", err)
 	}
 	return nil
 }
