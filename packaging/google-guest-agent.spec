@@ -68,6 +68,7 @@ install -p -m 0644 90-%{name}.preset %{buildroot}%{_presetdir}/90-%{name}.preset
 %endif
 
 %files
+%{_docdir}/%{name}
 %defattr(-,root,root,-)
 /usr/share/google-guest-agent/instance_configs.cfg
 %{_bindir}/google_guest_agent
