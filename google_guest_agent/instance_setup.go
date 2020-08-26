@@ -28,6 +28,7 @@ import (
 	"regexp"
 	"runtime"
 	"strconv"
+	"sort"
 	"strings"
 	"time"
 
@@ -64,13 +65,16 @@ func agentInit(ctx context.Context) {
 			return
 		}
 
-		// Choose the index that has the default route setup.
+		// Choose the first adapter index that has the default route setup.
 		// This is equivalent to how route.exe works when interface is not provided.
 		var index int32
 		var found bool
+		var metric int32
+		sort.Slice(fes, func(i, j int) bool { return fes[i].ipForwardIfIndex < fes[j].ipForwardIfIndex })
 		for _, fe := range fes {
-			if fe.ipForwardNextHop.Equal(net.ParseIP("0.0.0.0")) {
+			if fe.ipForwardDest.Equal(net.ParseIP("0.0.0.0")) {
 				index = fe.ipForwardIfIndex
+				metric = fe.ipForwardMetric1
 				found = true
 				break
 			}
@@ -87,16 +91,23 @@ func agentInit(ctx context.Context) {
 			return
 		}
 
-		fe := ipForwardEntry{
+		forwardEntry := ipForwardEntry{
 			ipForwardDest:    net.ParseIP("169.254.169.254"),
 			ipForwardMask:    net.IPv4Mask(255, 255, 255, 255),
 			ipForwardNextHop: net.ParseIP("0.0.0.0"),
-			ipForwardMetric1: 1,
+			ipForwardMetric1: metric, // This needs to be at least equal to the default route metric.
 			ipForwardIfIndex: int32(iface.Index),
 		}
 
+		for _, fe := range fes {
+			if fe.ipForwardDest.Equal(forwardEntry.ipForwardDest) && fe.ipForwardIfIndex == forwardEntry.ipForwardIfIndex {
+				// No need to add entry, it's already setup.
+				return
+			}
+		}
+
 		logger.Infof("Adding route to metadata server on %q (index: %d)", iface.Name, iface.Index)
-		if err := addIPForwardEntry(fe); err != nil {
+		if err := addIPForwardEntry(forwardEntry); err != nil {
 			logger.Errorf("%s, error adding IPForwardEntry on %q (index: %d): %v", msg, iface.Name, iface.Index, err)
 			return
 		}
