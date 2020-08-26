@@ -45,6 +45,9 @@ for bin in google_guest_agent google_metadata_script_runner; do
 done
 
 %install
+install -d "%{buildroot}/%{_docdir}/%{name}"
+cp -r THIRD_PARTY_LICENSES "%buildroot/%_docdir/%name/THIRD_PARTY_LICENSES"
+
 install -d %{buildroot}%{_bindir}
 install -p -m 0755 google_guest_agent/google_guest_agent %{buildroot}%{_bindir}/google_guest_agent
 install -p -m 0755 google_metadata_script_runner/google_metadata_script_runner %{buildroot}%{_bindir}/google_metadata_script_runner
@@ -65,6 +68,7 @@ install -p -m 0644 90-%{name}.preset %{buildroot}%{_presetdir}/90-%{name}.preset
 %endif
 
 %files
+%{_docdir}/%{name}
 %defattr(-,root,root,-)
 /usr/share/google-guest-agent/instance_configs.cfg
 %{_bindir}/google_guest_agent
