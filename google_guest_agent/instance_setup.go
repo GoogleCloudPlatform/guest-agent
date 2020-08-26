@@ -40,9 +40,11 @@ import (
 const (
 	instanceIDFile = "/etc/google_instance_id"
 	virtioNetDevs  = "/sys/bus/virtio/drivers/virtio_net/virtio*"
-	queueRegex = ".*tx-([0-9]+).*$"
-	irqDirPath = "/proc/irq/*"
-
+	queueRegex     = ".*tx-([0-9]+).*$"
+	irqDirPath     = "/proc/irq/*"
+	xpsCPU         = "/sys/class/net/e*/queues/tx*/xps_cpus"
+	nvmeDevice     = "/sys/bus/pci/drivers/nvme/*"
+	scsiDevice     = "/sys/bus/virtio/drivers/virtio_scsi/virtio*"
 )
 
 func agentInit(ctx context.Context) {
@@ -237,35 +239,43 @@ func setMultiQueue(totalCPUs int) error {
 		return err
 	}
 	for _, dev := range devices {
-		err := enableMultiQueue(dev)
-		if err != nil {
+		if err := enableMultiQueue(dev); err != nil {
+			logger.Warningf("Could not enable multi queue for %s.", dev)
 			return err
 		}
-		err = setQueueNumForDevice(dev)
-		if err != nil {
+		if err = setQueueNumForDevice(dev); err != nil {
+			logger.Warningf("Could not set queue num for %s.", dev)
 			return err
 		}
 	}
 	// Set smp_affinity properly for gvnic queues. '-ntfy-block.' is unique to gve and will not affect virtio queues.
+	if err = setSMPAffinityForGVNIC(totalCPUs); err != nil {
+		logger.Warningf("Could not set smp_affinity for gvnic.")
+		return err
+	}
+	return nil
+}
+
+func setSMPAffinityForGVNIC(totalCPUs int) error {
 	irqDirs, err := filepath.Glob(irqDirPath)
 	if err != nil {
 		return err
 	}
-	for _, i := range irqDirs {
-		// TODO ls ${i}/*-ntfy-block.* 1> /dev/null 2>&1;
-		if true && isFile(i+"/affinity_hint") {
-			err = copyFile(i+"/affinity_hint", i+"/smp_affinity")
-			if err != nil {
+	for _, irq := range irqDirs {
+		blocks, err := filepath.Glob(irq + "/*-ntfy-block.*")
+		if err != nil {
+			return err
+		}
+		if len(blocks) > 0 && isFile(irq+"/affinity_hint") {
+			if err = copyFile(irq+"/affinity_hint", irq+"/smp_affinity"); err != nil {
 				return err
 			}
 		}
 	}
-
-	XPS, err := filepath.Glob("/sys/class/net/e*/queues/tx*/xps_cpus")
+	XPS, err := filepath.Glob(xpsCPU)
 	if err != nil {
 		return err
 	}
-	numQueues := len(XPS)
 
 	// If we have more CPUs than queues, then stripe CPUs across tx affinity as CPUNumber % queue_count.
 	for _, q := range XPS {
@@ -279,7 +289,7 @@ func setMultiQueue(totalCPUs int) error {
 			}
 		}
 		xps := 0
-		for _, cpu := range makeRange(queueNum, numQueues, totalCPUs-1) {
+		for _, cpu := range makeRange(queueNum, len(XPS), totalCPUs-1) {
 			xps |= 1 << cpu
 		}
 		// Linux xps_cpus requires a hex number with commas every 32 bits. It ignores
@@ -289,14 +299,18 @@ func setMultiQueue(totalCPUs int) error {
 		for range makeRange(0, (totalCPUs-1)/32, 1) {
 			xpsDwords += fmt.Sprintf("%08x", xps&0xffffffff)
 		}
-		//xps_string=$(IFS=, ; echo "${xps_dwords[*]}")
-		//echo ${xps_string} > $q
-		//printf "Queue %d XPS=%s for %s\n" $queue_num `cat $q` $q
+		// TODO replace xpsString variable to real content.
+		var xpsString = ""
+		// xpsString=$(IFS=, ; echo "${xps_dwords[*]}")
+		if err = ioutil.WriteFile(q, []byte(xpsString), 0700); err != nil {
+			return err
+		}
+		logger.Infof("Queue %d XPS=%s for %s\n", queueNum, xpsString, q)
 	}
 	return nil
 }
 
-func makeRange(min, max, step int) []int {
+func makeRange(min, step, max int) []int {
 	arr := make([]int, (max-min)/step+1)
 	cur := min
 	for i := range arr {
@@ -334,8 +348,7 @@ func setQueueNumForDevice(dev string) error {
 		if isDir(virtionetIntxDir) {
 			// All virtionet intx IRQs are delivered to CPU 0
 			logger.Infof("Setting %s to 01 for device %s.", smpAffinity, dev)
-			err := ioutil.WriteFile("smp_affinity", []byte("01"), 0700)
-			if err != nil {
+			if err := ioutil.WriteFile(smpAffinity, []byte("01"), 0700); err != nil {
 				return err
 			}
 			continue
@@ -352,7 +365,7 @@ func setQueueNumForDevice(dev string) error {
 			match := r.MatchString(entry)
 			if match {
 				virtionetMsixFound = 1
-				// TODO test FindAllStringSubmatch is correct
+				// FindAllStringSubmatch return [][]string
 				queueNum, err = strconv.Atoi(r.FindAllStringSubmatch(entry, -1)[0][2])
 				if err != nil {
 					return err
@@ -366,47 +379,43 @@ func setQueueNumForDevice(dev string) error {
 
 		//Set the IRQ CPU affinity to the virtionet-initialized affinity hint
 		logger.Infof("Setting %s to $s for device %s.", smpAffinity, queueNum, dev)
-		err = ioutil.WriteFile("smp_affinity", []byte(strconv.Itoa(queueNum)), 0700)
-		if err != nil {
+		if err = ioutil.WriteFile(smpAffinity, []byte(strconv.Itoa(queueNum)), 0700); err != nil {
 			return err
 		}
-		b, err := ioutil.ReadFile(smpAffinity)
-		if err != nil {
-			return err
-		}
-		realAffinity := string(b)
-		logger.Infof("%s real affinity %s", smpAffinity, realAffinity)
 	}
 	return nil
 }
 
+/**
+Output `ethtool -l eth0`
+Channel parameters for eth0:
+Pre-set maximums:
+RX:		0
+TX:		0
+Other:		0
+Combined:	16
+Current hardware settings:
+RX:		0
+TX:		0
+Other:		0
+Combined:	16
+*/
 func enableMultiQueue(dev string) error {
 	ethDevs, err := filepath.Glob(dev + "/net/*")
 	if err != nil {
 		return err
 	}
+	ethHandle, err := ethtool.NewEthtool()
+	if err != nil {
+		return err
+	}
+	defer ethHandle.Close()
+
 	for _, ethDev := range ethDevs {
 		ethDev = path.Base(ethDev)
-		ethHandle, err := ethtool.NewEthtool()
-		if err != nil {
-			return err
-		}
-		/**
-		Output `ethtool -l eth0`
-		Channel parameters for eth0:
-		Pre-set maximums:
-		RX:		0
-		TX:		0
-		Other:		0
-		Combined:	16
-		Current hardware settings:
-		RX:		0
-		TX:		0
-		Other:		0
-		Combined:	16
-		*/
 		ch, err := ethHandle.GetChannels(ethDev)
 		if err != nil {
+			logger.Warningf("Could not get channels for %s.", ethDev)
 			return err
 		}
 		numMaxChannels := ch.MaxCombined
@@ -418,7 +427,6 @@ func enableMultiQueue(dev string) error {
 			logger.Warningf("Could not set channels for %s to %s.", ethDev, numMaxChannels)
 			return err
 		}
-		ethHandle.Close()
 		logger.Infof("Set channels for %s to %s.", ethDev, numMaxChannels)
 	}
 	return nil
@@ -426,7 +434,7 @@ func enableMultiQueue(dev string) error {
 
 func configNVME(totalCPUs int) error {
 	var currentCPU = 0
-	devices, err := filepath.Glob("/sys/bus/pci/drivers/nvme/*")
+	devices, err := filepath.Glob(nvmeDevice)
 	if err != nil {
 		return err
 	}
@@ -447,8 +455,7 @@ func configNVME(totalCPUs int) error {
 			cpuMask := 1 << currentCPU
 			irq := path.Base(irqInfo)
 			logger.Infof("Setting IRQ %s smp_affinity to %d", irq, cpuMask)
-			err := ioutil.WriteFile("/proc/irq/"+irq+"/smp_affinity", []byte(cpuMask), 0700)
-			if err != nil {
+			if err := ioutil.WriteFile("/proc/irq/"+irq+"/smp_affinity", []byte(cpuMask), 0700); err != nil {
 				return err
 			}
 			currentCPU++
@@ -459,7 +466,7 @@ func configNVME(totalCPUs int) error {
 
 func configSCSI(totalCPUs int) error {
 	var irqs []int
-	devices, err := filepath.Glob("/sys/bus/virtio/drivers/virtio_scsi/virtio*")
+	devices, err := filepath.Glob(scsiDevice)
 	if err != nil {
 		return err
 	}
