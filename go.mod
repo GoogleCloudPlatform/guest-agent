@@ -12,6 +12,7 @@ require (
 	github.com/google/go-cmp v0.4.0 // indirect
 	github.com/gopherjs/gopherjs v0.0.0-20190915194858-d3ddacdb130f // indirect
 	github.com/kardianos/service v1.0.0
+	github.com/safchain/ethtool v0.0.0-20200804214954-8f958a28363a
 	github.com/smartystreets/assertions v1.0.1 // indirect
 	github.com/smartystreets/goconvey v0.0.0-20190731233626-505e41936337 // indirect
 	github.com/tarm/serial v0.0.0-20180830185346-98f6abe2eb07
