@@ -122,9 +122,17 @@ func agentInit(ctx context.Context) {
 			snapshotServicePort := config.Section("Snapshots").Key("snapshot_service_port").MustInt(8081)
 			startSnapshotListener(snapshotServiceIP, snapshotServicePort)
 		}
-		// TODO find how to get totalCPUs
-		var totalCPUs = runtime.NumCPU()
 
+		res := runCmdOutput(exec.Command("nproc"))
+		if res.ExitCode() != 0 {
+			logger.Warningf("Failed to run nproc: %v", res.Stderr())
+			return
+		}
+		totalCPUs, err := strconv.Atoi(res.Stdout())
+		if err != nil {
+			logger.Warningf("Failed to get number of cpus: %v", err)
+			return
+		}
 		// Config NVME, SCSI and set MultiQueue are run regardless of metadata/network access and config options.
 		if err := configNVME(totalCPUs); err != nil {
 			logger.Warningf("Failed to config nvme: %v", err)
@@ -295,13 +303,11 @@ func setSMPAffinityForGVNIC(totalCPUs int) error {
 		// Linux xps_cpus requires a hex number with commas every 32 bits. It ignores
 		// all bits above # cpus, so write a list of comma separated 32 bit hex values
 		// with a comma between dwords.
-		var xpsDwords string
+		var xpsDwords []string
 		for range makeRange(0, (totalCPUs-1)/32, 1) {
-			xpsDwords += fmt.Sprintf("%08x", xps&0xffffffff)
+			xpsDwords = append(xpsDwords, fmt.Sprintf("%08x", xps&0xffffffff))
 		}
-		// TODO replace xpsString variable to real content.
-		var xpsString = ""
-		// xpsString=$(IFS=, ; echo "${xps_dwords[*]}")
+		var xpsString = strings.Join(xpsDwords, ",")
 		if err = ioutil.WriteFile(q, []byte(xpsString), 0700); err != nil {
 			return err
 		}
@@ -378,7 +384,7 @@ func setQueueNumForDevice(dev string) error {
 		}
 
 		//Set the IRQ CPU affinity to the virtionet-initialized affinity hint
-		logger.Infof("Setting %s to $s for device %s.", smpAffinity, queueNum, dev)
+		logger.Infof("Setting %s to %d for device %s.", smpAffinity, queueNum, dev)
 		if err = ioutil.WriteFile(smpAffinity, []byte(strconv.Itoa(queueNum)), 0700); err != nil {
 			return err
 		}
@@ -386,20 +392,18 @@ func setQueueNumForDevice(dev string) error {
 	return nil
 }
 
-/**
-Output `ethtool -l eth0`
-Channel parameters for eth0:
-Pre-set maximums:
-RX:		0
-TX:		0
-Other:		0
-Combined:	16
-Current hardware settings:
-RX:		0
-TX:		0
-Other:		0
-Combined:	16
-*/
+//Output `ethtool -l eth0`
+//Channel parameters for eth0:
+//Pre-set maximums:
+//RX:		0
+//TX:		0
+//Other:		0
+//Combined:	16
+//Current hardware settings:
+//RX:		0
+//TX:		0
+//Other:		0
+//Combined:	16
 func enableMultiQueue(dev string) error {
 	ethDevs, err := filepath.Glob(dev + "/net/*")
 	if err != nil {
@@ -424,10 +428,10 @@ func enableMultiQueue(dev string) error {
 		}
 		ch.CombinedCount = numMaxChannels
 		if _, err := ethHandle.SetChannels(ethDev, ch); err != nil {
-			logger.Warningf("Could not set channels for %s to %s.", ethDev, numMaxChannels)
+			logger.Warningf("Could not set channels for %s to %d.", ethDev, numMaxChannels)
 			return err
 		}
-		logger.Infof("Set channels for %s to %s.", ethDev, numMaxChannels)
+		logger.Infof("Set channels for %s to %d.", ethDev, numMaxChannels)
 	}
 	return nil
 }
@@ -455,7 +459,7 @@ func configNVME(totalCPUs int) error {
 			cpuMask := 1 << currentCPU
 			irq := path.Base(irqInfo)
 			logger.Infof("Setting IRQ %s smp_affinity to %d", irq, cpuMask)
-			if err := ioutil.WriteFile("/proc/irq/"+irq+"/smp_affinity", []byte(cpuMask), 0700); err != nil {
+			if err := ioutil.WriteFile("/proc/irq/"+irq+"/smp_affinity", []byte(strconv.Itoa(cpuMask)), 0700); err != nil {
 				return err
 			}
 			currentCPU++
@@ -522,8 +526,8 @@ func configSCSI(totalCPUs int) error {
 		for _, irq := range irqs {
 			currentCPU %= totalCPUs
 			cpuMask := 1 << currentCPU
-			logger.Infof("Setting IRQ %s smp_affinity to %d", irq, cpuMask)
-			err := ioutil.WriteFile("/proc/irq/"+string(irq)+"/smp_affinity", []byte(cpuMask), 0700)
+			logger.Infof("Setting IRQ %d smp_affinity to %d", irq, cpuMask)
+			err := ioutil.WriteFile(fmt.Sprintf("/proc/irq/%d/smp_affinity", irq), []byte(strconv.Itoa(cpuMask)), 0700)
 			if err != nil {
 				return err
 			}
