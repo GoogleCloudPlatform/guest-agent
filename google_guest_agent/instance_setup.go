@@ -391,29 +391,7 @@ func setQueueNumForDevice(dev string) error {
 	return nil
 }
 
-//Output `ethtool -l eth0`
-//Channel parameters for eth0:
-//Pre-set maximums:
-//RX:		0
-//TX:		0
-//Other:		0
-//Combined:	16
-//Current hardware settings:
-//RX:		0
-//TX:		0
-//Other:		0
-//Combined:	16
-func enableMultiQueue(dev string) error {
-	ethDevs, err := filepath.Glob(dev + "/net/*")
-	if err != nil {
-		return err
-	}
-	err = setChannel(ethDevs)
-	if err != nil {
-		return err
-	}
-	return nil
-}
+
 
 func configNVME(totalCPUs int) error {
 	var currentCPU = 0
