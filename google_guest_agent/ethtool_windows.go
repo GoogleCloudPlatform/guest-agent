@@ -18,7 +18,6 @@ package main
 
 import "github.com/GoogleCloudPlatform/guest-logging-go/logger"
 
-
 func enableMultiQueue(dev string) error {
 	logger.Errorf("enableMultiQueue unimplemented on Windows systems")
 	return nil

@@ -391,8 +391,6 @@ func setQueueNumForDevice(dev string) error {
 	return nil
 }
 
-
-
 func configNVME(totalCPUs int) error {
 	var currentCPU = 0
 	devices, err := filepath.Glob(nvmeDevice)
