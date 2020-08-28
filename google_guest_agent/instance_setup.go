@@ -27,14 +27,13 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
-	"strconv"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 	"github.com/go-ini/ini"
-	"github.com/safchain/ethtool"
 )
 
 const (
@@ -409,29 +408,9 @@ func enableMultiQueue(dev string) error {
 	if err != nil {
 		return err
 	}
-	ethHandle, err := ethtool.NewEthtool()
+	err = setChannel(ethDevs)
 	if err != nil {
 		return err
-	}
-	defer ethHandle.Close()
-
-	for _, ethDev := range ethDevs {
-		ethDev = path.Base(ethDev)
-		ch, err := ethHandle.GetChannels(ethDev)
-		if err != nil {
-			logger.Warningf("Could not get channels for %s.", ethDev)
-			return err
-		}
-		numMaxChannels := ch.MaxCombined
-		if numMaxChannels == 1 {
-			continue
-		}
-		ch.CombinedCount = numMaxChannels
-		if _, err := ethHandle.SetChannels(ethDev, ch); err != nil {
-			logger.Warningf("Could not set channels for %s to %d.", ethDev, numMaxChannels)
-			return err
-		}
-		logger.Infof("Set channels for %s to %d.", ethDev, numMaxChannels)
 	}
 	return nil
 }
