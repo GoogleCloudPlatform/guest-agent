@@ -127,7 +127,7 @@ func agentInit(ctx context.Context) {
 			logger.Warningf("Failed to run nproc: %v", res.Stderr())
 			return
 		}
-		totalCPUs, err := strconv.Atoi(res.Stdout())
+		totalCPUs, err := strconv.Atoi(res.Stdout()[0: len(res.Stdout())-1])
 		if err != nil {
 			logger.Warningf("Failed to get number of cpus: %v", err)
 			return
@@ -494,12 +494,18 @@ func configSCSI(totalCPUs int) error {
 
 func isFile(path string) bool {
 	info, err := os.Stat(path)
-	return os.IsNotExist(err) && !info.IsDir()
+	if err != nil{
+		return false
+	}
+	return !info.IsDir()
 }
 
 func isDir(path string) bool {
 	info, err := os.Stat(path)
-	return os.IsNotExist(err) && info.IsDir()
+	if err != nil{
+		return false
+	}
+	return info.IsDir()
 }
 
 func getIRQFromInterrupts(requestQueue string) (int, error) {
