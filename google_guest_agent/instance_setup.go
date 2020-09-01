@@ -284,6 +284,10 @@ func setSMPAffinityForGVNIC(totalCPUs int) error {
 		return err
 	}
 
+	numQueues := len(XPS)
+	if numQueues > 63{
+		numQueues = 63
+	}
 	// If we have more CPUs than queues, then stripe CPUs across tx affinity as CPUNumber % queue_count.
 	for _, q := range XPS {
 		r, _ := regexp.Compile(queueRegex)
@@ -296,7 +300,7 @@ func setSMPAffinityForGVNIC(totalCPUs int) error {
 			}
 		}
 		xps := 0
-		for _, cpu := range makeRange(queueNum, len(XPS), totalCPUs-1) {
+		for _, cpu := range makeRange(queueNum, numQueues, totalCPUs-1) {
 			xps |= 1 << cpu
 		}
 		// Linux xps_cpus requires a hex number with commas every 32 bits. It ignores
@@ -307,7 +311,7 @@ func setSMPAffinityForGVNIC(totalCPUs int) error {
 			xpsDwords = append(xpsDwords, fmt.Sprintf("%08x", xps&0xffffffff))
 		}
 		var xpsString = strings.Join(xpsDwords, ",")
-		if err = ioutil.WriteFile(q, []byte(xpsString), 0700); err != nil {
+		if err = ioutil.WriteFile(q, []byte(xpsString), 0644); err != nil {
 			return err
 		}
 		logger.Infof("Queue %d XPS=%s for %s\n", queueNum, xpsString, q)
@@ -353,7 +357,7 @@ func setQueueNumForDevice(dev string) error {
 		if isDir(virtionetIntxDir) {
 			// All virtionet intx IRQs are delivered to CPU 0
 			logger.Infof("Setting %s to 01 for device %s.", smpAffinity, dev)
-			if err := ioutil.WriteFile(smpAffinity, []byte("01"), 0700); err != nil {
+			if err := ioutil.WriteFile(smpAffinity, []byte("01"), 0644); err != nil {
 				return err
 			}
 			continue
@@ -384,7 +388,7 @@ func setQueueNumForDevice(dev string) error {
 
 		//Set the IRQ CPU affinity to the virtionet-initialized affinity hint
 		logger.Infof("Setting %s to %d for device %s.", smpAffinity, queueNum, dev)
-		if err = ioutil.WriteFile(smpAffinity, []byte(strconv.Itoa(queueNum)), 0700); err != nil {
+		if err = ioutil.WriteFile(smpAffinity, []byte(strconv.Itoa(queueNum)), 0644); err != nil {
 			return err
 		}
 	}
@@ -414,7 +418,7 @@ func configNVME(totalCPUs int) error {
 			cpuMask := 1 << currentCPU
 			irq := path.Base(irqInfo)
 			logger.Infof("Setting IRQ %s smp_affinity to %d", irq, cpuMask)
-			if err := ioutil.WriteFile("/proc/irq/"+irq+"/smp_affinity", []byte(strconv.Itoa(cpuMask)), 0700); err != nil {
+			if err := ioutil.WriteFile("/proc/irq/"+irq+"/smp_affinity", []byte(strconv.Itoa(cpuMask)), 0644); err != nil {
 				return err
 			}
 			currentCPU++
@@ -454,12 +458,12 @@ func configSCSI(totalCPUs int) error {
 					return err
 				}
 				for _, queuePath := range queuePaths {
-					ioutil.WriteFile(queuePath+"/scheduler", []byte("noop"), 0700)
-					ioutil.WriteFile(queuePath+"/add_random", []byte("0"), 0700)
-					ioutil.WriteFile(queuePath+"/nr_requests", []byte("512"), 0700)
-					ioutil.WriteFile(queuePath+"/rotational", []byte("0"), 0700)
-					ioutil.WriteFile(queuePath+"/rq_affinity", []byte("0"), 0700)
-					ioutil.WriteFile(queuePath+"/nomerges", []byte("1"), 0700)
+					ioutil.WriteFile(queuePath+"/scheduler", []byte("noop"), 0644)
+					ioutil.WriteFile(queuePath+"/add_random", []byte("0"), 0644)
+					ioutil.WriteFile(queuePath+"/nr_requests", []byte("512"), 0644)
+					ioutil.WriteFile(queuePath+"/rotational", []byte("0"), 0644)
+					ioutil.WriteFile(queuePath+"/rq_affinity", []byte("0"), 0644)
+					ioutil.WriteFile(queuePath+"/nomerges", []byte("1"), 0644)
 				}
 			}
 		}
@@ -482,7 +486,7 @@ func configSCSI(totalCPUs int) error {
 			currentCPU %= totalCPUs
 			cpuMask := 1 << currentCPU
 			logger.Infof("Setting IRQ %d smp_affinity to %d", irq, cpuMask)
-			err := ioutil.WriteFile(fmt.Sprintf("/proc/irq/%d/smp_affinity", irq), []byte(strconv.Itoa(cpuMask)), 0700)
+			err := ioutil.WriteFile(fmt.Sprintf("/proc/irq/%d/smp_affinity", irq), []byte(strconv.Itoa(cpuMask)), 0644)
 			if err != nil {
 				return err
 			}
@@ -648,7 +652,7 @@ func setIOScheduler() error {
 		// Detect if device is using MQ subsystem.
 		stat, err := os.Stat("/sys/block/" + dev + "/mq")
 		if err == nil && stat.IsDir() {
-			f, err := os.OpenFile("/sys/block/"+dev+"/queue/scheduler", os.O_WRONLY|os.O_TRUNC, 0700)
+			f, err := os.OpenFile("/sys/block/"+dev+"/queue/scheduler", os.O_WRONLY|os.O_TRUNC, 0644)
 			if err != nil {
 				return err
 			}
