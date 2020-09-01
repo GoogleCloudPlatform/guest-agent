@@ -303,7 +303,7 @@ func setSMPAffinityForGVNIC(totalCPUs int) error {
 		// all bits above # cpus, so write a list of comma separated 32 bit hex values
 		// with a comma between dwords.
 		var xpsDwords []string
-		for range makeRange(0, (totalCPUs-1)/32, 1) {
+		for range makeRange(0, 1, (totalCPUs-1)/32) {
 			xpsDwords = append(xpsDwords, fmt.Sprintf("%08x", xps&0xffffffff))
 		}
 		var xpsString = strings.Join(xpsDwords, ",")
