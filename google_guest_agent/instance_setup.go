@@ -311,8 +311,6 @@ func setSMPAffinityForGVNIC(totalCPUs int) error {
 			xpsDwords = append(xpsDwords, fmt.Sprintf("%08x", xps&0xffffffff))
 		}
 		var xpsString = strings.Join(xpsDwords, ",")
-		logger.Infof("q is :"+ q)
-		logger.Infof("xpsString is :"+ xpsString)
 		if err = ioutil.WriteFile(q, []byte(xpsString), 0644); err != nil {
 			logger.Warningf("%v", err)
 			return err
