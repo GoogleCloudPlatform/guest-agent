@@ -290,7 +290,7 @@ func setSMPAffinityForGVNIC(totalCPUs int) error {
 		match := r.MatchString(q)
 		var queueNum int
 		if match {
-			queueNum, err = strconv.Atoi(r.FindAllStringSubmatch(q, -1)[0][2])
+			queueNum, err = strconv.Atoi(r.FindAllStringSubmatch(q, -1)[0][1])
 			if err != nil {
 				return err
 			}
