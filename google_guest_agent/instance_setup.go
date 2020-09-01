@@ -127,7 +127,7 @@ func agentInit(ctx context.Context) {
 			logger.Warningf("Failed to run nproc: %v", res.Stderr())
 			return
 		}
-		totalCPUs, err := strconv.Atoi(res.Stdout()[0: len(res.Stdout())-1])
+		totalCPUs, err := strconv.Atoi(res.Stdout()[0 : len(res.Stdout())-1])
 		if err != nil {
 			logger.Warningf("Failed to get number of cpus: %v", err)
 			return
@@ -285,7 +285,7 @@ func setSMPAffinityForGVNIC(totalCPUs int) error {
 	}
 
 	numQueues := len(XPS)
-	if numQueues > 63{
+	if numQueues > 63 {
 		numQueues = 63
 	}
 	// If we have more CPUs than queues, then stripe CPUs across tx affinity as CPUNumber % queue_count.
@@ -498,7 +498,7 @@ func configSCSI(totalCPUs int) error {
 
 func isFile(path string) bool {
 	info, err := os.Stat(path)
-	if err != nil{
+	if err != nil {
 		return false
 	}
 	return !info.IsDir()
@@ -506,7 +506,7 @@ func isFile(path string) bool {
 
 func isDir(path string) bool {
 	info, err := os.Stat(path)
-	if err != nil{
+	if err != nil {
 		return false
 	}
 	return info.IsDir()
