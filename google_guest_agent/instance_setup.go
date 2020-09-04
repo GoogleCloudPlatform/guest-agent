@@ -39,7 +39,7 @@ import (
 const (
 	instanceIDFile = "/etc/google_instance_id"
 	virtioNetDevs  = "/sys/bus/virtio/drivers/virtio_net/virtio*"
-	deviceRegex		 = "/e(\\w+)"
+	deviceRegex    = "/e(\\w+)"
 	queueRegex     = ".*tx-([0-9]+).*$"
 	irqDirPath     = "/proc/irq/*"
 	xpsCPU         = "/sys/class/net/e*/queues/tx*/xps_cpus"
@@ -287,7 +287,7 @@ func setSMPAffinityForGVNIC(totalCPUs int) error {
 
 	// If we have more CPUs than queues, then stripe CPUs across tx affinity as CPUNumber % queue_count.
 	for _, q := range XPS {
-		onlyOneQueue, err:= onlyOneCombinedQueue(q)
+		onlyOneQueue, err := onlyOneCombinedQueue(q)
 		if err != nil {
 			return err
 		}
