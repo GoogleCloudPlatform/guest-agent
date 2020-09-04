@@ -39,6 +39,7 @@ import (
 const (
 	instanceIDFile = "/etc/google_instance_id"
 	virtioNetDevs  = "/sys/bus/virtio/drivers/virtio_net/virtio*"
+	deviceRegex		 = "/e(\\w+)"
 	queueRegex     = ".*tx-([0-9]+).*$"
 	irqDirPath     = "/proc/irq/*"
 	xpsCPU         = "/sys/class/net/e*/queues/tx*/xps_cpus"
@@ -284,12 +285,20 @@ func setSMPAffinityForGVNIC(totalCPUs int) error {
 		return err
 	}
 
-	numQueues := len(XPS)
-	if numQueues > 63 {
-		numQueues = 63
-	}
 	// If we have more CPUs than queues, then stripe CPUs across tx affinity as CPUNumber % queue_count.
 	for _, q := range XPS {
+		onlyOneQueue, err:= onlyOneCombinedQueue(q)
+		if err != nil {
+			return err
+		}
+		if onlyOneQueue {
+			continue
+		}
+
+		numQueues := len(XPS)
+		if numQueues > 63 {
+			numQueues = 63
+		}
 		r, _ := regexp.Compile(queueRegex)
 		match := r.MatchString(q)
 		var queueNum int
@@ -318,6 +327,24 @@ func setSMPAffinityForGVNIC(totalCPUs int) error {
 		logger.Infof("Queue %d XPS=%s for %s\n", queueNum, xpsString, q)
 	}
 	return nil
+}
+
+func onlyOneCombinedQueue(q string) (bool, error) {
+	r, _ := regexp.Compile(deviceRegex)
+	match := r.MatchString(q)
+	if match {
+		// /eth0, /eth1
+		ethDev := r.FindAllStringSubmatch(q, -1)[0][1]
+		ethDev = ethDev[1:]
+		combinedQueueNum, err := getCombinedQueueNum(ethDev)
+		if err != nil {
+			return false, err
+		}
+		if combinedQueueNum == 1 {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func makeRange(min, step, max int) []int {

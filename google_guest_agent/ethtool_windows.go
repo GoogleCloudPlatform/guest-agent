@@ -22,3 +22,8 @@ func enableMultiQueue(dev string) error {
 	logger.Errorf("enableMultiQueue unimplemented on Windows systems")
 	return nil
 }
+
+func getCombinedQueueNum(ethDev string) (uint32, error) {
+	logger.Errorf("getCombinedQueueNum unimplemented on Windows systems")
+	return nil
+}

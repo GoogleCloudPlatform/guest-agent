@@ -67,3 +67,19 @@ func enableMultiQueue(dev string) error {
 	}
 	return nil
 }
+
+func getCombinedQueueNum(ethDev string) (uint32, error) {
+	ethHandle, err := ethtool.NewEthtool()
+	if err != nil {
+		return 0, err
+	}
+	defer ethHandle.Close()
+
+	ethDev = path.Base(ethDev)
+	ch, err := ethHandle.GetChannels(ethDev)
+	if err != nil {
+		logger.Warningf("Could not get channels for %s.", ethDev)
+		return 0, err
+	}
+	return ch.CombinedCount, nil
+}
