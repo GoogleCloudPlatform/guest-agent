@@ -287,14 +287,6 @@ func setSMPAffinityForGVNIC(totalCPUs int) error {
 
 	// If we have more CPUs than queues, then stripe CPUs across tx affinity as CPUNumber % queue_count.
 	for _, q := range XPS {
-		onlyOneQueue, err := onlyOneCombinedQueue(q)
-		if err != nil {
-			return err
-		}
-		if onlyOneQueue {
-			continue
-		}
-
 		numQueues := len(XPS)
 		if numQueues > 63 {
 			numQueues = 63
@@ -321,30 +313,14 @@ func setSMPAffinityForGVNIC(totalCPUs int) error {
 		}
 		var xpsString = strings.Join(xpsDwords, ",")
 		if err = ioutil.WriteFile(q, []byte(xpsString), 0644); err != nil {
-			logger.Warningf("%v", err)
+			if !strings.Contains(err.Error(), "No such file or directory") {
+				logger.Errorf("Failed to write to xps file, %v", err)
+			}
 			return err
 		}
 		logger.Infof("Queue %d XPS=%s for %s\n", queueNum, xpsString, q)
 	}
 	return nil
-}
-
-func onlyOneCombinedQueue(q string) (bool, error) {
-	r, _ := regexp.Compile(deviceRegex)
-	match := r.MatchString(q)
-	if match {
-		// /eth0, /eth1
-		ethDev := r.FindAllStringSubmatch(q, -1)[0][1]
-		ethDev = ethDev[1:]
-		combinedQueueNum, err := getCombinedQueueNum(ethDev)
-		if err != nil {
-			return false, err
-		}
-		if combinedQueueNum == 1 {
-			return true, nil
-		}
-	}
-	return false, nil
 }
 
 func makeRange(min, step, max int) []int {
@@ -680,7 +656,7 @@ func setIOScheduler() error {
 		// Detect if device is using MQ subsystem.
 		stat, err := os.Stat("/sys/block/" + dev + "/mq")
 		if err == nil && stat.IsDir() {
-			f, err := os.OpenFile("/sys/block/"+dev+"/queue/scheduler", os.O_WRONLY|os.O_TRUNC, 0644)
+			f, err := os.OpenFile("/sys/block/"+dev+"/queue/scheduler", os.O_WRONLY|os.O_TRUNC, 0700)
 			if err != nil {
 				return err
 			}
