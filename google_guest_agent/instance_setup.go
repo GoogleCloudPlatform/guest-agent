@@ -31,10 +31,6 @@ import (
 	"github.com/go-ini/ini"
 )
 
-const (
-	instanceIDFile = "/etc/google_instance_id"
-)
-
 func agentInit(ctx context.Context) {
 	// Actions to take on agent startup.
 	//
@@ -155,6 +151,7 @@ func agentInit(ctx context.Context) {
 		// Check if instance ID has changed, and if so, consider this
 		// the first boot of the instance.
 		// TODO Also do this for windows. liamh@13-11-2019
+		instanceIDFile := config.Section("Instance").Key("instance_id_dir").MustString("/etc") + "/google_instance_id"
 		instanceID, err := ioutil.ReadFile(instanceIDFile)
 		if err != nil && !os.IsNotExist(err) {
 			logger.Warningf("Not running first-boot actions, error reading instance ID: %v", err)
