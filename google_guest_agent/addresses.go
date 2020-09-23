@@ -478,7 +478,7 @@ func configureIPv6() error {
 	return nil
 }
 
-// enableNetworkInterfaces runs `dhclient -x; dhclient eth1 eth2 ... ethN`.
+// enableNetworkInterfaces runs `dhclient eth1 eth2 ... ethN`.
 // On RHEL7, it also calls disableNM for each interface.
 // On SLES, it calls enableSLESInterfaces instead of dhclient.
 func enableNetworkInterfaces() error {
@@ -517,10 +517,6 @@ func enableNetworkInterfaces() error {
 			return runCmd(exec.Command(dhcpCommand))
 		}
 
-		err := runCmd(exec.Command("dhclient", "-x"))
-		if err != nil {
-			logger.Warningf("Error running 'dhclient -x': %v.", err)
-		}
 		dhclientArgs := []string{}
 		// The dhclient_script key has historically only been supported on EL6.
 		if (osRelease.os == "rhel" || osRelease.os == "centos") && osRelease.version.major == 6 {
