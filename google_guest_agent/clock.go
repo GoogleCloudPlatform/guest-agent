@@ -53,5 +53,5 @@ func (a *clockskewMgr) set() error {
 		return runCmd(exec.Command("ntpdate", "metadata.google.internal"))
 	}
 
-	return runCmd(exec.Command("/sbin/hwclock", "--hctosys", "-u", "--noadjtime"))
+	return runCmd(exec.Command("/sbin/hwclock", "--hctosys", "-u", "--noadjfile"))
 }
