@@ -1,9 +1,10 @@
 [Unit]
 Description=Google Compute Engine Guest Agent
 Before=sshd.service
-After=network-online.target rsyslog.service
+After=network-online.target rsyslog.service network.service networking.service
+After=NetworkManager.service
 Wants=network-online.target
-PartOf=network.service
+PartOf=network.service networking.service NetworkManager.service
 
 [Service]
 Type=simple
