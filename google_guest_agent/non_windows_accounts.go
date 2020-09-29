@@ -78,9 +78,9 @@ func (a *accountsMgr) diff() bool {
 		}
 	}
 	// If we've just disabled OS Login.
-	old, _ := getOSLoginEnabled(oldMetadata)
-	new, _ := getOSLoginEnabled(newMetadata)
-	if old && !new {
+	oldOslogin, _ := getOSLoginEnabled(oldMetadata)
+	newOslogin, _ := getOSLoginEnabled(newMetadata)
+	if oldOslogin && !newOslogin {
 		return true
 	}
 
