@@ -126,12 +126,11 @@ func agentInit(ctx context.Context) {
 		res := runCmdOutput(exec.Command("nproc"))
 		if res.ExitCode() != 0 {
 			logger.Warningf("Failed to run nproc: %v", res.Stderr())
-			return
 		}
 		totalCPUs, err := strconv.Atoi(res.Stdout()[0 : len(res.Stdout())-1])
 		if err != nil {
 			logger.Warningf("Failed to get number of cpus: %v", err)
-			return
+			totalCPUs = 1
 		}
 		// Config NVME, SCSI and set MultiQueue are run regardless of metadata/network access and config options.
 		if err := configNVME(totalCPUs); err != nil {
@@ -142,29 +141,6 @@ func agentInit(ctx context.Context) {
 			logger.Warningf("Failed to config scsi: %v", err)
 		}
 
-		/*
-			For a single-queue / no MSI-X virtionet device, sets the IRQ affinities to
-			processor 0. For this virtionet configuration, distributing IRQs to all
-			processors results in comparatively high cpu utilization and comparatively
-			low network bandwidth.
-
-			For a multi-queue / MSI-X virtionet device, sets the IRQ affinities to the
-			per-IRQ affinity hint. The virtionet driver maps each virtionet TX (RX) queue
-			MSI-X interrupt to a unique single CPU if the number of TX (RX) queues equals
-			the number of online CPUs. The mapping of network MSI-X interrupt vector to
-			CPUs is stored in the virtionet MSI-X interrupt vector affinity hint. This
-			configuration allows network traffic to be spread across the CPUs, giving
-			each CPU a dedicated TX and RX network queue, while ensuring that all packets
-			from a single flow are delivered to the same CPU.
-
-			For a gvnic device, set the IRQ affinities to the per-IRQ affinity hint.
-			The google virtual ethernet driver maps each queue MSI-X interrupt to a
-			unique single CPU, which is stored in the affinity_hint for each MSI-X
-			vector. In older versions of the kernel, irqblanace is expected to copy the
-			affinity_hint to smp_affinity; however, GCE instances disable irqbalance by
-			default. This script copies over the affinity_hint to smp_affinity on boot to
-			replicate the behavior of irqbalance.
-		*/
 		if err := setMultiQueue(totalCPUs); err != nil {
 			logger.Warningf("Failed to set multi queue: %v", err)
 		}
@@ -241,6 +217,28 @@ func agentInit(ctx context.Context) {
 	}
 }
 
+
+//For a single-queue / no MSI-X virtionet device, sets the IRQ affinities to
+//processor 0. For this virtionet configuration, distributing IRQs to all
+//processors results in comparatively high cpu utilization and comparatively
+//low network bandwidth.
+//
+//For a multi-queue / MSI-X virtionet device, sets the IRQ affinities to the
+//per-IRQ affinity hint. The virtionet driver maps each virtionet TX (RX) queue
+//MSI-X interrupt to a unique single CPU if the number of TX (RX) queues equals
+//the number of online CPUs. The mapping of network MSI-X interrupt vector to
+//CPUs is stored in the virtionet MSI-X interrupt vector affinity hint. This
+//configuration allows network traffic to be spread across the CPUs, giving
+//each CPU a dedicated TX and RX network queue, while ensuring that all packets
+//from a single flow are delivered to the same CPU.
+//
+//For a gvnic device, set the IRQ affinities to the per-IRQ affinity hint.
+//The google virtual ethernet driver maps each queue MSI-X interrupt to a
+//unique single CPU, which is stored in the affinity_hint for each MSI-X
+//vector. In older versions of the kernel, irqblanace is expected to copy the
+//affinity_hint to smp_affinity; however, GCE instances disable irqbalance by
+//default. This script copies over the affinity_hint to smp_affinity on boot to
+//replicate the behavior of irqbalance.
 func setMultiQueue(totalCPUs int) error {
 	devices, err := filepath.Glob(virtioNetDevs)
 	if err != nil {
@@ -249,17 +247,18 @@ func setMultiQueue(totalCPUs int) error {
 	for _, dev := range devices {
 		if err := enableMultiQueue(dev); err != nil {
 			logger.Warningf("Could not enable multi queue for %s.", dev)
-			return err
 		}
 		if err = setQueueNumForDevice(dev); err != nil {
 			logger.Warningf("Could not set queue num for %s.", dev)
-			return err
 		}
 	}
 	// Set smp_affinity properly for gvnic queues. '-ntfy-block.' is unique to gve and will not affect virtio queues.
 	if err = setSMPAffinityForGVNIC(totalCPUs); err != nil {
 		logger.Warningf("Could not set smp_affinity for gvnic.")
-		return err
+	}
+
+	if err = configureTransmitPacketSteering(totalCPUs); err != nil {
+		logger.Warningf("Could not set transmit packet steering.")
 	}
 	return nil
 }
@@ -280,6 +279,10 @@ func setSMPAffinityForGVNIC(totalCPUs int) error {
 			}
 		}
 	}
+	return nil
+}
+
+func configureTransmitPacketSteering(totalCPUs int) error {
 	XPS, err := filepath.Glob(xpsCPU)
 	if err != nil {
 		return err
@@ -292,26 +295,16 @@ func setSMPAffinityForGVNIC(totalCPUs int) error {
 			numQueues = 63
 		}
 		r, _ := regexp.Compile(queueRegex)
-		match := r.MatchString(q)
 		var queueNum int
-		if match {
+		if r.MatchString(q) {
 			queueNum, err = strconv.Atoi(r.FindAllStringSubmatch(q, -1)[0][1])
 			if err != nil {
 				return err
 			}
 		}
-		xps := 0
-		for _, cpu := range makeRange(queueNum, numQueues, totalCPUs-1) {
-			xps |= 1 << cpu
-		}
-		// Linux xps_cpus requires a hex number with commas every 32 bits. It ignores
-		// all bits above # cpus, so write a list of comma separated 32 bit hex values
-		// with a comma between dwords.
-		var xpsDwords []string
-		for range makeRange(0, 1, (totalCPUs-1)/32) {
-			xpsDwords = append(xpsDwords, fmt.Sprintf("%08x", xps&0xffffffff))
-		}
-		var xpsString = strings.Join(xpsDwords, ",")
+		xpsString := constructXPSString(queueNum, totalCPUs, numQueues)
+		logger.Infof("xpsString is '%s'", xpsString)
+
 		if err = ioutil.WriteFile(q, []byte(xpsString), 0644); err != nil {
 			if !strings.Contains(err.Error(), "No such file or directory") {
 				logger.Errorf("Failed to write to xps file, %v", err)
@@ -323,14 +316,20 @@ func setSMPAffinityForGVNIC(totalCPUs int) error {
 	return nil
 }
 
-func makeRange(min, step, max int) []int {
-	arr := make([]int, (max-min)/step+1)
-	cur := min
-	for i := range arr {
-		arr[i] = cur
-		cur += step
+func constructXPSString(queueNum, totalCPUs, numQueues int) string {
+	xps := 0
+	for cpu := queueNum; cpu < totalCPUs; cpu += numQueues {
+		xps |= 1 << cpu
 	}
-	return arr
+	// Linux xps_cpus requires a hex number with commas every 32 bits. It ignores
+	// all bits above # cpus, so write a list of comma separated 32 bit hex values
+	// with a comma between dwords.
+	var xpsDwords []string
+	for i := 0; i < (totalCPUs-1)/32 + 1; i++ {
+		xpsDwords = append(xpsDwords, fmt.Sprintf("%08x", xps & 0xffffffff))
+		xps >>= 32
+	}
+	return strings.Join(xpsDwords, ",")
 }
 
 func copyFile(src string, dest string) error {
@@ -353,7 +352,7 @@ func setQueueNumForDevice(dev string) error {
 	}
 	for _, irq := range irqDirs {
 		smpAffinity := irq + "/smp_affinity_list"
-		if isDir(smpAffinity) {
+		if !isFile(smpAffinity) {
 			continue
 		}
 		virtionetIntxDir := irq + "/" + dev
@@ -362,12 +361,12 @@ func setQueueNumForDevice(dev string) error {
 			// All virtionet intx IRQs are delivered to CPU 0
 			logger.Infof("Setting %s to 01 for device %s.", smpAffinity, dev)
 			if err := ioutil.WriteFile(smpAffinity, []byte("01"), 0644); err != nil {
-				return err
+				logger.Warningf("Could not write 01 to %s for %s.", smpAffinity, dev)
 			}
 			continue
 		}
 		// Not virtionet intx, probe for MSI-X
-		virtionetMsixFound := 0
+		var virtionetMsixFound bool
 		irqDevs, err := filepath.Glob(irq + "/" + dev + "*")
 		if err != nil {
 			return err
@@ -375,18 +374,16 @@ func setQueueNumForDevice(dev string) error {
 		var queueNum int
 		for _, entry := range irqDevs {
 			r, _ := regexp.Compile(virtionetMsixDirRegex)
-			match := r.MatchString(entry)
-			if match {
-				virtionetMsixFound = 1
-				// FindAllStringSubmatch return [][]string
-				queueNum, err = strconv.Atoi(r.FindAllStringSubmatch(entry, -1)[0][2])
+			if r.MatchString(entry) {
+				virtionetMsixFound = true
+				queueNum, err = strconv.Atoi(r.FindStringSubmatch(entry)[2])
 				if err != nil {
 					return err
 				}
 			}
 		}
 		affinityHint := irq + "/affinity_hint"
-		if virtionetMsixFound == 0 || isFile(affinityHint) {
+		if !virtionetMsixFound || !isFile(affinityHint) {
 			continue
 		}
 
@@ -502,7 +499,7 @@ func configSCSI(totalCPUs int) error {
 
 func isFile(path string) bool {
 	info, err := os.Stat(path)
-	if err != nil {
+	if os.IsNotExist(err) {
 		return false
 	}
 	return !info.IsDir()
@@ -510,7 +507,7 @@ func isFile(path string) bool {
 
 func isDir(path string) bool {
 	info, err := os.Stat(path)
-	if err != nil {
+	if os.IsNotExist(err) {
 		return false
 	}
 	return info.IsDir()
