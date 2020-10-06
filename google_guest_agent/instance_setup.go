@@ -123,15 +123,7 @@ func agentInit(ctx context.Context) {
 			startSnapshotListener(snapshotServiceIP, snapshotServicePort)
 		}
 
-		res := runCmdOutput(exec.Command("nproc"))
-		if res.ExitCode() != 0 {
-			logger.Warningf("Failed to run nproc: %v", res.Stderr())
-		}
-		totalCPUs, err := strconv.Atoi(res.Stdout()[0 : len(res.Stdout())-1])
-		if err != nil {
-			logger.Warningf("Failed to get number of cpus: %v", err)
-			totalCPUs = 1
-		}
+		totalCPUs := getTotalCPUs()
 		// Config NVME, SCSI and set MultiQueue are run regardless of metadata/network access and config options.
 		if err := configNVME(totalCPUs); err != nil {
 			logger.Warningf("Failed to config nvme: %v", err)
@@ -217,6 +209,20 @@ func agentInit(ctx context.Context) {
 	}
 }
 
+func getTotalCPUs() int {
+	var totalCPUs = 1
+	res := runCmdOutput(exec.Command("nproc"))
+	if res.ExitCode() != 0 {
+		logger.Warningf("Failed to run nproc: %v", res.Stderr())
+		return totalCPUs
+	}
+	totalCPUinString := res.Stdout()[0 : len(res.Stdout())-1]
+	totalCPUs, err := strconv.Atoi(totalCPUinString)
+	if err != nil {
+		logger.Warningf("Failed to get number of cpus: %v", err)
+	}
+	return totalCPUs
+}
 
 //For a single-queue / no MSI-X virtionet device, sets the IRQ affinities to
 //processor 0. For this virtionet configuration, distributing IRQs to all
