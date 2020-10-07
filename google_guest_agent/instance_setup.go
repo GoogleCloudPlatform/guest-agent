@@ -34,6 +34,9 @@ import (
 func agentInit(ctx context.Context) {
 	// Actions to take on agent startup.
 	//
+	// All platforms:
+	//  - Determine if metadata hostname can be resolved.
+	//
 	// On Windows:
 	//  - Add route to metadata server
 	// On Linux:
@@ -44,6 +47,8 @@ func agentInit(ctx context.Context) {
 	//  - Run `google_optimize_local_ssd` script.
 	//  - Run `google_set_multiqueue` script.
 	// TODO incorporate these scripts into the agent. liamh@12-11-19
+	setMetadataURL()
+
 	if runtime.GOOS == "windows" {
 		msg := "Could not set default route to metadata"
 		fes, err := getIPForwardEntries()
