@@ -175,6 +175,7 @@ func agentInit(ctx context.Context) {
 		// Check if instance ID has changed, and if so, consider this
 		// the first boot of the instance.
 		// TODO Also do this for windows. liamh@13-11-2019
+		instanceIDFile := config.Section("Instance").Key("instance_id_dir").MustString("/etc") + "/google_instance_id"
 		instanceID, err := ioutil.ReadFile(instanceIDFile)
 		if err != nil && !os.IsNotExist(err) {
 			logger.Warningf("Not running first-boot actions, error reading instance ID: %v", err)
@@ -305,13 +306,12 @@ func configureTransmitPacketSteering(totalCPUs int) error {
 		r, _ := regexp.Compile(queueRegex)
 		var queueNum int
 		if r.MatchString(q) {
-			queueNum, err = strconv.Atoi(r.FindAllStringSubmatch(q, -1)[0][1])
+			queueNum, err = strconv.Atoi(r.FindStringSubmatch(q)[1])
 			if err != nil {
 				return err
 			}
 		}
 		xpsString := constructXPSString(queueNum, totalCPUs, numQueues)
-		logger.Infof("xpsString is '%s'", xpsString)
 
 		if err = ioutil.WriteFile(q, []byte(xpsString), 0644); err != nil {
 			if !strings.Contains(err.Error(), "No such file or directory") {
@@ -333,8 +333,8 @@ func constructXPSString(queueNum, totalCPUs, numQueues int) string {
 	// all bits above # cpus, so write a list of comma separated 32 bit hex values
 	// with a comma between dwords.
 	var xpsDwords []string
-	for i := 0; i < (totalCPUs-1)/32 + 1; i++ {
-		xpsDwords = append(xpsDwords, fmt.Sprintf("%08x", xps & 0xffffffff))
+	for i := 0; i < (totalCPUs-1)/32+1; i++ {
+		xpsDwords = append(xpsDwords, fmt.Sprintf("%08x", xps&0xffffffff))
 		xps >>= 32
 	}
 	return strings.Join(xpsDwords, ",")

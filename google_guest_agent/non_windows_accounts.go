@@ -78,9 +78,9 @@ func (a *accountsMgr) diff() bool {
 		}
 	}
 	// If we've just disabled OS Login.
-	old, _ := getOSLoginEnabled(oldMetadata)
-	new, _ := getOSLoginEnabled(newMetadata)
-	if old && !new {
+	oldOslogin, _ := getOSLoginEnabled(oldMetadata)
+	newOslogin, _ := getOSLoginEnabled(newMetadata)
+	if oldOslogin && !newOslogin {
 		return true
 	}
 
@@ -198,7 +198,7 @@ func getPasswd(user string) (*passwdEntry, error) {
 	colon := []byte{':'}
 
 	parse := func(line []byte) (*passwdEntry, error) {
-		if !bytes.Contains(line, prefix) || bytes.Count(line, colon) < 6 {
+		if !bytes.HasPrefix(line, prefix) || bytes.Count(line, colon) < 6 {
 			return nil, nil
 		}
 		// kevin:x:1005:1006::/home/kevin:/usr/bin/zsh
