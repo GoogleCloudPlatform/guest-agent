@@ -21,16 +21,12 @@ import (
 func TestConstructXPSString(t *testing.T) {
 	test := []struct {
 		queueNum, totalCPUs, numQueues int
-		expect string
+		expect                         string
 	}{
-		{0, 8,2,
-			"00000055"},
-		{1, 8,2,
-		"000000aa"},
-		{0, 33,2,
-			"55555555,00000001"},
-		{0, 33,33,
-			"00000001,00000000"},
+		{0, 8, 2, "00000055"},
+		{1, 8, 2, "000000aa"},
+		{0, 33, 2, "55555555,00000001"},
+		{0, 33, 33, "00000001,00000000"},
 	}
 	for _, tt := range test {
 		if actual := constructXPSString(tt.queueNum, tt.totalCPUs, tt.numQueues); actual != tt.expect {

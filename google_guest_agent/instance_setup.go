@@ -17,6 +17,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -123,24 +124,27 @@ func agentInit(ctx context.Context) {
 			startSnapshotListener(snapshotServiceIP, snapshotServicePort)
 		}
 
-		totalCPUs := getTotalCPUs()
-		// Config NVME, SCSI and set MultiQueue are run regardless of metadata/network access and config options.
-		if err := configNVME(totalCPUs); err != nil {
-			logger.Warningf("Failed to config nvme: %v", err)
-		}
-
-		if err := configSCSI(totalCPUs); err != nil {
-			logger.Warningf("Failed to config scsi: %v", err)
-		}
-
-		if err := setMultiQueue(totalCPUs); err != nil {
-			logger.Warningf("Failed to set multi queue: %v", err)
-		}
-
 		// Below actions happen on every agent start. They only need to
 		// run once per boot, but it's harmless to run them on every
 		// boot. If this changes, we will hook these to an explicit
 		// on-boot signal.
+		totalCPUs, err := getTotalCPUs()
+		if err == nil {
+			// Config NVME, SCSI and set MultiQueue are run regardless of metadata/network access and config options.
+			if err := configNVME(totalCPUs); err != nil {
+				logger.Warningf("Failed to config nvme: %v", err)
+			}
+
+			if err := configSCSI(totalCPUs); err != nil {
+				logger.Warningf("Failed to config scsi: %v", err)
+			}
+
+			if err := setMultiQueue(totalCPUs); err != nil {
+				logger.Warningf("Failed to set multi queue: %v", err)
+			}
+		}
+		logger.Warningf("Failed to get total cpus, %s", err)
+
 		if err := setIOScheduler(); err != nil {
 			logger.Warningf("Failed to set IO scheduler: %v", err)
 		}
@@ -209,19 +213,20 @@ func agentInit(ctx context.Context) {
 	}
 }
 
-func getTotalCPUs() int {
-	var totalCPUs = 1
+func getTotalCPUs() (int, error) {
+	var totalCPUs int
 	res := runCmdOutput(exec.Command("nproc"))
 	if res.ExitCode() != 0 {
 		logger.Warningf("Failed to run nproc: %v", res.Stderr())
-		return totalCPUs
+		return 0, errors.New(res.Error())
 	}
 	totalCPUinString := res.Stdout()[0 : len(res.Stdout())-1]
 	totalCPUs, err := strconv.Atoi(totalCPUinString)
 	if err != nil {
 		logger.Warningf("Failed to get number of cpus: %v", err)
+		return 0, err
 	}
-	return totalCPUs
+	return totalCPUs, nil
 }
 
 //For a single-queue / no MSI-X virtionet device, sets the IRQ affinities to
@@ -259,7 +264,7 @@ func setMultiQueue(totalCPUs int) error {
 		}
 	}
 	// Set smp_affinity properly for gvnic queues. '-ntfy-block.' is unique to gve and will not affect virtio queues.
-	if err = setSMPAffinityForGVNIC(totalCPUs); err != nil {
+	if err = setSMPAffinityForGVNIC(); err != nil {
 		logger.Warningf("Could not set smp_affinity for gvnic.")
 	}
 
@@ -269,7 +274,7 @@ func setMultiQueue(totalCPUs int) error {
 	return nil
 }
 
-func setSMPAffinityForGVNIC(totalCPUs int) error {
+func setSMPAffinityForGVNIC() error {
 	irqDirs, err := filepath.Glob(irqDirPath)
 	if err != nil {
 		return err
@@ -297,9 +302,6 @@ func configureTransmitPacketSteering(totalCPUs int) error {
 	// If we have more CPUs than queues, then stripe CPUs across tx affinity as CPUNumber % queue_count.
 	for _, q := range XPS {
 		numQueues := len(XPS)
-		if numQueues > 63 {
-			numQueues = 63
-		}
 		r, _ := regexp.Compile(queueRegex)
 		var queueNum int
 		if r.MatchString(q) {
