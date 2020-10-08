@@ -306,8 +306,8 @@ func configureTransmitPacketSteering(totalCPUs int) error {
 	}
 
 	// If we have more CPUs than queues, then stripe CPUs across tx affinity as CPUNumber % queue_count.
+	numQueues := len(XPS)
 	for _, q := range XPS {
-		numQueues := len(XPS)
 		r, _ := regexp.Compile(queueRegex)
 		var queueNum int
 		if r.MatchString(q) {
@@ -331,12 +331,9 @@ func configureTransmitPacketSteering(totalCPUs int) error {
 
 
 func constructXPSString(queueNum, totalCPUs, numQueues int) string {
-	numwords := totalCPUs / 32
-	if totalCPUs%32 != 0 {
-		numwords++
-	}
-
+	numwords := (totalCPUs-1)/32+1
 	xps := make([]uint32, numwords)
+
 	for cpu := queueNum; cpu < totalCPUs; cpu += numQueues {
 		dword := cpu / 32
 		xps[dword] |= 1 << uint32(cpu-(32*dword))
