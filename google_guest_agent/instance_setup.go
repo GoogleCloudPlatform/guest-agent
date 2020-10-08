@@ -51,6 +51,9 @@ const (
 func agentInit(ctx context.Context) {
 	// Actions to take on agent startup.
 	//
+	// All platforms:
+	//  - Determine if metadata hostname can be resolved.
+	//
 	// On Windows:
 	//  - Add route to metadata server
 	// On Linux:
@@ -60,6 +63,8 @@ func agentInit(ctx context.Context) {
 	//  - Set scheduler values.
 	//  - Optimize local ssd.
 	//  - Set multiqueue.
+	setMetadataURL()
+
 	if runtime.GOOS == "windows" {
 		msg := "Could not set default route to metadata"
 		fes, err := getIPForwardEntries()
