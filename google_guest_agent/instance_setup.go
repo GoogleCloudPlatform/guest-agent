@@ -329,18 +329,24 @@ func configureTransmitPacketSteering(totalCPUs int) error {
 	return nil
 }
 
+
 func constructXPSString(queueNum, totalCPUs, numQueues int) string {
-	xps := 0
+	numwords := totalCPUs / 32
+	if totalCPUs%32 != 0 {
+		numwords++
+	}
+
+	xps := make([]uint32, numwords)
 	for cpu := queueNum; cpu < totalCPUs; cpu += numQueues {
-		xps |= 1 << cpu
+		dword := cpu / 32
+		xps[dword] |= 1 << uint32(cpu-(32*dword))
 	}
 	// Linux xps_cpus requires a hex number with commas every 32 bits. It ignores
 	// all bits above # cpus, so write a list of comma separated 32 bit hex values
 	// with a comma between dwords.
 	var xpsDwords []string
-	for i := 0; i < (totalCPUs-1)/32+1; i++ {
-		xpsDwords = append(xpsDwords, fmt.Sprintf("%08x", xps&0xffffffff))
-		xps >>= 32
+	for i := 0; i < numwords; i++ {
+		xpsDwords = append([]string{fmt.Sprintf("%08x", xps[i])}, xpsDwords...)
 	}
 	return strings.Join(xpsDwords, ",")
 }
