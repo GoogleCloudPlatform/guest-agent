@@ -52,6 +52,12 @@ func TestConstructXPSString(t *testing.T) {
 
 		{0, 33, 2, "00000001,55555555"},
 		{1, 33, 2, "00000000,aaaaaaaa"},
+
+		{0, 100, 2, "00000005,55555555,55555555,55555555"},
+		{1, 100, 2, "0000000a,aaaaaaaa,aaaaaaaa,aaaaaaaa"},
+
+		{0, 100, 32, "00000001,00000001,00000001,00000001"},
+		{1, 100, 80, "00000000,00020000,00000000,00000002"},
 	}
 	for _, tt := range test {
 		if actual := constructXPSString(tt.queueNum, tt.totalCPUs, tt.numQueues); actual != tt.expect {

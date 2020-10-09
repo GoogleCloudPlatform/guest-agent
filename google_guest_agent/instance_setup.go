@@ -329,9 +329,8 @@ func configureTransmitPacketSteering(totalCPUs int) error {
 	return nil
 }
 
-
 func constructXPSString(queueNum, totalCPUs, numQueues int) string {
-	numwords := (totalCPUs-1)/32+1
+	numwords := (totalCPUs-1)/32 + 1
 	xps := make([]uint32, numwords)
 
 	for cpu := queueNum; cpu < totalCPUs; cpu += numQueues {
