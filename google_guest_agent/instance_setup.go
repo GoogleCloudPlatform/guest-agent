@@ -38,14 +38,12 @@ import (
 )
 
 const (
-	instanceIDFile = "/etc/google_instance_id"
-	virtioNetDevs  = "/sys/bus/virtio/drivers/virtio_net/virtio*"
-	deviceRegex    = "/e(\\w+)"
-	queueRegex     = ".*tx-([0-9]+).*$"
-	irqDirPath     = "/proc/irq/*"
-	xpsCPU         = "/sys/class/net/e*/queues/tx*/xps_cpus"
-	nvmeDevice     = "/sys/bus/pci/drivers/nvme/*"
-	scsiDevice     = "/sys/bus/virtio/drivers/virtio_scsi/virtio*"
+	virtioNetDevs = "/sys/bus/virtio/drivers/virtio_net/virtio*"
+	queueRegex    = ".*tx-([0-9]+).*$"
+	irqDirPath    = "/proc/irq/*"
+	xpsCPU        = "/sys/class/net/e*/queues/tx*/xps_cpus"
+	nvmeDevice    = "/sys/bus/pci/drivers/nvme/*"
+	scsiDevice    = "/sys/bus/virtio/drivers/virtio_scsi/virtio*"
 )
 
 func agentInit(ctx context.Context) {
@@ -370,8 +368,8 @@ func setQueueNumForDevice(dev string) error {
 		if !isFile(smpAffinity) {
 			continue
 		}
-		virtionetIntxDir := irq + "/" + dev
-		virtionetMsixDirRegex := ".*/" + dev + "-(input|output)\\.([0-9]+)$"
+		virtionetIntxDir := fmt.Sprint("%s/%s", irq, dev)
+		virtionetMsixDirRegex := fmt.Sprint(".*/%s-(input|output)\\.([0-9]+)$", dev)
 		if isDir(virtionetIntxDir) {
 			// All virtionet intx IRQs are delivered to CPU 0
 			logger.Infof("Setting %s to 01 for device %s.", smpAffinity, dev)
@@ -382,7 +380,7 @@ func setQueueNumForDevice(dev string) error {
 		}
 		// Not virtionet intx, probe for MSI-X
 		var virtionetMsixFound bool
-		irqDevs, err := filepath.Glob(irq + "/" + dev + "*")
+		irqDevs, err := filepath.Glob(fmt.Sprintf("%s/%s*", irq, dev))
 		if err != nil {
 			return err
 		}
@@ -397,7 +395,7 @@ func setQueueNumForDevice(dev string) error {
 				}
 			}
 		}
-		affinityHint := irq + "/affinity_hint"
+		affinityHint := fmt.Sprint("%s/affinity_hint", irq)
 		if !virtionetMsixFound || !isFile(affinityHint) {
 			continue
 		}
@@ -430,11 +428,11 @@ func configNVME(totalCPUs int) error {
 			if !isFile(irqInfo) {
 				continue
 			}
-			currentCPU := currentCPU % totalCPUs
+			currentCPU %= totalCPUs
 			cpuMask := 1 << currentCPU
 			irq := path.Base(irqInfo)
 			logger.Infof("Setting IRQ %s smp_affinity to %d", irq, cpuMask)
-			if err := ioutil.WriteFile("/proc/irq/"+irq+"/smp_affinity", []byte(strconv.Itoa(cpuMask)), 0644); err != nil {
+			if err := ioutil.WriteFile(fmt.Sprintf("/proc/irq/%d/smp_affinity", irq), []byte(strconv.Itoa(cpuMask)), 0644); err != nil {
 				return err
 			}
 			currentCPU++
@@ -456,31 +454,26 @@ func configSCSI(totalCPUs int) error {
 			return err
 		}
 		for _, targetPath := range targetPaths {
-			if !isFile(targetPath + "/model") {
-				continue
-			}
 			b, err := ioutil.ReadFile(targetPath + "/model")
 			if err != nil {
 				return err
 			}
-			match, err := regexp.MatchString(".*EphemeralDisk.* ", string(b))
+			if !strings.Contains(string(b), "EphemeralDisk") {
+				continue
+			}
+
+			ssd = 1
+			queuePaths, err := filepath.Glob(targetPath + "/block/sd*/queue")
 			if err != nil {
 				return err
 			}
-			if match {
-				ssd = 1
-				queuePaths, err := filepath.Glob(targetPath + "/block/sd*/queue")
-				if err != nil {
-					return err
-				}
-				for _, queuePath := range queuePaths {
-					ioutil.WriteFile(queuePath+"/scheduler", []byte("noop"), 0644)
-					ioutil.WriteFile(queuePath+"/add_random", []byte("0"), 0644)
-					ioutil.WriteFile(queuePath+"/nr_requests", []byte("512"), 0644)
-					ioutil.WriteFile(queuePath+"/rotational", []byte("0"), 0644)
-					ioutil.WriteFile(queuePath+"/rq_affinity", []byte("0"), 0644)
-					ioutil.WriteFile(queuePath+"/nomerges", []byte("1"), 0644)
-				}
+			for _, queuePath := range queuePaths {
+				ioutil.WriteFile(queuePath+"/scheduler", []byte("noop\n"), 0644)
+				ioutil.WriteFile(queuePath+"/add_random", []byte("0\n"), 0644)
+				ioutil.WriteFile(queuePath+"/nr_requests", []byte("512\n"), 0644)
+				ioutil.WriteFile(queuePath+"/rotational", []byte("0\n"), 0644)
+				ioutil.WriteFile(queuePath+"/rq_affinity", []byte("0\n"), 0644)
+				ioutil.WriteFile(queuePath+"/nomerges", []byte("1\n"), 0644)
 			}
 		}
 		if ssd == 1 {
@@ -513,19 +506,17 @@ func configSCSI(totalCPUs int) error {
 }
 
 func isFile(path string) bool {
-	info, err := os.Stat(path)
-	if os.IsNotExist(err) {
-		return false
+	if info, err := os.Stat(path); err == nil {
+		return !info.IsDir()
 	}
-	return !info.IsDir()
+	return false
 }
 
 func isDir(path string) bool {
-	info, err := os.Stat(path)
-	if os.IsNotExist(err) {
-		return false
+	if info, err := os.Stat(path); err == nil {
+		return info.IsDir()
 	}
-	return info.IsDir()
+	return false
 }
 
 func getIRQFromInterrupts(requestQueue string) (int, error) {
