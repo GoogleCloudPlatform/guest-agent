@@ -368,8 +368,8 @@ func setQueueNumForDevice(dev string) error {
 		if !isFile(smpAffinity) {
 			continue
 		}
-		virtionetIntxDir := fmt.Sprint("%s/%s", irq, dev)
-		virtionetMsixDirRegex := fmt.Sprint(".*/%s-(input|output)\\.([0-9]+)$", dev)
+		virtionetIntxDir := fmt.Sprintf("%s/%s", irq, dev)
+		virtionetMsixDirRegex := fmt.Sprintf(".*/%s-(input|output)\\.([0-9]+)$", dev)
 		if isDir(virtionetIntxDir) {
 			// All virtionet intx IRQs are delivered to CPU 0
 			logger.Infof("Setting %s to 01 for device %s.", smpAffinity, dev)
@@ -395,7 +395,7 @@ func setQueueNumForDevice(dev string) error {
 				}
 			}
 		}
-		affinityHint := fmt.Sprint("%s/affinity_hint", irq)
+		affinityHint := fmt.Sprintf("%s/affinity_hint", irq)
 		if !virtionetMsixFound || !isFile(affinityHint) {
 			continue
 		}
@@ -432,7 +432,7 @@ func configNVME(totalCPUs int) error {
 			cpuMask := 1 << currentCPU
 			irq := path.Base(irqInfo)
 			logger.Infof("Setting IRQ %s smp_affinity to %d", irq, cpuMask)
-			if err := ioutil.WriteFile(fmt.Sprintf("/proc/irq/%d/smp_affinity", irq), []byte(strconv.Itoa(cpuMask)), 0644); err != nil {
+			if err := ioutil.WriteFile(fmt.Sprintf("/proc/irq/%s/smp_affinity", irq), []byte(strconv.Itoa(cpuMask)), 0644); err != nil {
 				return err
 			}
 			currentCPU++
