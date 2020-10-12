@@ -366,7 +366,7 @@ func setQueueNumForDevice(dev string) error {
 	}
 	for _, irq := range irqDirs {
 		smpAffinity := irq + "/smp_affinity_list"
-		stat, err := os.Stat(smpAffinity);
+		stat, err := os.Stat(smpAffinity)
 		if err == nil && stat.IsDir() {
 			continue
 		}
