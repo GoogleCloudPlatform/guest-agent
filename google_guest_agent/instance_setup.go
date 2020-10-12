@@ -288,7 +288,8 @@ func setSMPAffinityForGVNIC() error {
 		if err != nil {
 			return err
 		}
-		if len(blocks) > 0 && isFile(irq+"/affinity_hint") {
+		stat, err := os.Stat(irq + "/affinity_hint")
+		if err == nil && len(blocks) > 0 && !stat.IsDir() {
 			if err = copyFile(irq+"/affinity_hint", irq+"/smp_affinity"); err != nil {
 				return err
 			}
@@ -365,12 +366,14 @@ func setQueueNumForDevice(dev string) error {
 	}
 	for _, irq := range irqDirs {
 		smpAffinity := irq + "/smp_affinity_list"
-		if !isFile(smpAffinity) {
+		stat, err := os.Stat(smpAffinity);
+		if err == nil && stat.IsDir() {
 			continue
 		}
 		virtionetIntxDir := fmt.Sprintf("%s/%s", irq, dev)
 		virtionetMsixDirRegex := fmt.Sprintf(".*/%s-(input|output)\\.([0-9]+)$", dev)
-		if isDir(virtionetIntxDir) {
+		stat, err = os.Stat(virtionetIntxDir)
+		if err == nil && stat.IsDir() {
 			// All virtionet intx IRQs are delivered to CPU 0
 			logger.Infof("Setting %s to 01 for device %s.", smpAffinity, dev)
 			if err := ioutil.WriteFile(smpAffinity, []byte("01"), 0644); err != nil {
@@ -396,7 +399,8 @@ func setQueueNumForDevice(dev string) error {
 			}
 		}
 		affinityHint := fmt.Sprintf("%s/affinity_hint", irq)
-		if !virtionetMsixFound || !isFile(affinityHint) {
+		stat, err = os.Stat(affinityHint)
+		if !virtionetMsixFound || (err == nil && !stat.IsDir()) {
 			continue
 		}
 
@@ -416,7 +420,8 @@ func configNVME(totalCPUs int) error {
 		return err
 	}
 	for _, dev := range devices {
-		if !isDir(dev) {
+		stat, err := os.Stat(dev)
+		if err == nil && !stat.IsDir() {
 			continue
 		}
 		irqs, err := filepath.Glob(dev + "/msi_irqs/*")
@@ -425,7 +430,8 @@ func configNVME(totalCPUs int) error {
 		}
 
 		for _, irqInfo := range irqs {
-			if !isFile(irqInfo) {
+			stat, err := os.Stat(irqInfo)
+			if err == nil && stat.IsDir() {
 				continue
 			}
 			currentCPU %= totalCPUs
@@ -503,20 +509,6 @@ func configSCSI(totalCPUs int) error {
 		}
 	}
 	return nil
-}
-
-func isFile(path string) bool {
-	if info, err := os.Stat(path); err == nil {
-		return !info.IsDir()
-	}
-	return false
-}
-
-func isDir(path string) bool {
-	if info, err := os.Stat(path); err == nil {
-		return info.IsDir()
-	}
-	return false
 }
 
 func getIRQFromInterrupts(requestQueue string) (int, error) {
