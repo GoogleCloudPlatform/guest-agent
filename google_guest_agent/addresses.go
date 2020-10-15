@@ -534,7 +534,12 @@ func enableSLESInterfaces(interfaces []string) error {
 	var priority = 10100
 	for _, iface := range interfaces {
 		var ifcfg *os.File
-		ifcfg, err = os.Create("/etc/sysconfig/network/ifcfg-" + iface)
+		filename := "/etc/sysconfig/network/ifcfg-" + iface
+		_, err = os.Stat(filename)
+		if ! os.IsNotExist(err) {
+			return nil
+		}
+		ifcfg, err = os.Create(filename)
 		if err != nil {
 			return err
 		}
