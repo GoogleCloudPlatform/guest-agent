@@ -50,6 +50,21 @@ type DiagnosticsConfig struct {
 	Enable string
 }
 
+type InstanceConfig struct {
+	InstanceIdDir string
+	InstanceId    string
+}
+
+type InstanceSetupConfig struct {
+	OptimizeLocalSsd bool
+	SetMultiqueue    bool
+	NetworkEnabled   bool
+	HostKeyDir       string
+	HostKeyTypes     string
+	SetBotoConfig    bool
+	SetHostKeys      bool
+}
+
 type IpForwardingConfig struct {
 	EthernetProtoId   string
 	TargetInstanceIps bool
@@ -86,6 +101,8 @@ type AgentConfig struct {
 	AddressManager    AddressManagerConfig
 	Daemons           DaemonsConfig
 	Diagnostics       DiagnosticsConfig
+	Instance          InstanceConfig
+	InstanceSetup     InstanceSetupConfig
 	IpForwarding      IpForwardingConfig
 	NetworkInterfaces NetworkInterfacesConfig
 	Snapshots         SnapshotsConfig
@@ -107,6 +124,18 @@ var defaultConfig = AgentConfig{
 		ClockSkewDaemon: true,
 		AccountsDaemon:  true,
 		NetworkDaemon:   true,
+	},
+	Instance: InstanceConfig{
+		InstanceIdDir: "/etc",
+	},
+	InstanceSetup: InstanceSetupConfig{
+		OptimizeLocalSsd: true,
+		SetMultiqueue:    true,
+		NetworkEnabled:   true,
+		HostKeyDir:       "/etc/ssh",
+		HostKeyTypes:     "ecdsa,ed25519,rsa",
+		SetBotoConfig:    true,
+		SetHostKeys:      true,
 	},
 	IpForwarding: IpForwardingConfig{
 		EthernetProtoId:   "66",
@@ -145,6 +174,8 @@ var agentConfigNameMapper = func(raw string) string {
 		return strings.ToLower(string(raw[0])) + string(raw[1:])
 	} else if raw == "Accounts" ||
 		raw == "Daemons" ||
+		raw == "Instance" ||
+		raw == "InstanceSetup" ||
 		raw == "IpForwarding" ||
 		raw == "NetworkInterfaces" ||
 		raw == "Snapshots" {

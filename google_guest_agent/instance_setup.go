@@ -114,11 +114,14 @@ func agentInit(ctx context.Context) {
 		}
 
 		// These scripts are run regardless of metadata/network access and config options.
-		for _, script := range []string{"optimize_local_ssd", "set_multiqueue"} {
-			if config.raw.Section("InstanceSetup").Key(script).MustBool(true) {
-				if err := runCmd(exec.Command("google_" + script)); err != nil {
-					logger.Warningf("Failed to run %q script: %v", "google_"+script, err)
-				}
+		if config.InstanceSetup.SetMultiqueue {
+			if err := runCmd(exec.Command("google_set_multiqueue")); err != nil {
+				logger.Warningf("Failed to run %q script: %v", "google_set_multiqueue", err)
+			}
+		}
+		if config.InstanceSetup.OptimizeLocalSsd {
+			if err := runCmd(exec.Command("google_optimize_local_ssd")); err != nil {
+				logger.Warningf("Failed to run %q script: %v", "google_optimize_local_ssd", err)
 			}
 		}
 
@@ -131,7 +134,7 @@ func agentInit(ctx context.Context) {
 		}
 
 		// Allow users to opt out of below instance setup actions.
-		if !config.raw.Section("InstanceSetup").Key("network_enabled").MustBool(true) {
+		if !config.InstanceSetup.NetworkEnabled {
 			logger.Infof("InstanceSetup.network_enabled is false, skipping setup actions that require metadata")
 			return
 		}
@@ -156,14 +159,14 @@ func agentInit(ctx context.Context) {
 		// Check if instance ID has changed, and if so, consider this
 		// the first boot of the instance.
 		// TODO Also do this for windows. liamh@13-11-2019
-		instanceIDFile := config.raw.Section("Instance").Key("instance_id_dir").MustString("/etc") + "/google_instance_id"
+		instanceIDFile := config.Instance.InstanceIdDir + "/google_instance_id"
 		instanceID, err := ioutil.ReadFile(instanceIDFile)
 		if err != nil && !os.IsNotExist(err) {
 			logger.Warningf("Not running first-boot actions, error reading instance ID: %v", err)
 		} else {
 			if string(instanceID) == "" {
 				// If the file didn't exist or was empty, try legacy key from instance configs.
-				instanceID = []byte(config.raw.Section("Instance").Key("instance_id").String())
+				instanceID = []byte(config.Instance.InstanceId)
 
 				// Write instance ID to file for next time before moving on.
 				towrite := fmt.Sprintf("%s\n", newMetadata.Instance.ID.String())
@@ -173,12 +176,12 @@ func agentInit(ctx context.Context) {
 			}
 			if newMetadata.Instance.ID.String() != strings.TrimSpace(string(instanceID)) {
 				logger.Infof("Instance ID changed, running first-boot actions")
-				if config.raw.Section("InstanceSetup").Key("set_host_keys").MustBool(true) {
+				if config.InstanceSetup.SetHostKeys {
 					if err := generateSSHKeys(); err != nil {
 						logger.Warningf("Failed to generate SSH keys: %v", err)
 					}
 				}
-				if config.raw.Section("InstanceSetup").Key("set_boto_config").MustBool(true) {
+				if config.InstanceSetup.SetBotoConfig {
 					if err := generateBotoConfig(); err != nil {
 						logger.Warningf("Failed to create boto.cfg: %v", err)
 					}
@@ -196,7 +199,7 @@ func agentInit(ctx context.Context) {
 }
 
 func generateSSHKeys() error {
-	hostKeyDir := config.raw.Section("InstanceSetup").Key("host_key_dir").MustString("/etc/ssh")
+	hostKeyDir := config.InstanceSetup.HostKeyDir
 	dir, err := os.Open(hostKeyDir)
 	if err != nil {
 		return err
@@ -223,7 +226,7 @@ func generateSSHKeys() error {
 	}
 
 	// List keys we should generate, according to the config.
-	configKeys := config.raw.Section("InstanceSetup").Key("host_key_types").MustString("ecdsa,ed25519,rsa")
+	configKeys := config.InstanceSetup.HostKeyTypes
 	for _, keytype := range strings.Split(configKeys, ",") {
 		keytypes[keytype] = true
 	}
