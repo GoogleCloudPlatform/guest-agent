@@ -244,7 +244,7 @@ func (a *addressMgr) timeout() bool {
 }
 
 func (a *addressMgr) disabled(os string) (disabled bool) {
-        if config.AddressManager.ExplicitlyConfigured {
+	if config.AddressManager.ExplicitlyConfigured {
 		// This is the windows config key. On windows, finding a key in
 		// the config file takes priority over metadata.
 		return config.AddressManager.Disable

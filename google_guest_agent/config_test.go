@@ -16,7 +16,24 @@ package main
 
 import (
 	"testing"
+
+	"github.com/go-ini/ini"
 )
+
+func TestEnsureIpForwardingConfigurationLoaded(t *testing.T) {
+	iniConfig := []byte("[NetworkInterfaces]\nip_forwarding: false\n")
+	iniFile, err := ini.InsensitiveLoad(iniConfig)
+	if err != nil {
+		t.Errorf("Error parsing ini data: %v", err)
+	}
+	config, err := parseIni(iniFile)
+	if err != nil {
+		t.Errorf("Error parsing config %s: %s", iniConfig, err)
+	}
+	if config.NetworkInterfaces.IpForwarding != false {
+		t.Errorf("Error loading NetworkInterfaces.IpForwarding value")
+	}
+}
 
 func TestEnsureDefaultConfigLoads(t *testing.T) {
 	configFile := "../instance_configs.cfg"

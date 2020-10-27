@@ -16,9 +16,10 @@ package main
 
 import (
 	"fmt"
-	"github.com/go-ini/ini"
 	"reflect"
 	"strings"
+
+	"github.com/go-ini/ini"
 )
 
 type AccountManagerConfig struct {
@@ -204,6 +205,13 @@ func agentConfigValueToString(v reflect.Value) string {
 			if field.Kind() == reflect.Struct {
 				fieldName = "\n[" + fieldName + "]"
 			} else {
+				// We have a name collision with IpForwarding
+				// It maps to both a section and a key. When
+				// the field is not a struct, it should map to
+				// the key name.
+				if fieldName == "IpForwarding" {
+					fieldName = "ip_forwarding"
+				}
 				fieldName = fieldName + ":"
 			}
 			s += fmt.Sprintf("\n%s ", fieldName) + agentConfigValueToString(field)
@@ -226,6 +234,10 @@ func parseIni(iniFile *ini.File) (AgentConfig, error) {
 	config.Wsfc.ExplicitlyConfigured = iniFile.Section("wsfc").HasKey("enable")
 	iniFile.NameMapper = agentConfigNameMapper
 	iniFile.StrictMapTo(&config)
+	// We have a name collision with IpForwarding
+	// It maps to both a section and a key. This forces us to manually extract the key value.
+	config.NetworkInterfaces.IpForwarding =
+		iniFile.Section("NetworkInterfaces").Key("ip_forwarding").MustBool(config.NetworkInterfaces.IpForwarding)
 	return config, nil
 }
 
