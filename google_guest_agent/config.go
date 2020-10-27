@@ -23,6 +23,10 @@ type DaemonsConfig struct {
 	ClockSkewDaemon bool
 }
 
+type DiagnosticsConfig struct {
+	Enable string
+}
+
 type WsfcConfig struct {
 	ExplicitlyConfigured bool
 	Enable               bool
@@ -31,9 +35,10 @@ type WsfcConfig struct {
 }
 
 type AgentConfig struct {
-	raw     *ini.File
-	Daemons DaemonsConfig
-	Wsfc    WsfcConfig
+	raw         *ini.File
+	Daemons     DaemonsConfig
+	Diagnostics DiagnosticsConfig
+	Wsfc        WsfcConfig
 }
 
 var defaultConfig = AgentConfig{
@@ -56,7 +61,8 @@ var defaultConfig = AgentConfig{
 // - UpperCamelCase field maps to UpperCamelCase key
 //   e.g. InstanceSetup maps to InstanceSetup
 var agentConfigNameMapper = func(raw string) string {
-	if raw == "Wsfc" {
+	if raw == "Diagnostics" ||
+		raw == "Wsfc" {
 		return strings.ToLower(string(raw[0])) + string(raw[1:])
 	} else if raw == "Daemons" {
 		return raw

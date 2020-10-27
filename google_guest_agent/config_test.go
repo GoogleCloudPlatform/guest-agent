@@ -25,4 +25,3 @@ func TestEnsureDefaultConfigLoads(t *testing.T) {
 		t.Errorf("Error parsing config %s: %s", configFile, err)
 	}
 }
-
