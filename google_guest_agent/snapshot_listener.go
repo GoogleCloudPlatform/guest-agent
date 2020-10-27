@@ -48,9 +48,9 @@ func (e *invalidSnapshotConfig) Error() string {
 
 func getSnapshotConfig() (snapshotConfig, error) {
 	var conf snapshotConfig
-	conf.timeout = time.Duration(config.raw.Section("Snapshots").Key("timeout_in_seconds").MustInt(60)) * time.Second
-	conf.preSnapshotScriptURL = config.raw.Section("Snapshots").Key("pre_snapshot_script").String()
-	conf.postSnapshotScriptURL = config.raw.Section("Snapshots").Key("post_snapshot_script").String()
+	conf.timeout = time.Duration(config.Snapshots.TimeoutInSeconds) * time.Second
+	conf.preSnapshotScriptURL = config.Snapshots.PreSnapshotScript
+	conf.postSnapshotScriptURL = config.Snapshots.PostSnapshotScript
 
 	if conf.preSnapshotScriptURL == "" && conf.postSnapshotScriptURL == "" {
 		return conf, &invalidSnapshotConfig{"neither pre or post snapshot script has been configured"}

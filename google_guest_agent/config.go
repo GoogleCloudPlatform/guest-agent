@@ -44,6 +44,15 @@ type DiagnosticsConfig struct {
 	Enable string
 }
 
+type SnapshotsConfig struct {
+	Enabled             bool
+	SnapshotServiceIp   string
+	SnapshotServicePort int
+	TimeoutInSeconds    int
+	PreSnapshotScript   string
+	PostSnapshotScript  string
+}
+
 type WsfcConfig struct {
 	ExplicitlyConfigured bool
 	Enable               bool
@@ -57,6 +66,7 @@ type AgentConfig struct {
 	Accounts       AccountsConfig
 	Daemons        DaemonsConfig
 	Diagnostics    DiagnosticsConfig
+	Snapshots      SnapshotsConfig
 	Wsfc           WsfcConfig
 }
 
@@ -75,6 +85,11 @@ var defaultConfig = AgentConfig{
 	Daemons: DaemonsConfig{
 		ClockSkewDaemon: true,
 		AccountsDaemon:  true,
+	},
+	Snapshots: SnapshotsConfig{
+		SnapshotServiceIp:   "169.254.169.254",
+		SnapshotServicePort: 8081,
+		TimeoutInSeconds:    60,
 	},
 }
 
@@ -96,7 +111,8 @@ var agentConfigNameMapper = func(raw string) string {
 		raw == "Wsfc" {
 		return strings.ToLower(string(raw[0])) + string(raw[1:])
 	} else if raw == "Accounts" ||
-		raw == "Daemons" {
+		raw == "Daemons" ||
+		raw == "Snapshots" {
 		return raw
 	} else {
 		return ini.TitleUnderscore(raw)

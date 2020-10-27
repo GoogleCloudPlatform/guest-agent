@@ -106,10 +106,10 @@ func agentInit(ctx context.Context) {
 	} else {
 		// Linux instance setup.
 
-		if config.raw.Section("Snapshots").Key("enabled").MustBool(false) {
+		if config.Snapshots.Enabled {
 			logger.Infof("Snapshot listener enabled")
-			snapshotServiceIP := config.raw.Section("Snapshots").Key("snapshot_service_ip").MustString("169.254.169.254")
-			snapshotServicePort := config.raw.Section("Snapshots").Key("snapshot_service_port").MustInt(8081)
+			snapshotServiceIP := config.Snapshots.SnapshotServiceIp
+			snapshotServicePort := config.Snapshots.SnapshotServicePort
 			startSnapshotListener(snapshotServiceIP, snapshotServicePort)
 		}
 
