@@ -16,10 +16,19 @@ package main
 
 import (
 	"github.com/go-ini/ini"
+	"strings"
 )
 
+type WsfcConfig struct {
+	ExplicitlyConfigured bool
+	Enable               bool
+	Addresses            string
+	Port                 string
+}
+
 type AgentConfig struct {
-	raw *ini.File
+	raw  *ini.File
+	Wsfc WsfcConfig
 }
 
 var defaultConfig = AgentConfig{
@@ -39,7 +48,11 @@ var defaultConfig = AgentConfig{
 // - UpperCamelCase field maps to UpperCamelCase key
 //   e.g. InstanceSetup maps to InstanceSetup
 var agentConfigNameMapper = func(raw string) string {
-	return raw
+	if raw == "Wsfc" {
+		return strings.ToLower(string(raw[0])) + string(raw[1:])
+	} else {
+		return ini.TitleUnderscore(raw)
+	}
 }
 
 // parseIni is only exposed for testing. parseConfig should almost
@@ -47,6 +60,7 @@ var agentConfigNameMapper = func(raw string) string {
 func parseIni(iniFile *ini.File) (AgentConfig, error) {
 	config := defaultConfig
 	config.raw = iniFile
+	config.Wsfc.ExplicitlyConfigured = iniFile.Section("wsfc").HasKey("enable")
 	iniFile.NameMapper = agentConfigNameMapper
 	iniFile.StrictMapTo(&config)
 	return config, nil

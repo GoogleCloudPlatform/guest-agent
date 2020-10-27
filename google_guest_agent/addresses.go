@@ -41,7 +41,7 @@ var (
 type addressMgr struct{}
 
 func (a *addressMgr) parseWSFCAddresses() string {
-	wsfcAddresses := config.raw.Section("wsfc").Key("addresses").String()
+	wsfcAddresses := config.Wsfc.Addresses
 	if wsfcAddresses != "" {
 		return wsfcAddresses
 	}
@@ -56,9 +56,8 @@ func (a *addressMgr) parseWSFCAddresses() string {
 }
 
 func (a *addressMgr) parseWSFCEnable() bool {
-	wsfcEnable, err := config.raw.Section("wsfc").Key("enable").Bool()
-	if err == nil {
-		return wsfcEnable
+	if config.Wsfc.ExplicitlyConfigured {
+		return config.Wsfc.Enable
 	}
 	if newMetadata.Instance.Attributes.EnableWSFC != nil {
 		return *newMetadata.Instance.Attributes.EnableWSFC
