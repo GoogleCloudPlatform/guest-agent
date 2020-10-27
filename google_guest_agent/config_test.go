@@ -20,10 +20,11 @@ import (
 
 func TestEnsureDefaultConfigLoads(t *testing.T) {
 	configFile := "../instance_configs.cfg"
-	_, err := parseConfig(configFile)
+	config, err := parseConfig(configFile)
 	if err != nil {
 		t.Errorf("Error parsing config %s: %s", configFile, err)
 	}
+	t.Logf("Config:%s", config)
 }
 
 func TestAgentConfigNameMapper(t *testing.T) {

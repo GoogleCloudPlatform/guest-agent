@@ -15,7 +15,9 @@
 package main
 
 import (
+	"fmt"
 	"github.com/go-ini/ini"
+	"reflect"
 	"strings"
 )
 
@@ -183,6 +185,37 @@ var agentConfigNameMapper = func(raw string) string {
 	} else {
 		return ini.TitleUnderscore(raw)
 	}
+}
+
+// agentConfigValueToString walks the fields in the AgentConfig struct
+// recursively using reflection, and prints the name and value of each
+func agentConfigValueToString(v reflect.Value) string {
+	switch v.Kind() {
+	case reflect.Int:
+		return fmt.Sprintf("%d", v.Int())
+	case reflect.Bool:
+		return fmt.Sprintf("%t", v.Bool())
+	case reflect.String:
+		return fmt.Sprintf("\"%s\"", v.String())
+	case reflect.Struct:
+		s := ""
+		for i := 0; i < v.NumField(); i++ {
+			fieldName := agentConfigNameMapper(v.Type().Field(i).Name)
+			field := v.Field(i)
+			if field.Kind() == reflect.Struct {
+				fieldName = "\n[" + fieldName + "]"
+			} else {
+				fieldName = fieldName + ":"
+			}
+			s += fmt.Sprintf("\n%s ", fieldName) + agentConfigValueToString(field)
+		}
+		return s
+	}
+	return ""
+}
+
+func (c AgentConfig) String() string {
+	return agentConfigValueToString(reflect.ValueOf(c)) + "\n\n"
 }
 
 // parseIni is only exposed for testing. parseConfig should almost

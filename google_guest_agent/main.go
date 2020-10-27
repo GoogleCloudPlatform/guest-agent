@@ -148,6 +148,8 @@ func run(ctx context.Context) {
 		logger.Errorf("Error parsing config %s: %s", cfgfile, err)
 	}
 
+	logger.Infof("GCE Agent Config Loaded:\n%s", config)
+
 	agentInit(ctx)
 
 	go func() {
