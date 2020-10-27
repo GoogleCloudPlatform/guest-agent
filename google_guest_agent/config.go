@@ -19,8 +19,25 @@ import (
 	"strings"
 )
 
+type AccountManagerConfig struct {
+	ExplicitlyConfigured bool
+	Disable              bool
+}
+
+type AccountsConfig struct {
+	ReuseHomedir      bool
+	Groups            string
+	DeprovisionRemove bool
+	UserdelCmd        string
+	GpasswdRemoveCmd  string
+	GpasswdAddCmd     string
+	GroupaddCmd       string
+	UseraddCmd        string
+}
+
 type DaemonsConfig struct {
 	ClockSkewDaemon bool
+	AccountsDaemon  bool
 }
 
 type DiagnosticsConfig struct {
@@ -35,16 +52,29 @@ type WsfcConfig struct {
 }
 
 type AgentConfig struct {
-	raw         *ini.File
-	Daemons     DaemonsConfig
-	Diagnostics DiagnosticsConfig
-	Wsfc        WsfcConfig
+	raw            *ini.File
+	AccountManager AccountManagerConfig
+	Accounts       AccountsConfig
+	Daemons        DaemonsConfig
+	Diagnostics    DiagnosticsConfig
+	Wsfc           WsfcConfig
 }
 
 var defaultConfig = AgentConfig{
 	raw: ini.Empty(),
+	Accounts: AccountsConfig{
+		ReuseHomedir:      false,
+		Groups:            "adm,dip,docker,lxd,plugdev,video",
+		DeprovisionRemove: false,
+		UserdelCmd:        "userdel -r {user}",
+		GpasswdRemoveCmd:  "gpasswd -d {user} {group}",
+		GpasswdAddCmd:     "gpasswd -a {user} {group}",
+		GroupaddCmd:       "groupadd {group}",
+		UseraddCmd:        "useradd -m -s /bin/bash -p * {user}",
+	},
 	Daemons: DaemonsConfig{
 		ClockSkewDaemon: true,
+		AccountsDaemon:  true,
 	},
 }
 
@@ -61,10 +91,12 @@ var defaultConfig = AgentConfig{
 // - UpperCamelCase field maps to UpperCamelCase key
 //   e.g. InstanceSetup maps to InstanceSetup
 var agentConfigNameMapper = func(raw string) string {
-	if raw == "Diagnostics" ||
+	if raw == "AccountManager" ||
+		raw == "Diagnostics" ||
 		raw == "Wsfc" {
 		return strings.ToLower(string(raw[0])) + string(raw[1:])
-	} else if raw == "Daemons" {
+	} else if raw == "Accounts" ||
+		raw == "Daemons" {
 		return raw
 	} else {
 		return ini.TitleUnderscore(raw)
@@ -76,6 +108,7 @@ var agentConfigNameMapper = func(raw string) string {
 func parseIni(iniFile *ini.File) (AgentConfig, error) {
 	config := defaultConfig
 	config.raw = iniFile
+	config.AccountManager.ExplicitlyConfigured = iniFile.Section("accountManager").HasKey("disable")
 	config.Wsfc.ExplicitlyConfigured = iniFile.Section("wsfc").HasKey("enable")
 	iniFile.NameMapper = agentConfigNameMapper
 	iniFile.StrictMapTo(&config)

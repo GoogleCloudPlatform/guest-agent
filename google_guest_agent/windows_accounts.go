@@ -204,9 +204,8 @@ func (a *winAccountsMgr) disabled(os string) (disabled bool) {
 		return true
 	}
 
-	disabled, err := config.raw.Section("accountManager").Key("disable").Bool()
-	if err == nil {
-		return disabled
+	if config.AccountManager.ExplicitlyConfigured {
+		return config.AccountManager.Disable
 	}
 	if newMetadata.Instance.Attributes.DisableAccountManager != nil {
 		return *newMetadata.Instance.Attributes.DisableAccountManager

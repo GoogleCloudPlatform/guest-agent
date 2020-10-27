@@ -33,7 +33,7 @@ func getUID(path string) string {
 }
 
 func createUser(username, uid string) error {
-	useradd := config.raw.Section("Accounts").Key("useradd_cmd").MustString("useradd -m -s /bin/bash -p * {user}")
+	useradd := config.Accounts.UseraddCmd
 	if uid != "" {
 		useradd = fmt.Sprintf("%s -u %s", useradd, uid)
 	}
@@ -41,7 +41,7 @@ func createUser(username, uid string) error {
 }
 
 func addUserToGroup(user, group string) error {
-	gpasswdadd := config.raw.Section("Accounts").Key("gpasswd_add_cmd").MustString("gpasswd -a {user} {group}")
+	gpasswdadd := config.Accounts.GpasswdAddCmd
 	return runCmd(createUserGroupCmd(gpasswdadd, user, group))
 }
 

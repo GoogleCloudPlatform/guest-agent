@@ -95,7 +95,7 @@ func (a *accountsMgr) disabled(os string) bool {
 	oslogin, _ := getOSLoginEnabled(newMetadata)
 	return false ||
 		os == "windows" || oslogin ||
-		!config.raw.Section("Daemons").Key("accounts_daemon").MustBool(true)
+		!config.Daemons.AccountsDaemon
 }
 
 func (a *accountsMgr) set() error {
@@ -346,14 +346,14 @@ func createUserGroupCmd(cmd, user, group string) *exec.Cmd {
 // to the configured groups.
 func createGoogleUser(user string) error {
 	var uid string
-	if config.raw.Section("Accounts").Key("reuse_homedir").MustBool(false) {
+	if config.Accounts.ReuseHomedir {
 		uid = getUID(fmt.Sprintf("/home/%s", user))
 	}
 
 	if err := createUser(user, uid); err != nil {
 		return err
 	}
-	groups := config.raw.Section("Accounts").Key("groups").MustString("adm,dip,docker,lxd,plugdev,video")
+	groups := config.Accounts.Groups
 	for _, group := range strings.Split(groups, ",") {
 		addUserToGroup(user, group)
 	}
@@ -365,14 +365,14 @@ func createGoogleUser(user string) error {
 // permissions are removed but the user remains on the system. Group membership
 // is not changed.
 func removeGoogleUser(user string) error {
-	if config.raw.Section("Accounts").Key("deprovision_remove").MustBool(false) {
-		userdel := config.raw.Section("Accounts").Key("userdel_cmd").MustString("userdel -r {user}")
+	if config.Accounts.DeprovisionRemove {
+		userdel := config.Accounts.UserdelCmd
 		return runCmd(createUserGroupCmd(userdel, user, ""))
 	}
 	if err := updateAuthorizedKeysFile(user, []string{}); err != nil {
 		return err
 	}
-	gpasswddel := config.raw.Section("Accounts").Key("gpasswd_remove_cmd").MustString("gpasswd -d {user} {group}")
+	gpasswddel := config.Accounts.GpasswdRemoveCmd
 	return runCmd(createUserGroupCmd(gpasswddel, user, "google-sudoers"))
 
 }
@@ -395,7 +395,7 @@ func createSudoersFile() error {
 
 // createSudoersGroup creates the google-sudoers group if it does not exist.
 func createSudoersGroup() error {
-	groupadd := config.raw.Section("Accounts").Key("groupadd_cmd").MustString("groupadd {group}")
+	groupadd := config.Accounts.GroupaddCmd
 	ret := runCmdOutput(createUserGroupCmd(groupadd, "", "google-sudoers"))
 	if ret.ExitCode() == 9 {
 		// 9 means group already exists.
