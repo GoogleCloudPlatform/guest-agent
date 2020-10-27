@@ -34,8 +34,6 @@ var (
 	oldWSFCEnable     bool
 	interfacesEnabled bool
 	interfaces        []net.Interface
-
-	defaultProtoID = "66"
 )
 
 type addressMgr struct{}
@@ -131,7 +129,7 @@ func getLocalRoutes(ifname string) ([]string, error) {
 		return nil, errors.New("getLocalRoutes unimplemented on Windows")
 	}
 
-	protoID := config.raw.Section("IpForwarding").Key("ethernet_proto_id").MustString(defaultProtoID)
+	protoID := config.IpForwarding.EthernetProtoId
 	args := fmt.Sprintf("route list table local type local scope host dev %s proto %s", ifname, protoID)
 	out := runCmdOutput(exec.Command("ip", strings.Split(args, " ")...))
 	if out.ExitCode() != 0 {
@@ -158,7 +156,7 @@ func addLocalRoute(ip, ifname string) error {
 	if !strings.Contains(ip, "/") {
 		ip = ip + "/32"
 	}
-	protoID := config.raw.Section("IpForwarding").Key("ethernet_proto_id").MustString(defaultProtoID)
+	protoID := config.IpForwarding.EthernetProtoId
 	args := fmt.Sprintf("route add to local %s scope host dev %s proto %s", ip, ifname, protoID)
 	return runCmd(exec.Command("ip", strings.Split(args, " ")...))
 }
@@ -173,7 +171,7 @@ func removeLocalRoute(ip, ifname string) error {
 	if !strings.Contains(ip, "/") {
 		ip = ip + "/32"
 	}
-	protoID := config.raw.Section("IpForwarding").Key("ethernet_proto_id").MustString(defaultProtoID)
+	protoID := config.IpForwarding.EthernetProtoId
 	args := fmt.Sprintf("route delete to local %s scope host dev %s proto %s", ip, ifname, protoID)
 	return runCmd(exec.Command("ip", strings.Split(args, " ")...))
 }
@@ -246,11 +244,10 @@ func (a *addressMgr) timeout() bool {
 }
 
 func (a *addressMgr) disabled(os string) (disabled bool) {
-	disabled, err := config.raw.Section("addressManager").Key("disable").Bool()
-	if err == nil {
+        if config.AddressManager.ExplicitlyConfigured {
 		// This is the windows config key. On windows, finding a key in
 		// the config file takes priority over metadata.
-		return disabled
+		return config.AddressManager.Disable
 	}
 
 	if newMetadata.Instance.Attributes.DisableAddressManager != nil {
@@ -262,7 +259,7 @@ func (a *addressMgr) disabled(os string) (disabled bool) {
 
 	// This is the linux config key, defaulting to true. On Linux, the
 	// config file has lower priority since we ship a file with defaults.
-	return !config.raw.Section("Daemons").Key("network_daemon").MustBool(true)
+	return !config.Daemons.NetworkDaemon
 }
 
 func (a *addressMgr) set() error {
@@ -276,7 +273,7 @@ func (a *addressMgr) set() error {
 		return fmt.Errorf("error populating interfaces: %v", err)
 	}
 
-	if config.raw.Section("NetworkInterfaces").Key("setup").MustBool(true) {
+	if config.NetworkInterfaces.Setup {
 		if runtime.GOOS != "windows" {
 			if err := configureIPv6(); err != nil {
 				// Continue through IPv6 configuration errors.
@@ -292,7 +289,7 @@ func (a *addressMgr) set() error {
 		}
 	}
 
-	if !config.raw.Section("NetworkInterfaces").Key("ip_forwarding").MustBool(true) {
+	if !config.NetworkInterfaces.IpForwarding {
 		return nil
 	}
 
@@ -307,11 +304,11 @@ func (a *addressMgr) set() error {
 			continue
 		}
 		wantIPs := ni.ForwardedIps
-		if config.raw.Section("IpForwarding").Key("target_instance_ips").MustBool(true) {
+		if config.IpForwarding.TargetInstanceIps {
 			wantIPs = append(wantIPs, ni.TargetInstanceIps...)
 		}
 		// IP Aliases are not supported on windows.
-		if runtime.GOOS != "windows" && config.raw.Section("IpForwarding").Key("ip_aliases").MustBool(true) {
+		if runtime.GOOS != "windows" && config.IpForwarding.IpAliases {
 			wantIPs = append(wantIPs, ni.IPAliases...)
 		}
 
@@ -511,7 +508,7 @@ func enableNetworkInterfaces() error {
 		}
 		fallthrough
 	default:
-		dhcpCommand := config.raw.Section("NetworkInterfaces").Key("dhcp_command").String()
+		dhcpCommand := config.NetworkInterfaces.DhcpCommand
 		if dhcpCommand != "" {
 			return runCmd(exec.Command(dhcpCommand))
 		}
@@ -519,7 +516,7 @@ func enableNetworkInterfaces() error {
 		dhclientArgs := []string{}
 		// The dhclient_script key has historically only been supported on EL6.
 		if (osRelease.os == "rhel" || osRelease.os == "centos") && osRelease.version.major == 6 {
-			dhclientArgs = append(dhclientArgs, "-sf", config.raw.Section("NetworkInterfaces").Key("dhclient_script").MustString("/sbin/google-dhclient-script"))
+			dhclientArgs = append(dhclientArgs, "-sf", config.NetworkInterfaces.DhclientScript)
 		}
 		dhclientArgs = append(dhclientArgs, googleInterfaces...)
 		return runCmd(exec.Command("dhclient", dhclientArgs...))

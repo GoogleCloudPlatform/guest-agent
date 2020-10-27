@@ -35,13 +35,32 @@ type AccountsConfig struct {
 	UseraddCmd        string
 }
 
+type AddressManagerConfig struct {
+	ExplicitlyConfigured bool
+	Disable              bool
+}
+
 type DaemonsConfig struct {
 	ClockSkewDaemon bool
 	AccountsDaemon  bool
+	NetworkDaemon   bool
 }
 
 type DiagnosticsConfig struct {
 	Enable string
+}
+
+type IpForwardingConfig struct {
+	EthernetProtoId   string
+	TargetInstanceIps bool
+	IpAliases         bool
+}
+
+type NetworkInterfacesConfig struct {
+	Setup          bool
+	IpForwarding   bool
+	DhcpCommand    string
+	DhclientScript string
 }
 
 type SnapshotsConfig struct {
@@ -61,17 +80,19 @@ type WsfcConfig struct {
 }
 
 type AgentConfig struct {
-	raw            *ini.File
-	AccountManager AccountManagerConfig
-	Accounts       AccountsConfig
-	Daemons        DaemonsConfig
-	Diagnostics    DiagnosticsConfig
-	Snapshots      SnapshotsConfig
-	Wsfc           WsfcConfig
+	raw               *ini.File
+	AccountManager    AccountManagerConfig
+	Accounts          AccountsConfig
+	AddressManager    AddressManagerConfig
+	Daemons           DaemonsConfig
+	Diagnostics       DiagnosticsConfig
+	IpForwarding      IpForwardingConfig
+	NetworkInterfaces NetworkInterfacesConfig
+	Snapshots         SnapshotsConfig
+	Wsfc              WsfcConfig
 }
 
 var defaultConfig = AgentConfig{
-	raw: ini.Empty(),
 	Accounts: AccountsConfig{
 		ReuseHomedir:      false,
 		Groups:            "adm,dip,docker,lxd,plugdev,video",
@@ -85,6 +106,17 @@ var defaultConfig = AgentConfig{
 	Daemons: DaemonsConfig{
 		ClockSkewDaemon: true,
 		AccountsDaemon:  true,
+		NetworkDaemon:   true,
+	},
+	IpForwarding: IpForwardingConfig{
+		EthernetProtoId:   "66",
+		TargetInstanceIps: true,
+		IpAliases:         true,
+	},
+	NetworkInterfaces: NetworkInterfacesConfig{
+		Setup:          true,
+		IpForwarding:   true,
+		DhclientScript: "/sbin/google-dhclient-script",
 	},
 	Snapshots: SnapshotsConfig{
 		SnapshotServiceIp:   "169.254.169.254",
@@ -107,11 +139,14 @@ var defaultConfig = AgentConfig{
 //   e.g. InstanceSetup maps to InstanceSetup
 var agentConfigNameMapper = func(raw string) string {
 	if raw == "AccountManager" ||
+		raw == "AddressManager" ||
 		raw == "Diagnostics" ||
 		raw == "Wsfc" {
 		return strings.ToLower(string(raw[0])) + string(raw[1:])
 	} else if raw == "Accounts" ||
 		raw == "Daemons" ||
+		raw == "IpForwarding" ||
+		raw == "NetworkInterfaces" ||
 		raw == "Snapshots" {
 		return raw
 	} else {
@@ -125,6 +160,7 @@ func parseIni(iniFile *ini.File) (AgentConfig, error) {
 	config := defaultConfig
 	config.raw = iniFile
 	config.AccountManager.ExplicitlyConfigured = iniFile.Section("accountManager").HasKey("disable")
+	config.AddressManager.ExplicitlyConfigured = iniFile.Section("addressManager").HasKey("disable")
 	config.Wsfc.ExplicitlyConfigured = iniFile.Section("wsfc").HasKey("enable")
 	iniFile.NameMapper = agentConfigNameMapper
 	iniFile.StrictMapTo(&config)
