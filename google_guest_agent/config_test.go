@@ -25,3 +25,53 @@ func TestEnsureDefaultConfigLoads(t *testing.T) {
 		t.Errorf("Error parsing config %s: %s", configFile, err)
 	}
 }
+
+func TestAgentConfigNameMapper(t *testing.T) {
+	var tests = []struct {
+		name            string
+		expectedMapping string
+	}{
+		{"Accounts", "Accounts"},
+		{"ReuseHomedir", "reuse_homedir"},
+		{"Groups", "groups"},
+		{"DeprovisionRemove", "deprovision_remove"},
+		{"UserdelCmd", "userdel_cmd"},
+		{"GpasswdRemoveCmd", "gpasswd_remove_cmd"},
+		{"GpasswdAddCmd", "gpasswd_add_cmd"},
+		{"GroupaddCmd", "groupadd_cmd"},
+		{"UseraddCmd", "useradd_cmd"},
+		{"Daemons", "Daemons"},
+		{"ClockSkewDaemon", "clock_skew_daemon"},
+		{"AccountsDaemon", "accounts_daemon"},
+		{"NetworkDaemon", "network_daemon"},
+		{"Instance", "Instance"},
+		{"InstanceIdDir", "instance_id_dir"},
+		{"InstanceSetup", "InstanceSetup"},
+		{"OptimizeLocalSsd", "optimize_local_ssd"},
+		{"SetMultiqueue", "set_multiqueue"},
+		{"NetworkEnabled", "network_enabled"},
+		{"HostKeyDir", "host_key_dir"},
+		{"HostKeyTypes", "host_key_types"},
+		{"SetBotoConfig", "set_boto_config"},
+		{"SetHostKeys", "set_host_keys"},
+		{"IpForwarding", "IpForwarding"},
+		{"EthernetProtoId", "ethernet_proto_id"},
+		{"TargetInstanceIps", "target_instance_ips"},
+		{"IpAliases", "ip_aliases"},
+		{"NetworkInterfaces", "NetworkInterfaces"},
+		{"Setup", "setup"},
+		{"IpForwarding", "IpForwarding"},
+		{"DhclientScript", "dhclient_script"},
+		{"Snapshots", "Snapshots"},
+		{"SnapshotServiceIp", "snapshot_service_ip"},
+		{"SnapshotServicePort", "snapshot_service_port"},
+		{"TimeoutInSeconds", "timeout_in_seconds"},
+	}
+
+	for _, tt := range tests {
+		mapping := agentConfigNameMapper(tt.name)
+		if mapping != tt.expectedMapping {
+			t.Errorf("Got '%s' instead of expected mapping '%s' for '%s'", mapping, tt.expectedMapping, tt.name)
+		}
+	}
+}
