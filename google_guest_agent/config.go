@@ -97,7 +97,6 @@ type WsfcConfig struct {
 }
 
 type AgentConfig struct {
-	raw               *ini.File
 	AccountManager    AccountManagerConfig
 	Accounts          AccountsConfig
 	AddressManager    AddressManagerConfig
@@ -222,7 +221,6 @@ func (c AgentConfig) String() string {
 // always be used instead.
 func parseIni(iniFile *ini.File) (AgentConfig, error) {
 	config := defaultConfig
-	config.raw = iniFile
 	config.AccountManager.ExplicitlyConfigured = iniFile.Section("accountManager").HasKey("disable")
 	config.AddressManager.ExplicitlyConfigured = iniFile.Section("addressManager").HasKey("disable")
 	config.Wsfc.ExplicitlyConfigured = iniFile.Section("wsfc").HasKey("enable")
