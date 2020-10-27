@@ -19,6 +19,10 @@ import (
 	"strings"
 )
 
+type DaemonsConfig struct {
+	ClockSkewDaemon bool
+}
+
 type WsfcConfig struct {
 	ExplicitlyConfigured bool
 	Enable               bool
@@ -27,12 +31,16 @@ type WsfcConfig struct {
 }
 
 type AgentConfig struct {
-	raw  *ini.File
-	Wsfc WsfcConfig
+	raw     *ini.File
+	Daemons DaemonsConfig
+	Wsfc    WsfcConfig
 }
 
 var defaultConfig = AgentConfig{
 	raw: ini.Empty(),
+	Daemons: DaemonsConfig{
+		ClockSkewDaemon: true,
+	},
 }
 
 // agentConfigNameMapper is used to map field names in the AgentConfig
@@ -50,6 +58,8 @@ var defaultConfig = AgentConfig{
 var agentConfigNameMapper = func(raw string) string {
 	if raw == "Wsfc" {
 		return strings.ToLower(string(raw[0])) + string(raw[1:])
+	} else if raw == "Daemons" {
+		return raw
 	} else {
 		return ini.TitleUnderscore(raw)
 	}
