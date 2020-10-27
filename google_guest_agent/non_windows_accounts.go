@@ -95,7 +95,7 @@ func (a *accountsMgr) disabled(os string) bool {
 	oslogin, _ := getOSLoginEnabled(newMetadata)
 	return false ||
 		os == "windows" || oslogin ||
-		!config.Section("Daemons").Key("accounts_daemon").MustBool(true)
+		!config.raw.Section("Daemons").Key("accounts_daemon").MustBool(true)
 }
 
 func (a *accountsMgr) set() error {
@@ -346,14 +346,14 @@ func createUserGroupCmd(cmd, user, group string) *exec.Cmd {
 // to the configured groups.
 func createGoogleUser(user string) error {
 	var uid string
-	if config.Section("Accounts").Key("reuse_homedir").MustBool(false) {
+	if config.raw.Section("Accounts").Key("reuse_homedir").MustBool(false) {
 		uid = getUID(fmt.Sprintf("/home/%s", user))
 	}
 
 	if err := createUser(user, uid); err != nil {
 		return err
 	}
-	groups := config.Section("Accounts").Key("groups").MustString("adm,dip,docker,lxd,plugdev,video")
+	groups := config.raw.Section("Accounts").Key("groups").MustString("adm,dip,docker,lxd,plugdev,video")
 	for _, group := range strings.Split(groups, ",") {
 		addUserToGroup(user, group)
 	}
@@ -365,14 +365,14 @@ func createGoogleUser(user string) error {
 // permissions are removed but the user remains on the system. Group membership
 // is not changed.
 func removeGoogleUser(user string) error {
-	if config.Section("Accounts").Key("deprovision_remove").MustBool(false) {
-		userdel := config.Section("Accounts").Key("userdel_cmd").MustString("userdel -r {user}")
+	if config.raw.Section("Accounts").Key("deprovision_remove").MustBool(false) {
+		userdel := config.raw.Section("Accounts").Key("userdel_cmd").MustString("userdel -r {user}")
 		return runCmd(createUserGroupCmd(userdel, user, ""))
 	}
 	if err := updateAuthorizedKeysFile(user, []string{}); err != nil {
 		return err
 	}
-	gpasswddel := config.Section("Accounts").Key("gpasswd_remove_cmd").MustString("gpasswd -d {user} {group}")
+	gpasswddel := config.raw.Section("Accounts").Key("gpasswd_remove_cmd").MustString("gpasswd -d {user} {group}")
 	return runCmd(createUserGroupCmd(gpasswddel, user, "google-sudoers"))
 
 }
@@ -395,7 +395,7 @@ func createSudoersFile() error {
 
 // createSudoersGroup creates the google-sudoers group if it does not exist.
 func createSudoersGroup() error {
-	groupadd := config.Section("Accounts").Key("groupadd_cmd").MustString("groupadd {group}")
+	groupadd := config.raw.Section("Accounts").Key("groupadd_cmd").MustString("groupadd {group}")
 	ret := runCmdOutput(createUserGroupCmd(groupadd, "", "google-sudoers"))
 	if ret.ExitCode() == 9 {
 		// 9 means group already exists.

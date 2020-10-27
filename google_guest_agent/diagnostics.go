@@ -77,7 +77,7 @@ func (d *diagnosticsMgr) disabled(os string) (disabled bool) {
 	// Diagnostics are opt-in and enabled by default.
 	var err error
 	var enabled bool
-	enabled, err = strconv.ParseBool(config.Section("diagnostics").Key("enable").String())
+	enabled, err = strconv.ParseBool(config.raw.Section("diagnostics").Key("enable").String())
 	if err == nil {
 		return !enabled
 	}

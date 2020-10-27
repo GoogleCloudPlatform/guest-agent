@@ -32,7 +32,7 @@ func (a *clockskewMgr) timeout() bool {
 }
 
 func (a *clockskewMgr) disabled(os string) (disabled bool) {
-	enabled := config.Section("Daemons").Key("clock_skew_daemon").MustBool(true)
+	enabled := config.raw.Section("Daemons").Key("clock_skew_daemon").MustBool(true)
 	return os == "windows" || !enabled
 }
 

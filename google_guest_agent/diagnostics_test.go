@@ -61,14 +61,18 @@ func TestDiagnosticsDisabled(t *testing.T) {
 	for _, tt := range tests {
 		cfg, err := ini.InsensitiveLoad(tt.data)
 		if err != nil {
-			t.Errorf("test case %q: error parsing config: %v", tt.name, err)
+			t.Errorf("test case %q: error parsing ini file: %v", tt.name, err)
 			continue
 		}
 		if cfg == nil {
 			cfg = &ini.File{}
 		}
 		newMetadata = tt.md
-		config = cfg
+		config, err = parseIni(cfg)
+		if err != nil {
+			t.Errorf("test case %q: error parsing config: %v", tt.name, err)
+			continue
+		}
 		got := (&diagnosticsMgr{}).disabled("windows")
 		if got != tt.want {
 			t.Errorf("test case %q, diagnostics.disabled() got: %t, want: %t", tt.name, got, tt.want)

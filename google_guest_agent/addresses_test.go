@@ -76,14 +76,18 @@ func TestAddressDisabled(t *testing.T) {
 	for _, tt := range tests {
 		cfg, err := ini.InsensitiveLoad(tt.data)
 		if err != nil {
-			t.Errorf("test case %q: error parsing config: %v", tt.name, err)
+			t.Errorf("test case %q: error parsing ini data: %v", tt.name, err)
 			continue
 		}
 		if cfg == nil {
 			cfg = &ini.File{}
 		}
 		newMetadata = tt.md
-		config = cfg
+		config, err = parseIni(cfg)
+		if err != nil {
+			t.Errorf("test case %q: error parsing config: %v", tt.name, err)
+			continue
+		}
 		got := (&addressMgr{}).disabled("")
 		if got != tt.want {
 			t.Errorf("test case %q, addressMgr.disabled() got: %t, want: %t", tt.name, got, tt.want)
@@ -113,7 +117,7 @@ func TestAddressDiff(t *testing.T) {
 	for _, tt := range tests {
 		cfg, err := ini.InsensitiveLoad(tt.data)
 		if err != nil {
-			t.Errorf("test case %q: error parsing config: %v", tt.name, err)
+			t.Errorf("test case %q: error parsing ini data: %v", tt.name, err)
 			continue
 		}
 		if cfg == nil {
@@ -122,7 +126,11 @@ func TestAddressDiff(t *testing.T) {
 		oldWSFCEnable = false
 		oldMetadata = &metadata{}
 		newMetadata = tt.md
-		config = cfg
+		config, err = parseIni(cfg)
+		if err != nil {
+			t.Errorf("test case %q: error parsing config: %v", tt.name, err)
+			continue
+		}
 		got := (&addressMgr{}).diff()
 		if got != tt.want {
 			t.Errorf("test case %q, addresses.diff() got: %t, want: %t", tt.name, got, tt.want)
@@ -147,7 +155,7 @@ func TestWsfcFilter(t *testing.T) {
 		{[]byte(`{"instance":{"attributes":{"wsfc-addrs":"192.168.0"}, "networkInterfaces":[{"forwardedIps":["192.168.0.0", "192.168.0.1"]}]}}`), []string{"192.168.0.0", "192.168.0.1"}},
 	}
 
-	config = ini.Empty()
+	config = defaultConfig
 	for idx, tt := range tests {
 		var md metadata
 		if err := json.Unmarshal(tt.metaDataJSON, &md); err != nil {
@@ -180,7 +188,7 @@ func TestWsfcFlagTriggerAddressDiff(t *testing.T) {
 		{&metadata{Project: project{Attributes: attributes{WSFCAddresses: "192.168.0.1"}}}, &metadata{Project: project{Attributes: attributes{WSFCAddresses: "192.168.0.2"}}}},
 	}
 
-	config = ini.Empty()
+	config = defaultConfig
 	for _, tt := range tests {
 		oldWSFCAddresses = tt.oldMetadata.Instance.Attributes.WSFCAddresses
 		newMetadata = tt.newMetadata

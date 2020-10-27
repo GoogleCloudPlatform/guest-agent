@@ -21,8 +21,6 @@ import (
 	"net"
 	"reflect"
 	"testing"
-
-	"github.com/go-ini/ini"
 )
 
 func setEnableWSFC(md metadata, enabled *bool) *metadata {
@@ -60,7 +58,7 @@ func TestNewWsfcManager(t *testing.T) {
 		{"wsfc addrs is set", args{setWSFCAddresses(testMetadata, "0.0.0.0")}, &wsfcManager{agentNewState: running, agentNewPort: wsfcDefaultAgentPort, agent: testAgent}},
 		{"wsfc port is set", args{setWSFCAgentPort(testMetadata, "1818")}, &wsfcManager{agentNewState: stopped, agentNewPort: "1818", agent: testAgent}},
 	}
-	config = ini.Empty()
+	config = defaultConfig
 	for _, tt := range tests {
 		newMetadata = tt.args.newMetadata
 		if got := newWsfcManager(); !reflect.DeepEqual(got, tt.want) {

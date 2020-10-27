@@ -52,11 +52,11 @@ func newWsfcManager() *wsfcManager {
 	newState := stopped
 
 	if func() bool {
-		enabled, err := config.Section("wsfc").Key("enable").Bool()
+		enabled, err := config.raw.Section("wsfc").Key("enable").Bool()
 		if err == nil {
 			return enabled
 		}
-		if config.Section("wsfc").Key("addresses").String() != "" {
+		if config.raw.Section("wsfc").Key("addresses").String() != "" {
 			return true
 		}
 		if newMetadata.Instance.Attributes.EnableWSFC != nil {
@@ -77,7 +77,7 @@ func newWsfcManager() *wsfcManager {
 	}
 
 	newPort := wsfcDefaultAgentPort
-	port := config.Section("wsfc").Key("port").String()
+	port := config.raw.Section("wsfc").Key("port").String()
 	if port != "" {
 		newPort = port
 	} else if newMetadata.Instance.Attributes.WSFCAgentPort != "" {

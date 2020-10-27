@@ -204,7 +204,7 @@ func (a *winAccountsMgr) disabled(os string) (disabled bool) {
 		return true
 	}
 
-	disabled, err := config.Section("accountManager").Key("disable").Bool()
+	disabled, err := config.raw.Section("accountManager").Key("disable").Bool()
 	if err == nil {
 		return disabled
 	}

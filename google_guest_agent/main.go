@@ -30,7 +30,6 @@ import (
 	"time"
 
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
-	"github.com/go-ini/ini"
 	"github.com/tarm/serial"
 )
 
@@ -39,7 +38,7 @@ var (
 	version                  string
 	ticker                   = time.Tick(70 * time.Second)
 	oldMetadata, newMetadata *metadata
-	config                   *ini.File
+	config                   AgentConfig
 	osRelease                release
 	action                   string
 )
@@ -81,15 +80,6 @@ func logStatus(name string, disabled bool) {
 		status = "disabled"
 	}
 	logger.Infof("GCE %s manager status: %s", name, status)
-}
-
-func parseConfig(file string) (*ini.File, error) {
-	// Priority: file.cfg, file.cfg.distro, file.cfg.template
-	cfg, err := ini.LoadSources(ini.LoadOptions{Loose: true, Insensitive: true}, file, file+".distro", file+".template")
-	if err != nil {
-		return nil, err
-	}
-	return cfg, nil
 }
 
 func closeFile(c io.Closer) {
