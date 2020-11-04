@@ -448,13 +448,13 @@ func configNVME(totalCPUs int) error {
 }
 
 func configSCSI(totalCPUs int) error {
-	var irqs []int
 	devices, err := filepath.Glob(scsiDevice)
 	if err != nil {
 		return err
 	}
+	var irqs []int
 	for _, device := range devices {
-		var ssd = 0
+		var isSSD = false
 		targetPaths, err := filepath.Glob(device + "/host*/target*/*")
 		if err != nil {
 			continue
@@ -468,13 +468,12 @@ func configSCSI(totalCPUs int) error {
 				continue
 			}
 
-			ssd = 1
+			isSSD = true
 			queuePaths, err := filepath.Glob(targetPath + "/block/sd*/queue")
 			if err != nil {
 				return err
 			}
 			for _, queuePath := range queuePaths {
-				ioutil.WriteFile(queuePath+"/scheduler", []byte("noop\n"), 0644)
 				ioutil.WriteFile(queuePath+"/add_random", []byte("0\n"), 0644)
 				ioutil.WriteFile(queuePath+"/nr_requests", []byte("512\n"), 0644)
 				ioutil.WriteFile(queuePath+"/rotational", []byte("0\n"), 0644)
@@ -482,14 +481,21 @@ func configSCSI(totalCPUs int) error {
 				ioutil.WriteFile(queuePath+"/nomerges", []byte("1\n"), 0644)
 			}
 		}
-		if ssd == 1 {
-			irq, err := getIRQFromInterrupts(path.Base(device) + "-request")
+		if isSSD {
+			irqs, err = getIRQFromInterrupts(path.Base(device)+"-request", irqs)
 			if err != nil {
 				return err
 			}
-			irqs = append(irqs, irq)
 		}
 	}
+	err = setSMPaffinity(totalCPUs, irqs)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func setSMPaffinity(totalCPUs int, irqs []int) error {
 	irqCount := len(irqs)
 	if irqCount != 0 {
 		stride := totalCPUs / irqCount
@@ -511,30 +517,29 @@ func configSCSI(totalCPUs int) error {
 	return nil
 }
 
-func getIRQFromInterrupts(requestQueue string) (int, error) {
-	var irq int
+func getIRQFromInterrupts(requestQueue string, irqs []int) ([]int, error) {
 	f, err := os.Open("/proc/interrupts")
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if strings.Contains(line, requestQueue) {
-			irq, err = strconv.Atoi(strings.Split(line, ":")[0])
+			irq, err := strconv.Atoi(strings.Split(line, ":")[0])
 			if err != nil {
-				return 0, err
+				return nil, err
 			}
-			break
+			irqs = append(irqs, irq)
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		return 0, err
+		return nil, err
 	}
 	if err := f.Close(); err != nil {
-		return 0, err
+		return nil, err
 	}
-	return irq, nil
+	return irqs, nil
 }
 
 func generateSSHKeys() error {
