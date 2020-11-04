@@ -457,12 +457,12 @@ func configSCSI(totalCPUs int) error {
 		var ssd = 0
 		targetPaths, err := filepath.Glob(device + "/host*/target*/*")
 		if err != nil {
-			return err
+			continue
 		}
 		for _, targetPath := range targetPaths {
 			b, err := ioutil.ReadFile(targetPath + "/model")
 			if err != nil {
-				return err
+				continue
 			}
 			if !strings.Contains(string(b), "EphemeralDisk") {
 				continue
