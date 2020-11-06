@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"syscall"
 	"time"
 
 	sspb "github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/snapshot_service"
@@ -32,10 +33,11 @@ var (
 )
 
 type snapshotConfig struct {
-	timeout               time.Duration // seconds
-	preSnapshotScriptURL  string
-	postSnapshotScriptURL string
-	enabled               bool
+	timeout                  time.Duration // seconds
+	preSnapshotScriptURL     string
+	postSnapshotScriptURL    string
+	enabled                  bool
+	scriptMustBeRootWritable bool
 }
 
 type invalidSnapshotConfig struct {
@@ -51,6 +53,7 @@ func getSnapshotConfig() (snapshotConfig, error) {
 	conf.timeout = time.Duration(config.Section("Snapshots").Key("timeout_in_seconds").MustInt(60)) * time.Second
 	conf.preSnapshotScriptURL = config.Section("Snapshots").Key("pre_snapshot_script").String()
 	conf.postSnapshotScriptURL = config.Section("Snapshots").Key("post_snapshot_script").String()
+	conf.scriptMustBeRootWritable = config.Section("Snapshots").Key("script_must_be_root_writable").MustBool(true)
 
 	if conf.preSnapshotScriptURL == "" && conf.postSnapshotScriptURL == "" {
 		return conf, &invalidSnapshotConfig{"neither pre or post snapshot script has been configured"}
@@ -62,8 +65,25 @@ func getSnapshotConfig() (snapshotConfig, error) {
 func runScript(path, disks string, config snapshotConfig) (int, sspb.AgentErrorCode) {
 	logger.Infof("Running guest consistent snapshot script at: %s.", path)
 
-	if _, err := os.Stat(path); os.IsNotExist(err) {
+	info, err := os.Stat(path)
+	if os.IsNotExist(err) {
 		return -1, sspb.AgentErrorCode_SCRIPT_NOT_FOUND
+	}
+
+	if config.scriptMustBeRootWritable {
+		if stat, ok := info.Sys().(*syscall.Stat_t); ok {
+			uid := int(stat.Uid)
+			if uid != 0 {
+				logger.Infof("Snapshot script not owned by root. Set script_must_be_root_writable=false in config file if you wish to not have this restriction.")
+				return 125, sspb.AgentErrorCode_UNHANDLED_SCRIPT_ERROR
+			}
+		}
+
+		// Check write permissions
+		if info.Mode()<<7 == 0 || info.Mode()<<4 != 1 || info.Mode()<<1 != 1 {
+			logger.Infof("Snapshot script not writable by only root. Set script_must_be_root_writable=false in config file if you wish to not have this restriction.")
+			return 126, sspb.AgentErrorCode_UNHANDLED_SCRIPT_ERROR
+		}
 	}
 
 	execResult := runCmdOutputWithTimeout(config.timeout, path, disks)
