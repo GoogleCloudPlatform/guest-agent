@@ -370,8 +370,16 @@ func setQueueNumForDevice(dev string) error {
 		if err == nil && stat.IsDir() {
 			continue
 		}
+		// Classify this IRQ as virtionet intx, virtionet MSI-X, or non-virtionet
+		// If the IRQ type is virtionet intx, a subdirectory with the same name as
+		// he device will be present. If the IRQ type is virtionet MSI-X, then
+		// a subdirectory of the form <device name>-<input|output>.N will exist.
+		// In this case, N is the input (output) queue number, and is specified as
+		// a decimal integer ranging from 0 to K - 1 where K is the number of
+		// input (output) queues in the virtionet device.
+
+		// Probe virtionet intx
 		virtionetIntxDir := fmt.Sprintf("%s/%s", irq, dev)
-		virtionetMsixDirRegex := fmt.Sprintf(".*/%s-(input|output)\\.([0-9]+)$", dev)
 		stat, err = os.Stat(virtionetIntxDir)
 		if err == nil && stat.IsDir() {
 			// All virtionet intx IRQs are delivered to CPU 0
@@ -383,6 +391,7 @@ func setQueueNumForDevice(dev string) error {
 		}
 		// Not virtionet intx, probe for MSI-X
 		var virtionetMsixFound bool
+		virtionetMsixDirRegex := fmt.Sprintf(".*/%s-(input|output)\\.([0-9]+)$", dev)
 		irqDevs, err := filepath.Glob(fmt.Sprintf("%s/%s*", irq, dev))
 		if err != nil {
 			return err
@@ -400,7 +409,7 @@ func setQueueNumForDevice(dev string) error {
 		}
 		affinityHint := fmt.Sprintf("%s/affinity_hint", irq)
 		stat, err = os.Stat(affinityHint)
-		if !virtionetMsixFound || (err == nil && !stat.IsDir()) {
+		if !virtionetMsixFound || (err == nil && stat.IsDir()) {
 			continue
 		}
 
