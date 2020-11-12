@@ -364,6 +364,7 @@ func setQueueNumForDevice(dev string) error {
 	if err != nil {
 		return err
 	}
+	var queueNum int
 	for _, irq := range irqDirs {
 		smpAffinity := irq + "/smp_affinity_list"
 		stat, err := os.Stat(smpAffinity)
@@ -396,7 +397,6 @@ func setQueueNumForDevice(dev string) error {
 		if err != nil {
 			return err
 		}
-		var queueNum int
 		for _, entry := range irqDevs {
 			r, _ := regexp.Compile(virtionetMsixDirRegex)
 			if r.MatchString(entry) {
