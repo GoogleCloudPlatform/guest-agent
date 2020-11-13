@@ -27,15 +27,13 @@ import (
 )
 
 var (
+	scriptsDir                   = "/etc/google/snapshots/"
 	seenPreSnapshotOperationIds  = lru.New(128)
 	seenPostSnapshotOperationIds = lru.New(128)
 )
 
 type snapshotConfig struct {
-	timeout               time.Duration // seconds
-	preSnapshotScriptURL  string
-	postSnapshotScriptURL string
-	enabled               bool
+	timeout time.Duration // seconds
 }
 
 type invalidSnapshotConfig struct {
@@ -49,12 +47,6 @@ func (e *invalidSnapshotConfig) Error() string {
 func getSnapshotConfig() (snapshotConfig, error) {
 	var conf snapshotConfig
 	conf.timeout = time.Duration(config.Section("Snapshots").Key("timeout_in_seconds").MustInt(60)) * time.Second
-	conf.preSnapshotScriptURL = config.Section("Snapshots").Key("pre_snapshot_script").String()
-	conf.postSnapshotScriptURL = config.Section("Snapshots").Key("post_snapshot_script").String()
-
-	if conf.preSnapshotScriptURL == "" && conf.postSnapshotScriptURL == "" {
-		return conf, &invalidSnapshotConfig{"neither pre or post snapshot script has been configured"}
-	}
 
 	return conf, nil
 }
@@ -139,7 +131,7 @@ func getSnapshotResponse(guestMessage *sspb.GuestMessage) *sspb.SnapshotResponse
 				return nil
 			}
 			seenPreSnapshotOperationIds.Add(request.GetOperationId(), request.GetOperationId())
-			url = config.preSnapshotScriptURL
+			url = scriptsDir + "pre.sh"
 		case sspb.OperationType_POST_SNAPSHOT:
 			logger.Infof("Handling post snapshot request for operation id %d.", request.GetOperationId())
 			_, found := seenPostSnapshotOperationIds.Get(request.GetOperationId())
@@ -148,7 +140,7 @@ func getSnapshotResponse(guestMessage *sspb.GuestMessage) *sspb.SnapshotResponse
 				return nil
 			}
 			seenPostSnapshotOperationIds.Add(request.GetOperationId(), request.GetOperationId())
-			url = config.postSnapshotScriptURL
+			url = scriptsDir + "post.sh"
 		default:
 			logger.Errorf("Unhandled operation type %d.", request.GetType())
 			return nil
@@ -192,6 +184,14 @@ func handleSnapshotRequests(address string, requestChan <-chan *sspb.GuestMessag
 func startSnapshotListener(snapshotServiceIP string, snapshotServicePort int) {
 	requestChan := make(chan *sspb.GuestMessage)
 	address := fmt.Sprintf("%s:%d", snapshotServiceIP, snapshotServicePort)
+
+	// Create scripts directory if it doesn't exist.
+	_, err := os.Stat(scriptsDir)
+	if os.IsNotExist(err) {
+		// Make the directory only readable/writable/executable by root.
+		os.MkdirAll(scriptsDir, 0700)
+	}
+
 	go listenForSnapshotRequests(address, requestChan)
 	go handleSnapshotRequests(address, requestChan)
 }
