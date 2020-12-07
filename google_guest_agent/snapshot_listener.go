@@ -85,8 +85,8 @@ func listenForSnapshotRequests(address string, requestChan chan<- *sspb.GuestMes
 		logger.Infof("Attempting to connect to snapshot service at %s.", address)
 		conn, err := grpc.Dial(address, grpc.WithInsecure())
 		if err != nil {
-			logger.Errorf("Failed to connect: %v.", err)
-			continue
+			logger.Errorf("Failed to connect to snapshot service: %v.", err)
+			return
 		}
 
 		c := sspb.NewSnapshotServiceClient(conn)
@@ -97,18 +97,19 @@ func listenForSnapshotRequests(address string, requestChan chan<- *sspb.GuestMes
 		r, err := c.CreateConnection(ctx, &guestReady)
 		if err != nil {
 			logger.Errorf("Error creating connection: %v.", err)
+			cancel()
 			continue
 		}
 		for {
 			request, err := r.Recv()
 			if err != nil {
 				logger.Errorf("Error reading snapshot request: %v.", err)
+				cancel()
 				break
 			}
 			logger.Infof("Received snapshot request.")
 			requestChan <- request
 		}
-		cancel()
 	}
 }
 
@@ -167,9 +168,8 @@ func handleSnapshotRequests(address string, requestChan <-chan *sspb.GuestMessag
 	for {
 		conn, err := grpc.Dial(address, grpc.WithInsecure(), grpc.WithBlock())
 		if err != nil {
-			logger.Errorf("Failed to connect: %v.", err)
-			time.Sleep(1 * time.Second)
-			continue
+			logger.Errorf("Failed to connect to snapshot service: %v.", err)
+			return
 		}
 		for {
 			// Listen on channel and respond
@@ -187,7 +187,6 @@ func handleSnapshotRequests(address string, requestChan <-chan *sspb.GuestMessag
 			}
 		}
 	}
-
 }
 
 func startSnapshotListener(snapshotServiceIP string, snapshotServicePort int) {
