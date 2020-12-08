@@ -42,18 +42,20 @@ var (
 // Characters that are difficult for users to type on a command line (quotes,
 // non english characters) are not used.
 func newPwd(userPwLgth int) (string, error) {
-	pwLgth := 15
+	var pwLgth int
+	minPwLgth := 15
 	maxPwLgth := 255
 	lower := []byte("abcdefghijklmnopqrstuvwxyz")
 	upper := []byte("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
 	numbers := []byte("0123456789")
 	special := []byte(`~!@#$%^&*_-+=|\(){}[]:;<>,.?/`)
 	chars := bytes.Join([][]byte{lower, upper, numbers, special}, nil)
+	pwLgth = minPwLgth
+	if userPwLgth > minPwLgth {
+		pwLgth = userPwLgth
+	}
 	if userPwLgth > maxPwLgth {
 		pwLgth = maxPwLgth
-	}
-	if userPwLgth > pwLgth {
-		pwLgth = userPwLgth
 	}
 
 	for {
