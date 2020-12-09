@@ -99,8 +99,8 @@ func TestNewPwd(t *testing.T) {
 	minPasswordLength := 15
 	maxPasswordLength := 255
 	var tests = []struct {
-		name string
-		passwordLength int
+		name               string
+		passwordLength     int
 		wantPasswordLength int
 	}{
 		{"0 characters, default value", 0, minPasswordLength},
