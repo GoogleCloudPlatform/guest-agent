@@ -137,6 +137,7 @@ type windowsKey struct {
 	UserName            string
 	HashFunction        string
 	AddToAdministrators *bool
+	PasswordLength      int
 }
 
 type windowsKeys []windowsKey

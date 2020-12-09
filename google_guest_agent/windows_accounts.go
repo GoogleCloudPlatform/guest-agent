@@ -41,13 +41,22 @@ var (
 // requirements: https://technet.microsoft.com/en-us/library/cc786468.
 // Characters that are difficult for users to type on a command line (quotes,
 // non english characters) are not used.
-func newPwd() (string, error) {
-	pwLgth := 15
+func newPwd(userPwLgth int) (string, error) {
+	var pwLgth int
+	minPwLgth := 15
+	maxPwLgth := 255
 	lower := []byte("abcdefghijklmnopqrstuvwxyz")
 	upper := []byte("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
 	numbers := []byte("0123456789")
 	special := []byte(`~!@#$%^&*_-+=|\(){}[]:;<>,.?/`)
 	chars := bytes.Join([][]byte{lower, upper, numbers, special}, nil)
+	pwLgth = minPwLgth
+	if userPwLgth > minPwLgth {
+		pwLgth = userPwLgth
+	}
+	if userPwLgth > maxPwLgth {
+		pwLgth = maxPwLgth
+	}
 
 	for {
 		b := make([]byte, pwLgth)
@@ -114,7 +123,7 @@ func (k windowsKey) expired() bool {
 }
 
 func (k windowsKey) createOrResetPwd() (*credsJSON, error) {
-	pwd, err := newPwd()
+	pwd, err := newPwd(k.PasswordLength)
 	if err != nil {
 		return nil, fmt.Errorf("error creating password: %v", err)
 	}
