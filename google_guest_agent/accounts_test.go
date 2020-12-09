@@ -138,7 +138,7 @@ func TestNewPwd(t *testing.T) {
 				t.Errorf("Password does not have at least one character from 3 categories: '%v'", pwd)
 			}
 		}
-}
+  }
 }
 
 func TestCreatecredsJSON(t *testing.T) {
