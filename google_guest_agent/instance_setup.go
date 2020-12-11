@@ -15,20 +15,35 @@
 package main
 
 import (
+	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net"
 	"net/http"
 	"os"
 	"os/exec"
+	"path"
+	"path/filepath"
+	"regexp"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 	"github.com/go-ini/ini"
+)
+
+const (
+	virtioNetDevs = "/sys/bus/virtio/drivers/virtio_net/virtio*"
+	queueRegex    = ".*tx-([0-9]+).*$"
+	irqDirPath    = "/proc/irq/*"
+	xpsCPU        = "/sys/class/net/e*/queues/tx*/xps_cpus"
+	nvmeDevice    = "/sys/bus/pci/drivers/nvme/*"
+	scsiDevice    = "/sys/bus/virtio/drivers/virtio_scsi/virtio*"
 )
 
 func agentInit(ctx context.Context) {
@@ -44,9 +59,8 @@ func agentInit(ctx context.Context) {
 	//  - Generate boto.cfg (one time only).
 	//  - Set sysctl values.
 	//  - Set scheduler values.
-	//  - Run `google_optimize_local_ssd` script.
-	//  - Run `google_set_multiqueue` script.
-	// TODO incorporate these scripts into the agent. liamh@12-11-19
+	//  - Optimize local ssd.
+	//  - Set multiqueue.
 	setMetadataURL()
 
 	if runtime.GOOS == "windows" {
@@ -113,19 +127,27 @@ func agentInit(ctx context.Context) {
 			startSnapshotListener(snapshotServiceIP, snapshotServicePort)
 		}
 
-		// These scripts are run regardless of metadata/network access and config options.
-		for _, script := range []string{"optimize_local_ssd", "set_multiqueue"} {
-			if config.Section("InstanceSetup").Key(script).MustBool(true) {
-				if err := runCmd(exec.Command("google_" + script)); err != nil {
-					logger.Warningf("Failed to run %q script: %v", "google_"+script, err)
-				}
-			}
-		}
-
 		// Below actions happen on every agent start. They only need to
 		// run once per boot, but it's harmless to run them on every
 		// boot. If this changes, we will hook these to an explicit
 		// on-boot signal.
+		totalCPUs, err := getTotalCPUs()
+		if err == nil {
+			// Config NVME, SCSI and set MultiQueue are run regardless of metadata/network access and config options.
+			if err := configNVME(totalCPUs); err != nil {
+				logger.Warningf("Failed to config nvme: %v", err)
+			}
+
+			if err := configSCSI(totalCPUs); err != nil {
+				logger.Warningf("Failed to config scsi: %v", err)
+			}
+
+			if err := setMultiQueue(totalCPUs); err != nil {
+				logger.Warningf("Failed to set multi queue: %v", err)
+			}
+		}
+		logger.Warningf("Failed to get total cpus, %s", err)
+
 		if err := setIOScheduler(); err != nil {
 			logger.Warningf("Failed to set IO scheduler: %v", err)
 		}
@@ -193,6 +215,340 @@ func agentInit(ctx context.Context) {
 		}
 
 	}
+}
+
+func getTotalCPUs() (int, error) {
+	var totalCPUs int
+	res := runCmdOutput(exec.Command("nproc"))
+	if res.ExitCode() != 0 {
+		logger.Warningf("Failed to run nproc: %v", res.Stderr())
+		return 0, errors.New(res.Error())
+	}
+	totalCPUinString := res.Stdout()[0 : len(res.Stdout())-1]
+	totalCPUs, err := strconv.Atoi(totalCPUinString)
+	if err != nil {
+		logger.Warningf("Failed to get number of cpus: %v", err)
+		return 0, err
+	}
+	return totalCPUs, nil
+}
+
+//For a single-queue / no MSI-X virtionet device, sets the IRQ affinities to
+//processor 0. For this virtionet configuration, distributing IRQs to all
+//processors results in comparatively high cpu utilization and comparatively
+//low network bandwidth.
+//
+//For a multi-queue / MSI-X virtionet device, sets the IRQ affinities to the
+//per-IRQ affinity hint. The virtionet driver maps each virtionet TX (RX) queue
+//MSI-X interrupt to a unique single CPU if the number of TX (RX) queues equals
+//the number of online CPUs. The mapping of network MSI-X interrupt vector to
+//CPUs is stored in the virtionet MSI-X interrupt vector affinity hint. This
+//configuration allows network traffic to be spread across the CPUs, giving
+//each CPU a dedicated TX and RX network queue, while ensuring that all packets
+//from a single flow are delivered to the same CPU.
+//
+//For a gvnic device, set the IRQ affinities to the per-IRQ affinity hint.
+//The google virtual ethernet driver maps each queue MSI-X interrupt to a
+//unique single CPU, which is stored in the affinity_hint for each MSI-X
+//vector. In older versions of the kernel, irqblanace is expected to copy the
+//affinity_hint to smp_affinity; however, GCE instances disable irqbalance by
+//default. This script copies over the affinity_hint to smp_affinity on boot to
+//replicate the behavior of irqbalance.
+func setMultiQueue(totalCPUs int) error {
+	devices, err := filepath.Glob(virtioNetDevs)
+	if err != nil {
+		return err
+	}
+	for _, dev := range devices {
+		if err := enableMultiQueue(dev); err != nil {
+			logger.Warningf("Could not enable multi queue for %s.", dev)
+		}
+		if err = setQueueNumForDevice(dev); err != nil {
+			logger.Warningf("Could not set queue num for %s.", dev)
+		}
+	}
+	// Set smp_affinity properly for gvnic queues. '-ntfy-block.' is unique to gve and will not affect virtio queues.
+	if err = setSMPAffinityForGVNIC(); err != nil {
+		logger.Warningf("Could not set smp_affinity for gvnic.")
+	}
+
+	if err = configureTransmitPacketSteering(totalCPUs); err != nil {
+		logger.Warningf("Could not set transmit packet steering.")
+	}
+	return nil
+}
+
+func setSMPAffinityForGVNIC() error {
+	irqDirs, err := filepath.Glob(irqDirPath)
+	if err != nil {
+		return err
+	}
+	for _, irq := range irqDirs {
+		blocks, err := filepath.Glob(irq + "/*-ntfy-block.*")
+		if err != nil {
+			return err
+		}
+		stat, err := os.Stat(irq + "/affinity_hint")
+		if err == nil && len(blocks) > 0 && !stat.IsDir() {
+			if err = copyFile(irq+"/affinity_hint", irq+"/smp_affinity"); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func configureTransmitPacketSteering(totalCPUs int) error {
+	XPS, err := filepath.Glob(xpsCPU)
+	if err != nil {
+		return err
+	}
+
+	// If we have more CPUs than queues, then stripe CPUs across tx affinity as CPUNumber % queue_count.
+	numQueues := len(XPS)
+	for _, q := range XPS {
+		r, _ := regexp.Compile(queueRegex)
+		var queueNum int
+		if r.MatchString(q) {
+			queueNum, err = strconv.Atoi(r.FindStringSubmatch(q)[1])
+			if err != nil {
+				return err
+			}
+		}
+		xpsString := constructXPSString(queueNum, totalCPUs, numQueues)
+
+		if err = ioutil.WriteFile(q, []byte(xpsString), 0644); err != nil {
+			if !strings.Contains(err.Error(), "No such file or directory") {
+				logger.Errorf("Failed to write to xps file, %v", err)
+			}
+			return err
+		}
+		logger.Infof("Queue %d XPS=%s for %s\n", queueNum, xpsString, q)
+	}
+	return nil
+}
+
+func constructXPSString(queueNum, totalCPUs, numQueues int) string {
+	numwords := (totalCPUs-1)/32 + 1
+	xps := make([]uint32, numwords)
+
+	for cpu := queueNum; cpu < totalCPUs; cpu += numQueues {
+		dword := cpu / 32
+		xps[dword] |= 1 << uint32(cpu-(32*dword))
+	}
+	// Linux xps_cpus requires a hex number with commas every 32 bits. It ignores
+	// all bits above # cpus, so write a list of comma separated 32 bit hex values
+	// with a comma between dwords.
+	var xpsDwords []string
+	for i := 0; i < numwords; i++ {
+		xpsDwords = append([]string{fmt.Sprintf("%08x", xps[i])}, xpsDwords...)
+	}
+	return strings.Join(xpsDwords, ",")
+}
+
+func copyFile(src string, dest string) error {
+	input, err := ioutil.ReadFile(src)
+	if err != nil {
+		return err
+	}
+	err = ioutil.WriteFile(dest, input, 0644)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func setQueueNumForDevice(dev string) error {
+	dev = path.Base(dev)
+	irqDirs, err := filepath.Glob(irqDirPath)
+	if err != nil {
+		return err
+	}
+	var queueNum int
+	for _, irq := range irqDirs {
+		smpAffinity := irq + "/smp_affinity_list"
+		stat, err := os.Stat(smpAffinity)
+		if err == nil && stat.IsDir() {
+			continue
+		}
+		// Classify this IRQ as virtionet intx, virtionet MSI-X, or non-virtionet
+		// If the IRQ type is virtionet intx, a subdirectory with the same name as
+		// he device will be present. If the IRQ type is virtionet MSI-X, then
+		// a subdirectory of the form <device name>-<input|output>.N will exist.
+		// In this case, N is the input (output) queue number, and is specified as
+		// a decimal integer ranging from 0 to K - 1 where K is the number of
+		// input (output) queues in the virtionet device.
+
+		// Probe virtionet intx
+		virtionetIntxDir := fmt.Sprintf("%s/%s", irq, dev)
+		stat, err = os.Stat(virtionetIntxDir)
+		if err == nil && stat.IsDir() {
+			// All virtionet intx IRQs are delivered to CPU 0
+			logger.Infof("Setting %s to 01 for device %s.", smpAffinity, dev)
+			if err := ioutil.WriteFile(smpAffinity, []byte("01"), 0644); err != nil {
+				logger.Warningf("Could not write 01 to %s for %s.", smpAffinity, dev)
+			}
+			continue
+		}
+		// Not virtionet intx, probe for MSI-X
+		var virtionetMsixFound bool
+		virtionetMsixDirRegex := fmt.Sprintf(".*/%s-(input|output)\\.([0-9]+)$", dev)
+		irqDevs, err := filepath.Glob(fmt.Sprintf("%s/%s*", irq, dev))
+		if err != nil {
+			return err
+		}
+		for _, entry := range irqDevs {
+			r, _ := regexp.Compile(virtionetMsixDirRegex)
+			if r.MatchString(entry) {
+				virtionetMsixFound = true
+				queueNum, err = strconv.Atoi(r.FindStringSubmatch(entry)[2])
+				if err != nil {
+					return err
+				}
+			}
+		}
+		affinityHint := fmt.Sprintf("%s/affinity_hint", irq)
+		stat, err = os.Stat(affinityHint)
+		if !virtionetMsixFound || (err == nil && stat.IsDir()) {
+			continue
+		}
+
+		//Set the IRQ CPU affinity to the virtionet-initialized affinity hint
+		logger.Infof("Setting %s to %d for device %s.", smpAffinity, queueNum, dev)
+		if err = ioutil.WriteFile(smpAffinity, []byte(strconv.Itoa(queueNum)), 0644); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func configNVME(totalCPUs int) error {
+	var currentCPU = 0
+	devices, err := filepath.Glob(nvmeDevice)
+	if err != nil {
+		return err
+	}
+	for _, dev := range devices {
+		stat, err := os.Stat(dev)
+		if err == nil && !stat.IsDir() {
+			continue
+		}
+		irqs, err := filepath.Glob(dev + "/msi_irqs/*")
+		if err != nil {
+			return err
+		}
+
+		for _, irqInfo := range irqs {
+			stat, err := os.Stat(irqInfo)
+			if err == nil && stat.IsDir() {
+				continue
+			}
+			currentCPU %= totalCPUs
+			cpuMask := 1 << currentCPU
+			irq := path.Base(irqInfo)
+			logger.Infof("Setting IRQ %s smp_affinity to %d", irq, cpuMask)
+			if err := ioutil.WriteFile(fmt.Sprintf("/proc/irq/%s/smp_affinity", irq), []byte(strconv.Itoa(cpuMask)), 0644); err != nil {
+				return err
+			}
+			currentCPU++
+		}
+	}
+	return nil
+}
+
+func configSCSI(totalCPUs int) error {
+	devices, err := filepath.Glob(scsiDevice)
+	if err != nil {
+		return err
+	}
+	var irqs []int
+	for _, device := range devices {
+		var isSSD = false
+		targetPaths, err := filepath.Glob(device + "/host*/target*/*")
+		if err != nil {
+			continue
+		}
+		for _, targetPath := range targetPaths {
+			b, err := ioutil.ReadFile(targetPath + "/model")
+			if err != nil {
+				continue
+			}
+			if !strings.Contains(string(b), "EphemeralDisk") {
+				continue
+			}
+
+			isSSD = true
+			queuePaths, err := filepath.Glob(targetPath + "/block/sd*/queue")
+			if err != nil {
+				return err
+			}
+			for _, queuePath := range queuePaths {
+				ioutil.WriteFile(queuePath+"/add_random", []byte("0\n"), 0644)
+				ioutil.WriteFile(queuePath+"/nr_requests", []byte("512\n"), 0644)
+				ioutil.WriteFile(queuePath+"/rotational", []byte("0\n"), 0644)
+				ioutil.WriteFile(queuePath+"/rq_affinity", []byte("0\n"), 0644)
+				ioutil.WriteFile(queuePath+"/nomerges", []byte("1\n"), 0644)
+			}
+		}
+		if isSSD {
+			irqs, err = getIRQFromInterrupts(path.Base(device)+"-request", irqs)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	err = setSMPaffinity(totalCPUs, irqs)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func setSMPaffinity(totalCPUs int, irqs []int) error {
+	irqCount := len(irqs)
+	if irqCount != 0 {
+		stride := totalCPUs / irqCount
+		if stride < 1 {
+			stride = 1
+		}
+		currentCPU := 0
+		for _, irq := range irqs {
+			currentCPU %= totalCPUs
+			cpuMask := 1 << currentCPU
+			logger.Infof("Setting IRQ %d smp_affinity to %d", irq, cpuMask)
+			err := ioutil.WriteFile(fmt.Sprintf("/proc/irq/%d/smp_affinity", irq), []byte(strconv.Itoa(cpuMask)), 0644)
+			if err != nil {
+				return err
+			}
+			currentCPU += stride
+		}
+	}
+	return nil
+}
+
+func getIRQFromInterrupts(requestQueue string, irqs []int) ([]int, error) {
+	f, err := os.Open("/proc/interrupts")
+	if err != nil {
+		return nil, err
+	}
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if strings.Contains(line, requestQueue) {
+			irq, err := strconv.Atoi(strings.Split(line, ":")[0])
+			if err != nil {
+				return nil, err
+			}
+			irqs = append(irqs, irq)
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+	if err := f.Close(); err != nil {
+		return nil, err
+	}
+	return irqs, nil
 }
 
 func generateSSHKeys() error {
