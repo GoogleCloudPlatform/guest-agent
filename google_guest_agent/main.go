@@ -130,6 +130,8 @@ func run(ctx context.Context) {
 		opts.Writers = []io.Writer{&serialPort{"COM1"}}
 	}
 
+	setMetadataURL()
+
 	var err error
 	newMetadata, err = getMetadata(ctx, false)
 	if err == nil {
