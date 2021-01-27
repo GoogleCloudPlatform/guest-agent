@@ -23,19 +23,27 @@ import (
 	"syscall"
 )
 
-func getUID(path string) string {
+func getUIDAndGID(path string) (string, string) {
 	if dir, err := os.Stat(path); err == nil {
 		if stat, ok := dir.Sys().(*syscall.Stat_t); ok {
-			return fmt.Sprintf("%d", stat.Uid)
+			return fmt.Sprintf("%d", stat.Uid), fmt.Sprintf("%d", stat.Gid)
 		}
 	}
-	return ""
+	return "", ""
 }
 
-func createUser(username, uid string) error {
+func createUser(username, uid, gid string) error {
 	useradd := config.Section("Accounts").Key("useradd_cmd").MustString("useradd -m -s /bin/bash -p * {user}")
 	if uid != "" {
 		useradd = fmt.Sprintf("%s -u %s", useradd, uid)
+	}
+	if gid != "" {
+		groupadd := config.Section("Accounts").Key("groupadd_cmd").MustString("groupadd {group}")
+		groupadd = fmt.Sprintf("%s -g %s", groupadd, gid)
+		if err := runCmd(createUserGroupCmd(groupadd, "", username)); err != nil {
+			return err
+		}
+		useradd = fmt.Sprintf("%s -g %s", useradd, gid)
 	}
 	return runCmd(createUserGroupCmd(useradd, username, ""))
 }
