@@ -1,1 +1,3 @@
 enable google-guest-agent.service
+enable google-shutdown-scripts.service
+enable google-startup-scripts.service
