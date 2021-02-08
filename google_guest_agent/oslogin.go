@@ -35,7 +35,7 @@ type osloginMgr struct{}
 
 // We also read project keys first, letting instance-level keys take
 // precedence.
-func getOSLoginEnabled(md *metadata) (bool, bool) {
+func getOSLoginEnabled(md *metadata) (bool, bool, bool) {
 	var enable bool
 	if md.Project.Attributes.EnableOSLogin != nil {
 		enable = *md.Project.Attributes.EnableOSLogin
@@ -50,16 +50,24 @@ func getOSLoginEnabled(md *metadata) (bool, bool) {
 	if md.Instance.Attributes.TwoFactor != nil {
 		twofactor = *md.Instance.Attributes.TwoFactor
 	}
-	return enable, twofactor
+	var sk bool
+	if md.Project.Attributes.EnableOSLoginSK != nil {
+		sk = *md.Project.Attributes.EnableOSLoginSK
+	}
+	if md.Instance.Attributes.EnableOSLoginSK != nil {
+		sk = *md.Instance.Attributes.TwoFactor
+	}
+	return enable, twofactor, sk
 }
 
 func (o *osloginMgr) diff() bool {
-	oldEnable, oldTwoFactor := getOSLoginEnabled(oldMetadata)
-	enable, twofactor := getOSLoginEnabled(newMetadata)
+	oldEnable, oldTwoFactor, oldSk := getOSLoginEnabled(oldMetadata)
+	enable, twofactor, sk := getOSLoginEnabled(newMetadata)
 	return oldMetadata.Project.ProjectID == "" ||
 		// True on first run or if any value has changed.
 		(oldTwoFactor != twofactor) ||
-		(oldEnable != enable)
+		(oldEnable != enable) ||
+		(oldSk != sk)
 }
 
 func (o *osloginMgr) timeout() bool {
@@ -73,8 +81,8 @@ func (o *osloginMgr) disabled(os string) bool {
 func (o *osloginMgr) set() error {
 	// We need to know if it was previously enabled for the clearing of
 	// metadata-based SSH keys.
-	oldEnable, _ := getOSLoginEnabled(oldMetadata)
-	enable, twofactor := getOSLoginEnabled(newMetadata)
+	oldEnable, _, _ := getOSLoginEnabled(oldMetadata)
+	enable, twofactor, sk := getOSLoginEnabled(newMetadata)
 
 	if enable && !oldEnable {
 		logger.Infof("Enabling OS Login")
@@ -87,7 +95,7 @@ func (o *osloginMgr) set() error {
 		logger.Infof("Disabling OS Login")
 	}
 
-	if err := writeSSHConfig(enable, twofactor); err != nil {
+	if err := writeSSHConfig(enable, twofactor, sk); err != nil {
 		logger.Errorf("Error updating SSH config: %v.", err)
 	}
 
@@ -158,12 +166,16 @@ func writeConfigFile(path, contents string) error {
 	return nil
 }
 
-func updateSSHConfig(sshConfig string, enable, twofactor bool) string {
+func updateSSHConfig(sshConfig string, enable, twofactor, sk bool) string {
 	// TODO: this feels like a case for a text/template
 	challengeResponseEnable := "ChallengeResponseAuthentication yes"
-	authorizedKeysCommand := "AuthorizedKeysCommand /usr/bin/google_authorized_keys"
+	authorizedKeysCommand := "AuthorizedKeysCommand /usr/bin/google_authorized_keys %u %t"
 	if runtime.GOOS == "freebsd" {
-		authorizedKeysCommand = "AuthorizedKeysCommand /usr/local/bin/google_authorized_keys"
+		authorizedKeysCommand = "AuthorizedKeysCommand /usr/local/bin/google_authorized_keys %u %t"
+	}
+	// Add as command line argument so it doesn't have to look up what kind of keys to get each time
+	if sk {
+		authorizedKeysCommand = "AuthorizedKeysCommand /usr/bin/google_authorized_keys %u %t sk"
 	}
 	authorizedKeysUser := "AuthorizedKeysCommandUser root"
 	twoFactorAuthMethods := "AuthenticationMethods publickey,keyboard-interactive"
@@ -186,12 +198,12 @@ func updateSSHConfig(sshConfig string, enable, twofactor bool) string {
 	return strings.Join(filtered, "\n")
 }
 
-func writeSSHConfig(enable, twofactor bool) error {
+func writeSSHConfig(enable, twofactor, sk bool) error {
 	sshConfig, err := ioutil.ReadFile("/etc/ssh/sshd_config")
 	if err != nil {
 		return err
 	}
-	proposed := updateSSHConfig(string(sshConfig), enable, twofactor)
+	proposed := updateSSHConfig(string(sshConfig), enable, twofactor, sk)
 	if proposed == string(sshConfig) {
 		return nil
 	}
