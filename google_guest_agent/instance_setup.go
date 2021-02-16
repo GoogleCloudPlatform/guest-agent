@@ -263,6 +263,7 @@ func generateSSHKeys() error {
 			logger.Warningf("Generated key is malformed, not uploading")
 		}
 	}
+	runCmd(exec.Command("restorecon", "-FR", hostKeyDir))
 	return nil
 }
 
