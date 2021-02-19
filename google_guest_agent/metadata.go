@@ -102,6 +102,7 @@ type instance struct {
 
 type networkInterfaces struct {
 	ForwardedIps      []string
+	ForwardedIpv6s    []string
 	TargetInstanceIps []string
 	IPAliases         []string
 	Mac               string
