@@ -308,6 +308,7 @@ func (a *addressMgr) set() error {
 			continue
 		}
 		wantIPs := ni.ForwardedIps
+		wantIPs = append(wantIPs, ni.ForwardedIpv6s...)
 		if config.Section("IpForwarding").Key("target_instance_ips").MustBool(true) {
 			wantIPs = append(wantIPs, ni.TargetInstanceIps...)
 		}
