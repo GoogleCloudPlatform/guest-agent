@@ -171,6 +171,8 @@ func updateSSHConfig(sshConfig string, enable, twofactor bool) string {
 		authorizedKeysUser = "AuthorizedKeysCommandRunAs root"
 		twoFactorAuthMethods = "RequiredAuthentications2 publickey,keyboard-interactive"
 	}
+	matchblock1 := `Match User sa_*`
+	matchblock2 := `       AuthenticationMethods publickey`
 
 	filtered := filterGoogleLines(string(sshConfig))
 
@@ -181,6 +183,9 @@ func updateSSHConfig(sshConfig string, enable, twofactor bool) string {
 		}
 		osLoginBlock = append(osLoginBlock, googleBlockEnd)
 		filtered = append(osLoginBlock, filtered...)
+		if twofactor {
+			filtered = append(filtered, googleBlockStart, matchblock1, matchblock2, googleBlockEnd)
+		}
 	}
 
 	return strings.Join(filtered, "\n")
