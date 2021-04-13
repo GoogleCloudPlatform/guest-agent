@@ -103,9 +103,19 @@ func (o *osloginMgr) set() error {
 		logger.Errorf("Error updating group.conf: %v.", err)
 	}
 
-	for _, svc := range []string{"ssh", "sshd", "nscd", "unscd", "systemd-logind", "cron", "crond"} {
+	for _, svc := range []string{"nscd", "unscd", "systemd-logind", "cron", "crond"} {
 		if err := restartService(svc); err != nil {
 			logger.Errorf("Error restarting service: %v.", err)
+		}
+	}
+
+	// SSH should be explicitly started if not running.
+	for _, svc := range []string{"ssh", "sshd"} {
+		if err := startService(svc, true); err != nil {
+			logger.Errorf("Error restarting service: %v.", err)
+		} else {
+			// Stop on first matching, to avoid double restarting.
+			break
 		}
 	}
 
@@ -340,35 +350,28 @@ func createOSLoginSudoersFile() error {
 	return sudoFile.Close()
 }
 
-// restartService tries to restart a service on linux-like systems. It attempts
-// to find and use the following mechanisms in order:
-// 1. The `systemctl` utility, if in a systemd environment.
-// 2. The `service` command, if present.
-// 3. A SysVinit script directly, if present.
-// Missing mechanisms and missing or disabled services are ignored.
+// restartService tries to restart a systemd service if it is already running.
 func restartService(servicename string) error {
-	init, err := os.Readlink("/sbin/init")
-	if err == nil && strings.Contains(init, "systemd") {
-		if systemctl, err := exec.LookPath("systemctl"); err == nil {
-			if err := runCmd(exec.Command(systemctl, "is-active", servicename+".service")); err == nil {
-				return runCmd(exec.Command(systemctl, "restart", servicename+".service"))
-			}
-			return nil
+	if systemctl, err := exec.LookPath("systemctl"); err == nil {
+		if err := runCmd(exec.Command(systemctl, "is-active", servicename+".service")); err == nil {
+			return runCmd(exec.Command(systemctl, "restart", servicename+".service"))
 		}
 	}
-	service, err := exec.LookPath("service")
-	if err == nil {
-		if err := runCmd(exec.Command(service, servicename, "status")); err == nil {
-			return runCmd(exec.Command(service, servicename, "restart"))
+
+	return nil
+}
+
+// startService tries to start a systemd service. If the service is already
+// running and restart is true, the service is restarted.
+func startService(servicename string, restart bool) error {
+	if systemctl, err := exec.LookPath("systemctl"); err == nil {
+		started := nil == runCmd(exec.Command(systemctl, "is-active", servicename+".service"))
+		if !started {
+			return runCmd(exec.Command(systemctl, "start", servicename+".service"))
 		}
-		return nil
-	}
-	initService := "/etc/init.d/" + servicename
-	if _, err := os.Stat(initService); err == nil {
-		if err := runCmd(exec.Command(initService, "status")); err == nil {
-			return runCmd(exec.Command(initService, "restart"))
+		if started && restart {
+			return runCmd(exec.Command(systemctl, "restart", servicename+".service"))
 		}
-		return nil
 	}
 
 	return nil

@@ -178,6 +178,15 @@ func (a *accountsMgr) set() error {
 	if err := writeGoogleUsersFile(); err != nil {
 		logger.Errorf("Error writing google_users file: %v.", err)
 	}
+
+	// Start SSHD if not started. We do this in agent instead of adding a
+	// Wants= directive, and here instead of instance setup, so that this
+	// can be disabled by the instance configs file.
+	for _, svc := range []string{"ssh", "sshd"} {
+		// Ignore output, it's just a best effort.
+		startService(svc, false)
+	}
+
 	return nil
 }
 
