@@ -139,7 +139,7 @@ func (k windowsKey) createOrResetPwd() (*credsJSON, error) {
 		}
 	} else {
 		logger.Infof("Creating user %s", k.UserName)
-		if err := createUser(k.UserName, pwd); err != nil {
+		if err := createUser(k.UserName, pwd, ""); err != nil {
 			return nil, fmt.Errorf("error running createUser: %v", err)
 		}
 		if k.AddToAdministrators == nil || *k.AddToAdministrators == true {

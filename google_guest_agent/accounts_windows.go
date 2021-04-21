@@ -137,7 +137,7 @@ func addUserToGroup(username, group string) error {
 	return nil
 }
 
-func createUser(username, pwd string) error {
+func createUser(username, pwd, _ string) error {
 	uPtr, err := syscall.UTF16PtrFromString(username)
 	if err != nil {
 		return fmt.Errorf("error encoding username to UTF16: %v", err)
@@ -183,6 +183,6 @@ func userExists(name string) (bool, error) {
 	return true, nil
 }
 
-func getUID(path string) string {
-	return ""
+func getUIDAndGID(path string) (string, string) {
+	return "", ""
 }
