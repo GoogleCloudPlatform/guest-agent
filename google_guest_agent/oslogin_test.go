@@ -181,15 +181,16 @@ func TestUpdateNSSwitchConfig(t *testing.T) {
 }
 func TestUpdateSSHConfig(t *testing.T) {
 	challengeResponseEnable := "ChallengeResponseAuthentication yes"
-	authorizedKeysCommand := "AuthorizedKeysCommand /usr/bin/google_authorized_keys"
+	authorizedKeysCommand := "AuthorizedKeysCommand /usr/bin/google_authorized_keys %u %t"
+	authorizedKeysCommandSk := "AuthorizedKeysCommand /usr/bin/google_authorized_keys %u %t sk"
 	authorizedKeysUser := "AuthorizedKeysCommandUser root"
 	twoFactorAuthMethods := "AuthenticationMethods publickey,keyboard-interactive"
 	matchblock1 := `Match User sa_*`
 	matchblock2 := `       AuthenticationMethods publickey`
 
 	var tests = []struct {
-		contents, want    []string
-		enable, twofactor bool
+		contents, want        []string
+		enable, twofactor, sk bool
 	}{
 		{
 			// Full block is created, any others removed.
@@ -214,6 +215,28 @@ func TestUpdateSSHConfig(t *testing.T) {
 			},
 			enable:    true,
 			twofactor: true,
+			sk:        false,
+		},
+		{
+			// Full block is created with SK, any others removed.
+			contents: []string{
+				"line1",
+				googleBlockStart,
+				"line2",
+				googleBlockEnd,
+			},
+			want: []string{
+				googleBlockStart,
+				authorizedKeysCommandSk,
+				authorizedKeysUser,
+				twoFactorAuthMethods,
+				challengeResponseEnable,
+				googleBlockEnd,
+				"line1",
+			},
+			enable:    true,
+			twofactor: true,
+			sk:        true,
 		},
 		{
 			// Full block is created, google comments removed.
@@ -239,6 +262,7 @@ func TestUpdateSSHConfig(t *testing.T) {
 			},
 			enable:    true,
 			twofactor: true,
+			sk:        false,
 		},
 		{
 			// Block is created without two-factor options.
@@ -256,6 +280,7 @@ func TestUpdateSSHConfig(t *testing.T) {
 			},
 			enable:    true,
 			twofactor: false,
+			sk:        false,
 		},
 		{
 			// Existing block is removed.
@@ -272,6 +297,7 @@ func TestUpdateSSHConfig(t *testing.T) {
 			},
 			enable:    false,
 			twofactor: true,
+			sk:        false,
 		},
 	}
 
@@ -279,7 +305,7 @@ func TestUpdateSSHConfig(t *testing.T) {
 		contents := strings.Join(tt.contents, "\n")
 		want := strings.Join(tt.want, "\n")
 
-		if res := updateSSHConfig(contents, tt.enable, tt.twofactor); res != want {
+		if res := updateSSHConfig(contents, tt.enable, tt.twofactor, tt.sk); res != want {
 			t.Errorf("test %v\nwant:\n%v\ngot:\n%v\n", idx, want, res)
 		}
 	}
@@ -440,30 +466,34 @@ func TestUpdateGroupConf(t *testing.T) {
 
 func TestGetOSLoginEnabled(t *testing.T) {
 	var tests = []struct {
-		md                string
-		enable, twofactor bool
+		md                    string
+		enable, twofactor, sk bool
 	}{
 		{
-			md:        `{"instance": {"attributes": {"enable-oslogin": "true", "enable-oslogin-2fa": "true"}}}`,
+			md:        `{"instance": {"attributes": {"enable-oslogin": "true", "enable-oslogin-2fa": "true", "enable-oslogin-sk": "true"}}}`,
 			enable:    true,
 			twofactor: true,
+			sk:        true,
 		},
 		{
-			md:        `{"project": {"attributes": {"enable-oslogin": "true", "enable-oslogin-2fa": "true"}}}`,
+			md:        `{"project": {"attributes": {"enable-oslogin": "true", "enable-oslogin-2fa": "true", "enable-oslogin-sk": "true"}}}`,
 			enable:    true,
 			twofactor: true,
-		},
-		{
-			// Instance keys take precedence
-			md:        `{"project": {"attributes": {"enable-oslogin": "false", "enable-oslogin-2fa": "false"}}, "instance": {"attributes": {"enable-oslogin": "true", "enable-oslogin-2fa": "true"}}}`,
-			enable:    true,
-			twofactor: true,
+			sk:        true,
 		},
 		{
 			// Instance keys take precedence
-			md:        `{"project": {"attributes": {"enable-oslogin": "true", "enable-oslogin-2fa": "true"}}, "instance": {"attributes": {"enable-oslogin": "false", "enable-oslogin-2fa": "false"}}}`,
+			md:        `{"project": {"attributes": {"enable-oslogin": "false", "enable-oslogin-2fa": "false", "enable-oslogin-sk": "false"}}, "instance": {"attributes": {"enable-oslogin": "true", "enable-oslogin-2fa": "true", "enable-oslogin-sk": "true"}}}`,
+			enable:    true,
+			twofactor: true,
+			sk:        true,
+		},
+		{
+			// Instance keys take precedence
+			md:        `{"project": {"attributes": {"enable-oslogin": "true", "enable-oslogin-2fa": "true", "enable-oslogin-sk": "true"}}, "instance": {"attributes": {"enable-oslogin": "false", "enable-oslogin-2fa": "false", "enable-oslogin-sk": "false"}}}`,
 			enable:    false,
 			twofactor: false,
+			sk:        false,
 		},
 		{
 			// Handle weird values
@@ -484,9 +514,9 @@ func TestGetOSLoginEnabled(t *testing.T) {
 		if err := json.Unmarshal([]byte(tt.md), &md); err != nil {
 			t.Errorf("Failed to unmarshal metadata JSON for test %v: %v", idx, err)
 		}
-		enable, twofactor := getOSLoginEnabled(&md)
-		if enable != tt.enable || twofactor != tt.twofactor {
-			t.Errorf("Test %v failed. Expected: %v/%v Got: %v/%v", idx, tt.enable, tt.twofactor, enable, twofactor)
+		enable, twofactor, sk := getOSLoginEnabled(&md)
+		if enable != tt.enable || twofactor != tt.twofactor || sk != tt.sk {
+			t.Errorf("Test %v failed. Expected: %v/%v/%v Got: %v/%v/%v", idx, tt.enable, tt.twofactor, tt.sk, enable, twofactor, sk)
 		}
 	}
 }
