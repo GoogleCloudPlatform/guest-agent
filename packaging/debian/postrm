@@ -1,9 +1,0 @@
-#!/bin/sh -e
-
-if [ "$1" = "purge" ] ; then
-	if [ -f /etc/default/instance_configs.cfg ]; then 
-		rm /etc/default/instance_configs.cfg
-	fi
-fi
-
-#DEBHELPER#
