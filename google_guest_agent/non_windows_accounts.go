@@ -184,7 +184,7 @@ func (a *accountsMgr) set() error {
 	// can be disabled by the instance configs file.
 	for _, svc := range []string{"ssh", "sshd"} {
 		// Ignore output, it's just a best effort.
-		startService(svc, false)
+		systemctlStart(svc)
 	}
 
 	return nil
