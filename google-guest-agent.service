@@ -13,7 +13,7 @@ Wants=network-online.target
 PartOf=network.service networking.service NetworkManager.service systemd-networkd.service
 
 [Service]
-Type=simple
+Type=notify
 ExecStart=/usr/bin/google_guest_agent
 OOMScoreAdjust=-999
 Restart=always

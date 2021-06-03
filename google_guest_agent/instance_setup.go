@@ -104,6 +104,7 @@ func agentInit(ctx context.Context) {
 		}
 	} else {
 		// Linux instance setup.
+		defer runCmd(exec.Command("systemd-notify", "--ready"))
 
 		if config.Section("Snapshots").Key("enabled").MustBool(false) {
 			logger.Infof("Snapshot listener enabled")
