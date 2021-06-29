@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -32,23 +31,12 @@ import (
 const defaultEtag = "NONE"
 
 var (
-	metadataURL       = ""
-	metadataHost      = "metadata.google.internal"
-	metadataFallback  = "169.254.169.254"
-	metadataPath      = "/computeMetadata/v1/"
+	metadataURL       = "http://169.254.169.254/computeMetadata/v1/"
 	metadataRecursive = "/?recursive=true&alt=json"
 	metadataHang      = "&wait_for_change=true&timeout_sec=60"
 	defaultTimeout    = 70 * time.Second
 	etag              = defaultEtag
 )
-
-func setMetadataURL() {
-	host := metadataHost
-	if _, err := net.LookupIP(host); err != nil {
-		host = metadataFallback
-	}
-	metadataURL = "http://" + host + metadataPath
-}
 
 type metadata struct {
 	Instance instance

@@ -130,8 +130,6 @@ func run(ctx context.Context) {
 		opts.Writers = []io.Writer{&serialPort{"COM1"}}
 	}
 
-	setMetadataURL()
-
 	var err error
 	newMetadata, err = getMetadata(ctx, false)
 	if err == nil {
@@ -173,9 +171,6 @@ func run(ctx context.Context) {
 				// not to spam the log on network failures.
 				if webError == 1 {
 					if urlErr, ok := err.(*url.Error); ok {
-						if _, ok := urlErr.Err.(*net.DNSError); ok {
-							logger.Errorf("DNS error when requesting metadata, check DNS settings and ensure metadata.internal.google is setup in your hosts file.")
-						}
 						if _, ok := urlErr.Err.(*net.OpError); ok {
 							logger.Errorf("Network error when requesting metadata, make sure your instance has an active network and can reach the metadata server.")
 						}
