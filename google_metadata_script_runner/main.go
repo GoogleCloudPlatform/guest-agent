@@ -46,7 +46,7 @@ import (
 var (
 	programName    = "GCEMetadataScripts"
 	version        = "dev"
-	metadataURL    = "http://metadata.google.internal/computeMetadata/v1"
+	metadataURL    = "http://169.254.169.254/computeMetadata/v1"
 	metadataHang   = "/?recursive=true&alt=json&timeout_sec=10&last_etag=NONE"
 	defaultTimeout = 20 * time.Second
 	powerShellArgs = []string{"-NoProfile", "-NoLogo", "-ExecutionPolicy", "Unrestricted", "-File"}

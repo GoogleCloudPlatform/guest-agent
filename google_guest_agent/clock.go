@@ -50,7 +50,7 @@ func (a *clockskewMgr) set() error {
 			}()
 		}
 		// TODO get server
-		return runCmd(exec.Command("ntpdate", "metadata.google.internal"))
+		return runCmd(exec.Command("ntpdate", "169.254.169.254"))
 	}
 
 	res := runCmdOutput(exec.Command("/sbin/hwclock", "--hctosys", "-u", "--noadjfile"))
