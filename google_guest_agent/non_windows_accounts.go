@@ -78,8 +78,8 @@ func (a *accountsMgr) diff() bool {
 		}
 	}
 	// If we've just disabled OS Login.
-	oldOslogin, _ := getOSLoginEnabled(oldMetadata)
-	newOslogin, _ := getOSLoginEnabled(newMetadata)
+	oldOslogin, _, _ := getOSLoginEnabled(oldMetadata)
+	newOslogin, _, _ := getOSLoginEnabled(newMetadata)
 	if oldOslogin && !newOslogin {
 		return true
 	}
@@ -92,7 +92,7 @@ func (a *accountsMgr) timeout() bool {
 }
 
 func (a *accountsMgr) disabled(os string) bool {
-	oslogin, _ := getOSLoginEnabled(newMetadata)
+	oslogin, _, _ := getOSLoginEnabled(newMetadata)
 	return false ||
 		os == "windows" || oslogin ||
 		!config.Section("Daemons").Key("accounts_daemon").MustBool(true)
