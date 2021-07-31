@@ -122,7 +122,7 @@ func (a *accountsMgr) set() error {
 			continue
 		}
 		user := key[:idx]
-		if user == "" {
+		if user == "" || user == "root" {
 			continue
 		}
 		userKeys := mdKeyMap[user]
