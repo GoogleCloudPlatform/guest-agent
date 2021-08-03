@@ -122,10 +122,12 @@ func (o *osloginMgr) set() error {
 			logger.Errorf("Error creating OS Login directory: %v.", err)
 		}
 
+		logger.Debugf("create OS Login sudoers config, if needed")
 		if err := createOSLoginSudoersFile(); err != nil {
 			logger.Errorf("Error creating OS Login sudoers file: %v.", err)
 		}
 
+		logger.Debugf("starting OS Login nss cache fill")
 		if err := runCmd(exec.Command("google_oslogin_nss_cache")); err != nil {
 			logger.Errorf("Error updating NSS cache: %v.", err)
 		}
@@ -157,6 +159,7 @@ func filterGoogleLines(contents string) []string {
 }
 
 func writeConfigFile(path, contents string) error {
+	logger.Debugf("writing %s", path)
 	file, err := os.OpenFile(path, os.O_WRONLY|os.O_TRUNC, 0777)
 	if err != nil {
 		return err

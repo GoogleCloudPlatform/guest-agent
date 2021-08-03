@@ -236,6 +236,7 @@ func watchMetadata(ctx context.Context) (*metadata, error) {
 }
 
 func getMetadata(ctx context.Context, hang bool) (*metadata, error) {
+	logger.Debugf("getMetadata, %t", hang)
 	client := &http.Client{
 		Timeout: defaultTimeout,
 	}
