@@ -114,14 +114,14 @@ func runUpdate() {
 		go func(mgr manager) {
 			defer wg.Done()
 			if mgr.disabled(runtime.GOOS) {
-				logger.Debugf("manager %#v disabled, skipping")
+				logger.Debugf("manager %#v disabled, skipping", mgr)
 				return
 			}
 			if !mgr.timeout() && !mgr.diff() {
-				logger.Debugf("manager %#v reports no diff")
+				logger.Debugf("manager %#v reports no diff", mgr)
 				return
 			}
-			logger.Debugf("running %#v manager")
+			logger.Debugf("running %#v manager", mgr)
 			if err := mgr.set(); err != nil {
 				logger.Errorf("error running %#v manager: %s", mgr, err)
 			}
