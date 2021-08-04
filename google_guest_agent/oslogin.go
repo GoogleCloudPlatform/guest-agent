@@ -105,6 +105,7 @@ func (o *osloginMgr) set() error {
 
 	for _, svc := range []string{"nscd", "unscd", "systemd-logind", "cron", "crond"} {
 		// These services should be restarted if running
+		logger.Debugf("systemctl try-restart %s, if it exists", svc)
 		if err := systemctlTryRestart(svc); err != nil {
 			logger.Errorf("Error restarting service: %v.", err)
 		}
@@ -112,12 +113,14 @@ func (o *osloginMgr) set() error {
 
 	// SSH should be started if not running, reloaded otherwise.
 	for _, svc := range []string{"ssh", "sshd"} {
+		logger.Debugf("systemctl reload-or-restart %s, if it exists", svc)
 		if err := systemctlReloadOrRestart(svc); err != nil {
 			logger.Errorf("Error reloading service: %v.", err)
 		}
 	}
 
 	if enable {
+		logger.Debugf("Create OS Login dirs, if needed")
 		if err := createOSLoginDirs(); err != nil {
 			logger.Errorf("Error creating OS Login directory: %v.", err)
 		}
@@ -354,17 +357,31 @@ func createOSLoginSudoersFile() error {
 // systemctlTryRestart tries to restart a systemd service if it is already
 // running. Stopped services will be ignored.
 func systemctlTryRestart(servicename string) error {
+	if !systemctlUnitExists(servicename) {
+		return nil
+	}
 	return runCmd(exec.Command("systemctl", "try-restart", servicename+".service"))
 }
 
 // systemctlReloadOrRestart tries to reload a running systemd service if
 // supported, restart otherwise. Stopped services will be started.
 func systemctlReloadOrRestart(servicename string) error {
+	if !systemctlUnitExists(servicename) {
+		return nil
+	}
 	return runCmd(exec.Command("systemctl", "reload-or-restart", servicename+".service"))
 }
 
 // systemctlStart tries to start a stopped systemd service. Started services
 // will be ignored.
 func systemctlStart(servicename string) error {
+	if !systemctlUnitExists(servicename) {
+		return nil
+	}
 	return runCmd(exec.Command("systemctl", "start", servicename+".service"))
+}
+
+func systemctlUnitExists(servicename string) bool {
+	res := runCmdOutput(exec.Command("systemctl", "list-units", "--all", servicename+".service"))
+	return !strings.Contains(res.Stdout(), "0 loaded units listed")
 }
