@@ -279,6 +279,7 @@ func (a *addressMgr) set() error {
 
 	if config.Section("NetworkInterfaces").Key("setup").MustBool(true) {
 		if runtime.GOOS != "windows" {
+			logger.Debugf("Configure IPv6")
 			if err := configureIPv6(); err != nil {
 				// Continue through IPv6 configuration errors.
 				logger.Errorf("Error configuring IPv6: %v", err)
@@ -286,6 +287,7 @@ func (a *addressMgr) set() error {
 		}
 
 		if runtime.GOOS != "windows" && !interfacesEnabled {
+			logger.Debugf("Enable network interfaces")
 			if err := enableNetworkInterfaces(); err != nil {
 				return err
 			}
@@ -297,6 +299,7 @@ func (a *addressMgr) set() error {
 		return nil
 	}
 
+	logger.Debugf("Add routes for aliases, forwarded IP and target-instance IPs")
 	// Add routes for IP aliases, forwarded and target-instance IPs.
 	for _, ni := range newMetadata.Instance.NetworkInterfaces {
 		iface, err := getInterfaceByMAC(ni.Mac)
@@ -534,6 +537,8 @@ func enableSLESInterfaces(interfaces []string) error {
 	var err error
 	var priority = 10100
 	for _, iface := range interfaces {
+		logger.Debugf("write enabling ifcfg-%s config", iface)
+
 		var ifcfg *os.File
 		ifcfg, err = os.Create("/etc/sysconfig/network/ifcfg-" + iface)
 		if err != nil {
@@ -558,6 +563,7 @@ func enableSLESInterfaces(interfaces []string) error {
 
 // disableNM writes an ifcfg file with DHCP and NetworkManager disabled.
 func disableNM(iface string) error {
+	logger.Debugf("write disabling ifcfg-%s config", iface)
 	filename := "/etc/sysconfig/network-scripts/ifcfg-" + iface
 	ifcfg, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
 	if err == nil {

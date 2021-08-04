@@ -26,6 +26,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -112,9 +113,15 @@ func runUpdate() {
 		wg.Add(1)
 		go func(mgr manager) {
 			defer wg.Done()
-			if mgr.disabled(runtime.GOOS) || (!mgr.timeout() && !mgr.diff()) {
+			if mgr.disabled(runtime.GOOS) {
+				logger.Debugf("manager %#v disabled, skipping", mgr)
 				return
 			}
+			if !mgr.timeout() && !mgr.diff() {
+				logger.Debugf("manager %#v reports no diff", mgr)
+				return
+			}
+			logger.Debugf("running %#v manager", mgr)
 			if err := mgr.set(); err != nil {
 				logger.Errorf("error running %#v manager: %s", mgr, err)
 			}
@@ -126,8 +133,16 @@ func runUpdate() {
 func run(ctx context.Context) {
 	opts := logger.LogOpts{LoggerName: programName}
 	if runtime.GOOS == "windows" {
-		opts.FormatFunction = logFormat
+		opts.FormatFunction = logFormatWindows
 		opts.Writers = []io.Writer{&serialPort{"COM1"}}
+	} else {
+		opts.FormatFunction = logFormat
+		opts.Writers = []io.Writer{os.Stdout}
+		// Local logging is syslog; we will just use stdout in Linux.
+		opts.DisableLocalLogging = true
+	}
+	if os.Getenv("GUEST_AGENT_DEBUG") != "" {
+		opts.Debug = true
 	}
 
 	var err error
@@ -206,7 +221,7 @@ type execResult struct {
 }
 
 func (e execResult) Error() string {
-	return e.err
+	return strings.TrimSuffix(e.err, "\n")
 }
 
 func (e execResult) ExitCode() int {
@@ -230,6 +245,7 @@ func runCmd(cmd *exec.Cmd) error {
 }
 
 func runCmdOutput(cmd *exec.Cmd) *execResult {
+	logger.Debugf("exec: %v", cmd)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -263,9 +279,21 @@ func containsString(s string, ss []string) bool {
 	return false
 }
 
-func logFormat(e logger.LogEntry) string {
+func logFormatWindows(e logger.LogEntry) string {
 	now := time.Now().Format("2006/01/02 15:04:05")
+	// 2006/01/02 15:04:05 GCEGuestAgent This is a log message.
 	return fmt.Sprintf("%s %s: %s", now, programName, e.Message)
+}
+
+func logFormat(e logger.LogEntry) string {
+	switch e.Severity {
+	case logger.Error, logger.Critical, logger.Debug:
+		// ERROR file.go:82 This is a log message.
+		return fmt.Sprintf("%s %s:%d %s", strings.ToUpper(e.Severity.String()), e.Source.File, e.Source.Line, e.Message)
+	default:
+		// This is a log message.
+		return e.Message
+	}
 }
 
 func closer(c io.Closer) {
