@@ -21,6 +21,7 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 )
@@ -118,6 +119,9 @@ func (o *osloginMgr) set() error {
 			logger.Errorf("Error reloading service: %v.", err)
 		}
 	}
+
+	now := fmt.Sprintf("%d", time.Now().Unix())
+	writeGuestAttributes("guest-agent/sshable", now)
 
 	if enable {
 		logger.Debugf("Create OS Login dirs, if needed")
