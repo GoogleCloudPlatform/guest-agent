@@ -203,7 +203,7 @@ func (a *wsfcAgent) handleHealthCheckRequest(conn net.Conn) {
 	// Read the incoming connection into the buffer.
 	reqLen, err := conn.Read(buf)
 	if err != nil {
-		logger.Errorf("wsfc - error on processing request: %s", err)
+		logger.Errorf("wsfc - error on processing tcp request for network heartbeat health check: %s", err)
 		return
 	}
 

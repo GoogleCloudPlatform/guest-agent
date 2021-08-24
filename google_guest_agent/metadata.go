@@ -31,7 +31,7 @@ import (
 const defaultEtag = "NONE"
 
 var (
-	metadataURL       = "http://metadata.google.internal/computeMetadata/v1/"
+	metadataURL       = "http://169.254.169.254/computeMetadata/v1/"
 	metadataRecursive = "/?recursive=true&alt=json"
 	metadataHang      = "&wait_for_change=true&timeout_sec=60"
 	defaultTimeout    = 70 * time.Second
@@ -90,6 +90,7 @@ type instance struct {
 
 type networkInterfaces struct {
 	ForwardedIps      []string
+	ForwardedIpv6s    []string
 	TargetInstanceIps []string
 	IPAliases         []string
 	Mac               string
@@ -125,6 +126,7 @@ type windowsKey struct {
 	UserName            string
 	HashFunction        string
 	AddToAdministrators *bool
+	PasswordLength      int
 }
 
 type windowsKeys []windowsKey
@@ -234,6 +236,7 @@ func watchMetadata(ctx context.Context) (*metadata, error) {
 }
 
 func getMetadata(ctx context.Context, hang bool) (*metadata, error) {
+	logger.Debugf("getMetadata, %t", hang)
 	client := &http.Client{
 		Timeout: defaultTimeout,
 	}

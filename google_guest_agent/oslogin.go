@@ -103,21 +103,34 @@ func (o *osloginMgr) set() error {
 		logger.Errorf("Error updating group.conf: %v.", err)
 	}
 
-	for _, svc := range []string{"ssh", "sshd", "nscd", "unscd", "systemd-logind", "cron", "crond"} {
-		if err := restartService(svc); err != nil {
+	for _, svc := range []string{"nscd", "unscd", "systemd-logind", "cron", "crond"} {
+		// These services should be restarted if running
+		logger.Debugf("systemctl try-restart %s, if it exists", svc)
+		if err := systemctlTryRestart(svc); err != nil {
 			logger.Errorf("Error restarting service: %v.", err)
 		}
 	}
 
+	// SSH should be started if not running, reloaded otherwise.
+	for _, svc := range []string{"ssh", "sshd"} {
+		logger.Debugf("systemctl reload-or-restart %s, if it exists", svc)
+		if err := systemctlReloadOrRestart(svc); err != nil {
+			logger.Errorf("Error reloading service: %v.", err)
+		}
+	}
+
 	if enable {
+		logger.Debugf("Create OS Login dirs, if needed")
 		if err := createOSLoginDirs(); err != nil {
 			logger.Errorf("Error creating OS Login directory: %v.", err)
 		}
 
+		logger.Debugf("create OS Login sudoers config, if needed")
 		if err := createOSLoginSudoersFile(); err != nil {
 			logger.Errorf("Error creating OS Login sudoers file: %v.", err)
 		}
 
+		logger.Debugf("starting OS Login nss cache fill")
 		if err := runCmd(exec.Command("google_oslogin_nss_cache")); err != nil {
 			logger.Errorf("Error updating NSS cache: %v.", err)
 		}
@@ -149,6 +162,7 @@ func filterGoogleLines(contents string) []string {
 }
 
 func writeConfigFile(path, contents string) error {
+	logger.Debugf("writing %s", path)
 	file, err := os.OpenFile(path, os.O_WRONLY|os.O_TRUNC, 0777)
 	if err != nil {
 		return err
@@ -171,6 +185,8 @@ func updateSSHConfig(sshConfig string, enable, twofactor bool) string {
 		authorizedKeysUser = "AuthorizedKeysCommandRunAs root"
 		twoFactorAuthMethods = "RequiredAuthentications2 publickey,keyboard-interactive"
 	}
+	matchblock1 := `Match User sa_*`
+	matchblock2 := `       AuthenticationMethods publickey`
 
 	filtered := filterGoogleLines(string(sshConfig))
 
@@ -181,6 +197,9 @@ func updateSSHConfig(sshConfig string, enable, twofactor bool) string {
 		}
 		osLoginBlock = append(osLoginBlock, googleBlockEnd)
 		filtered = append(osLoginBlock, filtered...)
+		if twofactor {
+			filtered = append(filtered, googleBlockStart, matchblock1, matchblock2, googleBlockEnd)
+		}
 	}
 
 	return strings.Join(filtered, "\n")
@@ -335,36 +354,34 @@ func createOSLoginSudoersFile() error {
 	return sudoFile.Close()
 }
 
-// restartService tries to restart a service on linux-like systems. It attempts
-// to find and use the following mechanisms in order:
-// 1. The `systemctl` utility, if in a systemd environment.
-// 2. The `service` command, if present.
-// 3. A SysVinit script directly, if present.
-// Missing mechanisms and missing or disabled services are ignored.
-func restartService(servicename string) error {
-	init, err := os.Readlink("/sbin/init")
-	if err == nil && strings.Contains(init, "systemd") {
-		if systemctl, err := exec.LookPath("systemctl"); err == nil {
-			if err := runCmd(exec.Command(systemctl, "is-active", servicename+".service")); err == nil {
-				return runCmd(exec.Command(systemctl, "restart", servicename+".service"))
-			}
-			return nil
-		}
-	}
-	service, err := exec.LookPath("service")
-	if err == nil {
-		if err := runCmd(exec.Command(service, servicename, "status")); err == nil {
-			return runCmd(exec.Command(service, servicename, "restart"))
-		}
+// systemctlTryRestart tries to restart a systemd service if it is already
+// running. Stopped services will be ignored.
+func systemctlTryRestart(servicename string) error {
+	if !systemctlUnitExists(servicename) {
 		return nil
 	}
-	initService := "/etc/init.d/" + servicename
-	if _, err := os.Stat(initService); err == nil {
-		if err := runCmd(exec.Command(initService, "status")); err == nil {
-			return runCmd(exec.Command(initService, "restart"))
-		}
-		return nil
-	}
+	return runCmd(exec.Command("systemctl", "try-restart", servicename+".service"))
+}
 
-	return nil
+// systemctlReloadOrRestart tries to reload a running systemd service if
+// supported, restart otherwise. Stopped services will be started.
+func systemctlReloadOrRestart(servicename string) error {
+	if !systemctlUnitExists(servicename) {
+		return nil
+	}
+	return runCmd(exec.Command("systemctl", "reload-or-restart", servicename+".service"))
+}
+
+// systemctlStart tries to start a stopped systemd service. Started services
+// will be ignored.
+func systemctlStart(servicename string) error {
+	if !systemctlUnitExists(servicename) {
+		return nil
+	}
+	return runCmd(exec.Command("systemctl", "start", servicename+".service"))
+}
+
+func systemctlUnitExists(servicename string) bool {
+	res := runCmdOutput(exec.Command("systemctl", "list-units", "--all", servicename+".service"))
+	return !strings.Contains(res.Stdout(), "0 loaded units listed")
 }

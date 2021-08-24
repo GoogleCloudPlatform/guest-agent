@@ -34,6 +34,9 @@ import (
 func agentInit(ctx context.Context) {
 	// Actions to take on agent startup.
 	//
+	// All platforms:
+	//  - Determine if metadata hostname can be resolved.
+	//
 	// On Windows:
 	//  - Add route to metadata server
 	// On Linux:
@@ -44,6 +47,7 @@ func agentInit(ctx context.Context) {
 	//  - Run `google_optimize_local_ssd` script.
 	//  - Run `google_set_multiqueue` script.
 	// TODO incorporate these scripts into the agent. liamh@12-11-19
+
 	if runtime.GOOS == "windows" {
 		msg := "Could not set default route to metadata"
 		fes, err := getIPForwardEntries()
@@ -100,6 +104,8 @@ func agentInit(ctx context.Context) {
 		}
 	} else {
 		// Linux instance setup.
+		defer runCmd(exec.Command("systemd-notify", "--ready"))
+		defer logger.Debugf("notify systemd")
 
 		if config.Section("Snapshots").Key("enabled").MustBool(false) {
 			logger.Infof("Snapshot listener enabled")
@@ -121,6 +127,8 @@ func agentInit(ctx context.Context) {
 		// run once per boot, but it's harmless to run them on every
 		// boot. If this changes, we will hook these to an explicit
 		// on-boot signal.
+
+		logger.Debugf("set IO scheduler config")
 		if err := setIOScheduler(); err != nil {
 			logger.Warningf("Failed to set IO scheduler: %v", err)
 		}
@@ -136,6 +144,7 @@ func agentInit(ctx context.Context) {
 		// network access, this will become an indefinite wait.
 		// TODO: split agentInit into needs-network and no-network functions.
 		for newMetadata == nil {
+			logger.Debugf("populate first time metadata...")
 			newMetadata, _ = getMetadata(ctx, false)
 			time.Sleep(1 * time.Second)
 		}
@@ -259,6 +268,7 @@ func generateSSHKeys() error {
 			logger.Warningf("Generated key is malformed, not uploading")
 		}
 	}
+	runCmd(exec.Command("restorecon", "-FR", hostKeyDir))
 	return nil
 }
 
@@ -276,6 +286,7 @@ func generateBotoConfig() error {
 }
 
 func writeGuestAttributes(key, value string) error {
+	logger.Debugf("write guest attribute %q", key)
 	client := &http.Client{Timeout: defaultTimeout}
 	finalURL := metadataURL + "instance/guest-attributes/" + key
 	req, err := http.NewRequest("PUT", finalURL, strings.NewReader(value))

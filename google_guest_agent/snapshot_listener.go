@@ -27,15 +27,13 @@ import (
 )
 
 var (
+	scriptsDir                   = "/etc/google/snapshots/"
 	seenPreSnapshotOperationIds  = lru.New(128)
 	seenPostSnapshotOperationIds = lru.New(128)
 )
 
 type snapshotConfig struct {
-	timeout               time.Duration // seconds
-	preSnapshotScriptURL  string
-	postSnapshotScriptURL string
-	enabled               bool
+	timeout time.Duration // seconds
 }
 
 type invalidSnapshotConfig struct {
@@ -49,12 +47,6 @@ func (e *invalidSnapshotConfig) Error() string {
 func getSnapshotConfig() (snapshotConfig, error) {
 	var conf snapshotConfig
 	conf.timeout = time.Duration(config.Section("Snapshots").Key("timeout_in_seconds").MustInt(60)) * time.Second
-	conf.preSnapshotScriptURL = config.Section("Snapshots").Key("pre_snapshot_script").String()
-	conf.postSnapshotScriptURL = config.Section("Snapshots").Key("post_snapshot_script").String()
-
-	if conf.preSnapshotScriptURL == "" && conf.postSnapshotScriptURL == "" {
-		return conf, &invalidSnapshotConfig{"neither pre or post snapshot script has been configured"}
-	}
 
 	return conf, nil
 }
@@ -85,8 +77,8 @@ func listenForSnapshotRequests(address string, requestChan chan<- *sspb.GuestMes
 		logger.Infof("Attempting to connect to snapshot service at %s.", address)
 		conn, err := grpc.Dial(address, grpc.WithInsecure())
 		if err != nil {
-			logger.Errorf("Failed to connect: %v.", err)
-			continue
+			logger.Errorf("Failed to connect to snapshot service: %v.", err)
+			return
 		}
 
 		c := sspb.NewSnapshotServiceClient(conn)
@@ -97,18 +89,19 @@ func listenForSnapshotRequests(address string, requestChan chan<- *sspb.GuestMes
 		r, err := c.CreateConnection(ctx, &guestReady)
 		if err != nil {
 			logger.Errorf("Error creating connection: %v.", err)
+			cancel()
 			continue
 		}
 		for {
 			request, err := r.Recv()
 			if err != nil {
 				logger.Errorf("Error reading snapshot request: %v.", err)
+				cancel()
 				break
 			}
 			logger.Infof("Received snapshot request.")
 			requestChan <- request
 		}
-		cancel()
 	}
 }
 
@@ -138,7 +131,7 @@ func getSnapshotResponse(guestMessage *sspb.GuestMessage) *sspb.SnapshotResponse
 				return nil
 			}
 			seenPreSnapshotOperationIds.Add(request.GetOperationId(), request.GetOperationId())
-			url = config.preSnapshotScriptURL
+			url = scriptsDir + "pre.sh"
 		case sspb.OperationType_POST_SNAPSHOT:
 			logger.Infof("Handling post snapshot request for operation id %d.", request.GetOperationId())
 			_, found := seenPostSnapshotOperationIds.Get(request.GetOperationId())
@@ -147,7 +140,7 @@ func getSnapshotResponse(guestMessage *sspb.GuestMessage) *sspb.SnapshotResponse
 				return nil
 			}
 			seenPostSnapshotOperationIds.Add(request.GetOperationId(), request.GetOperationId())
-			url = config.postSnapshotScriptURL
+			url = scriptsDir + "post.sh"
 		default:
 			logger.Errorf("Unhandled operation type %d.", request.GetType())
 			return nil
@@ -167,9 +160,8 @@ func handleSnapshotRequests(address string, requestChan <-chan *sspb.GuestMessag
 	for {
 		conn, err := grpc.Dial(address, grpc.WithInsecure(), grpc.WithBlock())
 		if err != nil {
-			logger.Errorf("Failed to connect: %v.", err)
-			time.Sleep(1 * time.Second)
-			continue
+			logger.Errorf("Failed to connect to snapshot service: %v.", err)
+			return
 		}
 		for {
 			// Listen on channel and respond
@@ -187,12 +179,19 @@ func handleSnapshotRequests(address string, requestChan <-chan *sspb.GuestMessag
 			}
 		}
 	}
-
 }
 
 func startSnapshotListener(snapshotServiceIP string, snapshotServicePort int) {
 	requestChan := make(chan *sspb.GuestMessage)
 	address := fmt.Sprintf("%s:%d", snapshotServiceIP, snapshotServicePort)
+
+	// Create scripts directory if it doesn't exist.
+	_, err := os.Stat(scriptsDir)
+	if os.IsNotExist(err) {
+		// Make the directory only readable/writable/executable by root.
+		os.MkdirAll(scriptsDir, 0700)
+	}
+
 	go listenForSnapshotRequests(address, requestChan)
 	go handleSnapshotRequests(address, requestChan)
 }

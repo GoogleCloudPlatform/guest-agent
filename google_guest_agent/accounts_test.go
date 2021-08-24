@@ -96,29 +96,47 @@ func TestAccountsDisabled(t *testing.T) {
 }
 
 func TestNewPwd(t *testing.T) {
-	for i := 0; i < 100000; i++ {
-		pwd, err := newPwd()
-		if err != nil {
-			t.Fatal(err)
-		}
-		if len(pwd) != 15 {
-			t.Errorf("Password is not 15 characters: len(%s)=%d", pwd, len(pwd))
-		}
-		var l, u, n, s int
-		for _, r := range pwd {
-			switch {
-			case unicode.IsLower(r):
-				l = 1
-			case unicode.IsUpper(r):
-				u = 1
-			case unicode.IsDigit(r):
-				n = 1
-			case unicode.IsPunct(r) || unicode.IsSymbol(r):
-				s = 1
+	minPasswordLength := 15
+	maxPasswordLength := 255
+	var tests = []struct {
+		name               string
+		passwordLength     int
+		wantPasswordLength int
+	}{
+		{"0 characters, default value", 0, minPasswordLength},
+		{"5 characters, below min", 5, minPasswordLength},
+		{"15 characters", 5, minPasswordLength},
+		{"30 characters", 30, 30},
+		{"127 characters", 127, 127},
+		{"254 characters", 254, 254},
+		{"256 characters", 256, maxPasswordLength},
+	}
+
+	for _, tt := range tests {
+		for i := 0; i < 100000; i++ {
+			pwd, err := newPwd(tt.passwordLength)
+			if err != nil {
+				t.Fatal(err)
 			}
-		}
-		if l+u+n+s < 3 {
-			t.Errorf("Password does not have at least one character from 3 categories: '%v'", pwd)
+			if len(pwd) != tt.wantPasswordLength {
+				t.Errorf("Password is not %d characters: len(%s)=%d", tt.wantPasswordLength, pwd, len(pwd))
+			}
+			var l, u, n, s int
+			for _, r := range pwd {
+				switch {
+				case unicode.IsLower(r):
+					l = 1
+				case unicode.IsUpper(r):
+					u = 1
+				case unicode.IsDigit(r):
+					n = 1
+				case unicode.IsPunct(r) || unicode.IsSymbol(r):
+					s = 1
+				}
+			}
+			if l+u+n+s < 3 {
+				t.Errorf("Password does not have at least one character from 3 categories: '%v'", pwd)
+			}
 		}
 	}
 }

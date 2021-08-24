@@ -100,12 +100,15 @@ func (a *accountsMgr) disabled(os string) bool {
 
 func (a *accountsMgr) set() error {
 	if sshKeys == nil {
+		logger.Debugf("initialize sshKeys map")
 		sshKeys = make(map[string][]string)
 	}
 
+	logger.Debugf("create sudoers file if needed")
 	if err := createSudoersFile(); err != nil {
 		logger.Errorf("Error creating google-sudoers file: %v.", err)
 	}
+	logger.Debugf("create sudoers group if needed")
 	if err := createSudoersGroup(); err != nil {
 		logger.Errorf("Error creating google-sudoers group: %v.", err)
 	}
@@ -119,10 +122,12 @@ func (a *accountsMgr) set() error {
 	for _, key := range removeExpiredKeys(mdkeys) {
 		idx := strings.Index(key, ":")
 		if idx == -1 {
+			logger.Debugf("invalid ssh key entry: %q", key)
 			continue
 		}
 		user := key[:idx]
 		if user == "" {
+			logger.Debugf("invalid ssh key entry: %q", key)
 			continue
 		}
 		userKeys := mdKeyMap[user]
@@ -130,10 +135,11 @@ func (a *accountsMgr) set() error {
 		mdKeyMap[user] = userKeys
 	}
 
+	logger.Debugf("read google users file")
 	gUsers, err := readGoogleUsersFile()
 	if err != nil {
 		// TODO: is this OK to continue past?
-		logger.Errorf("Couldn't read google users file: %v.", err)
+		logger.Errorf("Couldn't read google_users file: %v.", err)
 	}
 
 	// Update SSH keys, creating Google users as needed.
@@ -175,9 +181,19 @@ func (a *accountsMgr) set() error {
 	}
 
 	// Update the google_users file if we've added or removed any users.
+	logger.Debugf("write google_users file")
 	if err := writeGoogleUsersFile(); err != nil {
 		logger.Errorf("Error writing google_users file: %v.", err)
 	}
+
+	// Start SSHD if not started. We do this in agent instead of adding a
+	// Wants= directive, and here instead of instance setup, so that this
+	// can be disabled by the instance configs file.
+	for _, svc := range []string{"ssh", "sshd"} {
+		// Ignore output, it's just a best effort.
+		systemctlStart(svc)
+	}
+
 	return nil
 }
 

@@ -184,6 +184,8 @@ func TestUpdateSSHConfig(t *testing.T) {
 	authorizedKeysCommand := "AuthorizedKeysCommand /usr/bin/google_authorized_keys"
 	authorizedKeysUser := "AuthorizedKeysCommandUser root"
 	twoFactorAuthMethods := "AuthenticationMethods publickey,keyboard-interactive"
+	matchblock1 := `Match User sa_*`
+	matchblock2 := `       AuthenticationMethods publickey`
 
 	var tests = []struct {
 		contents, want    []string
@@ -205,6 +207,10 @@ func TestUpdateSSHConfig(t *testing.T) {
 				challengeResponseEnable,
 				googleBlockEnd,
 				"line1",
+				googleBlockStart,
+				matchblock1,
+				matchblock2,
+				googleBlockEnd,
 			},
 			enable:    true,
 			twofactor: true,
@@ -226,6 +232,10 @@ func TestUpdateSSHConfig(t *testing.T) {
 				googleBlockEnd,
 				"line1",
 				"line3",
+				googleBlockStart,
+				matchblock1,
+				matchblock2,
+				googleBlockEnd,
 			},
 			enable:    true,
 			twofactor: true,
