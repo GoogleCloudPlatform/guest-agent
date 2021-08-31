@@ -182,14 +182,15 @@ func TestUpdateNSSwitchConfig(t *testing.T) {
 func TestUpdateSSHConfig(t *testing.T) {
 	challengeResponseEnable := "ChallengeResponseAuthentication yes"
 	authorizedKeysCommand := "AuthorizedKeysCommand /usr/bin/google_authorized_keys"
+	authorizedKeysCommandSk := "AuthorizedKeysCommand /usr/bin/google_authorized_keys_sk"
 	authorizedKeysUser := "AuthorizedKeysCommandUser root"
 	twoFactorAuthMethods := "AuthenticationMethods publickey,keyboard-interactive"
 	matchblock1 := `Match User sa_*`
 	matchblock2 := `       AuthenticationMethods publickey`
 
 	var tests = []struct {
-		contents, want    []string
-		enable, twofactor bool
+		contents, want          []string
+		enable, twofactor, skey bool
 	}{
 		{
 			// Full block is created, any others removed.
@@ -214,6 +215,7 @@ func TestUpdateSSHConfig(t *testing.T) {
 			},
 			enable:    true,
 			twofactor: true,
+			skey:      false,
 		},
 		{
 			// Full block is created, google comments removed.
@@ -239,6 +241,7 @@ func TestUpdateSSHConfig(t *testing.T) {
 			},
 			enable:    true,
 			twofactor: true,
+			skey:      false,
 		},
 		{
 			// Block is created without two-factor options.
@@ -256,6 +259,7 @@ func TestUpdateSSHConfig(t *testing.T) {
 			},
 			enable:    true,
 			twofactor: false,
+			skey:      false,
 		},
 		{
 			// Existing block is removed.
@@ -272,6 +276,28 @@ func TestUpdateSSHConfig(t *testing.T) {
 			},
 			enable:    false,
 			twofactor: true,
+			skey:      false,
+		},
+		{
+			// Skey binary is chosen instead.
+			contents: []string{
+				"line1",
+				"line2",
+				googleBlockStart,
+				"line3",
+				googleBlockEnd,
+			},
+			want: []string{
+				googleBlockStart,
+				authorizedKeysCommandSk,
+				authorizedKeysUser,
+				googleBlockEnd,
+				"line1",
+				"line2",
+			},
+			enable:    true,
+			twofactor: false,
+			skey:      true,
 		},
 	}
 
@@ -279,7 +305,7 @@ func TestUpdateSSHConfig(t *testing.T) {
 		contents := strings.Join(tt.contents, "\n")
 		want := strings.Join(tt.want, "\n")
 
-		if res := updateSSHConfig(contents, tt.enable, tt.twofactor); res != want {
+		if res := updateSSHConfig(contents, tt.enable, tt.twofactor, tt.skey); res != want {
 			t.Errorf("test %v\nwant:\n%v\ngot:\n%v\n", idx, want, res)
 		}
 	}
@@ -440,42 +466,55 @@ func TestUpdateGroupConf(t *testing.T) {
 
 func TestGetOSLoginEnabled(t *testing.T) {
 	var tests = []struct {
-		md                string
-		enable, twofactor bool
+		md                      string
+		enable, twofactor, skey bool
 	}{
 		{
 			md:        `{"instance": {"attributes": {"enable-oslogin": "true", "enable-oslogin-2fa": "true"}}}`,
 			enable:    true,
 			twofactor: true,
+			skey:      false,
 		},
 		{
 			md:        `{"project": {"attributes": {"enable-oslogin": "true", "enable-oslogin-2fa": "true"}}}`,
 			enable:    true,
 			twofactor: true,
+			skey:      false,
 		},
 		{
 			// Instance keys take precedence
 			md:        `{"project": {"attributes": {"enable-oslogin": "false", "enable-oslogin-2fa": "false"}}, "instance": {"attributes": {"enable-oslogin": "true", "enable-oslogin-2fa": "true"}}}`,
 			enable:    true,
 			twofactor: true,
+			skey:      false,
 		},
 		{
 			// Instance keys take precedence
 			md:        `{"project": {"attributes": {"enable-oslogin": "true", "enable-oslogin-2fa": "true"}}, "instance": {"attributes": {"enable-oslogin": "false", "enable-oslogin-2fa": "false"}}}`,
 			enable:    false,
 			twofactor: false,
+			skey:      false,
 		},
 		{
 			// Handle weird values
 			md:        `{"instance": {"attributes": {"enable-oslogin": "TRUE", "enable-oslogin-2fa": "foobar"}}}`,
 			enable:    true,
 			twofactor: false,
+			skey:      false,
 		},
 		{
 			// Mixed test
 			md:        `{"project": {"attributes": {"enable-oslogin": "true", "enable-oslogin-2fa": "true"}}, "instance": {"attributes": {"enable-oslogin-2fa": "false"}}}`,
 			enable:    true,
 			twofactor: false,
+			skey:      false,
+		},
+		{
+			// Skey test
+			md:        `{"instance": {"attributes": {"enable-oslogin": "true", "enable-oslogin-2fa": "true", "enable-oslogin-sk": "true"}}}`,
+			enable:    true,
+			twofactor: true,
+			skey:      true,
 		},
 	}
 
@@ -484,9 +523,9 @@ func TestGetOSLoginEnabled(t *testing.T) {
 		if err := json.Unmarshal([]byte(tt.md), &md); err != nil {
 			t.Errorf("Failed to unmarshal metadata JSON for test %v: %v", idx, err)
 		}
-		enable, twofactor := getOSLoginEnabled(&md)
-		if enable != tt.enable || twofactor != tt.twofactor {
-			t.Errorf("Test %v failed. Expected: %v/%v Got: %v/%v", idx, tt.enable, tt.twofactor, enable, twofactor)
+		enable, twofactor, skey := getOSLoginEnabled(&md)
+		if enable != tt.enable || twofactor != tt.twofactor || skey != tt.skey {
+			t.Errorf("Test %v failed. Expected: %v/%v/%v Got: %v/%v/%v", idx, tt.enable, tt.twofactor, tt.skey, enable, twofactor, skey)
 		}
 	}
 }
