@@ -410,8 +410,9 @@ func (s *serialPort) Write(b []byte) (int, error) {
 	return p.Write(b)
 }
 
-func logFormat(e logger.LogEntry) string {
+func logFormatWindows(e logger.LogEntry) string {
 	now := time.Now().Format("2006/01/02 15:04:05")
+	// 2006/01/02 15:04:05 GCEMetadataScripts This is a log message.
 	return fmt.Sprintf("%s %s: %s", now, programName, e.Message)
 }
 
@@ -427,15 +428,18 @@ func parseConfig(file string) (*ini.File, error) {
 func main() {
 	ctx := context.Background()
 
-	opts := logger.LogOpts{
-		LoggerName:     programName,
-		FormatFunction: logFormat,
-	}
+	opts := logger.LogOpts{LoggerName: programName}
 
 	cfgfile := configPath
 	if runtime.GOOS == "windows" {
 		cfgfile = winConfigPath
 		opts.Writers = []io.Writer{&serialPort{"COM1"}, os.Stdout}
+		opts.FormatFunction = logFormatWindows
+	} else {
+		opts.Writers = []io.Writer{os.Stdout}
+		opts.FormatFunction = func(e logger.LogEntry) string { return e.Message }
+		// Local logging is syslog; we will just use stdout in Linux.
+		opts.DisableLocalLogging = true
 	}
 
 	var err error
