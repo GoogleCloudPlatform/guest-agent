@@ -105,9 +105,9 @@ func runUpdate() {
 	mgrs := []manager{&addressMgr{}}
 	switch runtime.GOOS {
 	case "windows":
-		mgrs = append(mgrs, []manager{newWsfcManager(), &winAccountsMgr{}, &diagnosticsMgr{}}...)
+		mgrs = append(mgrs, []manager{newWsfcManager(), &winAccountsMgr{userManager: WindowsUserManager{}}, &diagnosticsMgr{}}...)
 	default:
-		mgrs = append(mgrs, []manager{&clockskewMgr{}, &osloginMgr{}, &accountsMgr{}}...)
+		mgrs = append(mgrs, []manager{&clockskewMgr{}, &osloginMgr{}, &accountsMgr{userManager: UnixUserManager{}}}...)
 	}
 	for _, mgr := range mgrs {
 		wg.Add(1)

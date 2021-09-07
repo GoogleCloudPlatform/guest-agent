@@ -57,7 +57,9 @@ func compareStringSlice(first, second []string) bool {
 	return true
 }
 
-type accountsMgr struct{}
+type accountsMgr struct{
+	userManager UnixUserManager
+}
 
 func (a *accountsMgr) diff() bool {
 	// If any keys have changed.
@@ -146,7 +148,7 @@ func (a *accountsMgr) set() error {
 	for user, userKeys := range mdKeyMap {
 		if _, err := getPasswd(user); err != nil {
 			logger.Infof("Creating user %s.", user)
-			if err := createGoogleUser(user); err != nil {
+			if err := createGoogleUser(user, a.userManager); err != nil {
 				logger.Errorf("Error creating user: %s.", err)
 				continue
 			}
@@ -154,7 +156,7 @@ func (a *accountsMgr) set() error {
 		}
 		if _, ok := gUsers[user]; !ok {
 			logger.Infof("Adding existing user %s to google-sudoers group.", user)
-			if err := addUserToGroup(user, "google-sudoers"); err != nil {
+			if err := a.userManager.addUserToGroup(user, "google-sudoers"); err != nil {
 				logger.Errorf("%v.", err)
 			}
 		}
@@ -360,20 +362,20 @@ func createUserGroupCmd(cmd, user, group string) *exec.Cmd {
 
 // createGoogleUser creates a Google managed user account if needed and adds it
 // to the configured groups.
-func createGoogleUser(user string) error {
+func createGoogleUser(user string, usermgr UserManager) error {
 	var uid string
 	if config.Section("Accounts").Key("reuse_homedir").MustBool(false) {
-		uid = getUID(fmt.Sprintf("/home/%s", user))
+		uid = usermgr.getUID(fmt.Sprintf("/home/%s", user))
 	}
 
-	if err := createUser(user, uid); err != nil {
+	if err := usermgr.createUser(user, uid); err != nil {
 		return err
 	}
 	groups := config.Section("Accounts").Key("groups").MustString("adm,dip,docker,lxd,plugdev,video")
 	for _, group := range strings.Split(groups, ",") {
-		addUserToGroup(user, group)
+		usermgr.addUserToGroup(user, group)
 	}
-	return addUserToGroup(user, "google-sudoers")
+	return usermgr.addUserToGroup(user, "google-sudoers")
 }
 
 // removeGoogleUser removes Google managed users. If deprovision_remove is true, the

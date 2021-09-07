@@ -122,28 +122,28 @@ func (k windowsKey) expired() bool {
 	return t.Before(time.Now())
 }
 
-func (k windowsKey) createOrResetPwd() (*credsJSON, error) {
+func (k windowsKey) createOrResetPwd(userMgr UserManager) (*credsJSON, error) {
 	pwd, err := newPwd(k.PasswordLength)
 	if err != nil {
 		return nil, fmt.Errorf("error creating password: %v", err)
 	}
-	if _, err := userExists(k.UserName); err == nil {
+	if _, err := userMgr.userExists(k.UserName); err == nil {
 		logger.Infof("Resetting password for user %s", k.UserName)
 		if err := resetPwd(k.UserName, pwd); err != nil {
 			return nil, fmt.Errorf("error running resetPwd: %v", err)
 		}
 		if k.AddToAdministrators != nil && *k.AddToAdministrators == true {
-			if err := addUserToGroup(k.UserName, "Administrators"); err != nil {
+			if err := userMgr.addUserToGroup(k.UserName, "Administrators"); err != nil {
 				return nil, fmt.Errorf("error running addUserToGroup: %v", err)
 			}
 		}
 	} else {
 		logger.Infof("Creating user %s", k.UserName)
-		if err := createUser(k.UserName, pwd); err != nil {
+		if err := userMgr.createUser(k.UserName, pwd); err != nil {
 			return nil, fmt.Errorf("error running createUser: %v", err)
 		}
 		if k.AddToAdministrators == nil || *k.AddToAdministrators == true {
-			if err := addUserToGroup(k.UserName, "Administrators"); err != nil {
+			if err := userMgr.addUserToGroup(k.UserName, "Administrators"); err != nil {
 				return nil, fmt.Errorf("error running addUserToGroup: %v", err)
 			}
 		}
@@ -198,7 +198,9 @@ func createcredsJSON(k windowsKey, pwd string) (*credsJSON, error) {
 	}, nil
 }
 
-type winAccountsMgr struct{}
+type winAccountsMgr struct{
+	userManager WindowsUserManager
+}
 
 func (a *winAccountsMgr) diff() bool {
 	return !reflect.DeepEqual(newMetadata.Instance.Attributes.WindowsKeys, oldMetadata.Instance.Attributes.WindowsKeys)
@@ -236,9 +238,8 @@ func (a *winAccountsMgr) set() error {
 	}
 
 	toAdd := compareAccounts(newKeys, regKeys)
-
 	for _, key := range toAdd {
-		creds, err := key.createOrResetPwd()
+		creds, err := key.createOrResetPwd(a.userManager)
 		if err == nil {
 			printCreds(creds)
 			continue

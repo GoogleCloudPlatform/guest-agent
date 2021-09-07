@@ -23,7 +23,13 @@ import (
 	"syscall"
 )
 
-func getUID(path string) string {
+type UnixUserManager struct{}
+
+func (u UnixUserManager) resetPwd(username, pwd string) error {
+	return nil
+}
+
+func (u UnixUserManager) getUID(path string) string {
 	if dir, err := os.Stat(path); err == nil {
 		if stat, ok := dir.Sys().(*syscall.Stat_t); ok {
 			return fmt.Sprintf("%d", stat.Uid)
@@ -32,7 +38,7 @@ func getUID(path string) string {
 	return ""
 }
 
-func createUser(username, uid string) error {
+func (u UnixUserManager) createUser(username, uid string) error {
 	useradd := config.Section("Accounts").Key("useradd_cmd").MustString("useradd -m -s /bin/bash -p * {user}")
 	if uid != "" {
 		useradd = fmt.Sprintf("%s -u %s", useradd, uid)
@@ -40,12 +46,12 @@ func createUser(username, uid string) error {
 	return runCmd(createUserGroupCmd(useradd, username, ""))
 }
 
-func addUserToGroup(user, group string) error {
+func (u UnixUserManager) addUserToGroup(user, group string) error {
 	gpasswdadd := config.Section("Accounts").Key("gpasswd_add_cmd").MustString("gpasswd -a {user} {group}")
 	return runCmd(createUserGroupCmd(gpasswdadd, user, group))
 }
 
-func userExists(name string) (bool, error) {
+func (u UnixUserManager) userExists(name string) (bool, error) {
 	if _, err := user.Lookup(name); err != nil {
 		return false, err
 	}

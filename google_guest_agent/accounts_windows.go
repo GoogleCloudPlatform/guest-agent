@@ -30,6 +30,8 @@ var (
 	procNetLocalGroupAddMembers = netAPI32.NewProc("NetLocalGroupAddMembers")
 )
 
+type WindowsUserManager struct {}
+
 type (
 	USER_INFO_0 struct {
 		Usri0_name LPWSTR
@@ -88,7 +90,7 @@ const (
 	UF_USE_AES_KEYS                           = 0x8000000
 )
 
-func resetPwd(username, pwd string) error {
+func (w WindowsUserManager) resetPwd(username, pwd string) error {
 	uPtr, err := syscall.UTF16PtrFromString(username)
 	if err != nil {
 		return fmt.Errorf("error encoding username to UTF16: %v", err)
@@ -110,7 +112,7 @@ func resetPwd(username, pwd string) error {
 	return nil
 }
 
-func addUserToGroup(username, group string) error {
+func (w WindowsUserManager) addUserToGroup(username, group string) error {
 	gPtr, err := syscall.UTF16PtrFromString(group)
 	if err != nil {
 		return fmt.Errorf("error encoding group to UTF16: %v", err)
@@ -137,7 +139,7 @@ func addUserToGroup(username, group string) error {
 	return nil
 }
 
-func createUser(username, pwd string) error {
+func (w WindowsUserManager) createUser(username, pwd string) error {
 	uPtr, err := syscall.UTF16PtrFromString(username)
 	if err != nil {
 		return fmt.Errorf("error encoding username to UTF16: %v", err)
@@ -165,7 +167,7 @@ func createUser(username, pwd string) error {
 	return nil
 }
 
-func userExists(name string) (bool, error) {
+func (w WindowsUserManager) userExists(name string) (bool, error) {
 	uPtr, err := syscall.UTF16PtrFromString(name)
 	if err != nil {
 		return false, fmt.Errorf("error encoding username to UTF16: %v", err)
@@ -183,6 +185,6 @@ func userExists(name string) (bool, error) {
 	return true, nil
 }
 
-func getUID(path string) string {
+func (w WindowsUserManager) getUID(path string) string {
 	return ""
 }
