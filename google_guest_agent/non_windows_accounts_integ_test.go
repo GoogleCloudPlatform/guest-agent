@@ -3,6 +3,8 @@
 package main
 
 import (
+	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"testing"
@@ -39,6 +41,9 @@ func TestCreateGoogleUser(t *testing.T) {
 			t.Errorf("test user has not been added to group %s", expected)
 		}
 	}
+	if _, err := os.Stat(fmt.Sprintf("/home/%s", testUser)); err != nil {
+		t.Errorf("test user home directory is not exist")
+	}
 	if err := createGoogleUser(testUser); err == nil {
 		t.Errorf("user should exist and return error but not")
 	}
@@ -56,6 +61,9 @@ func TestRemoveGoogleUser(t *testing.T) {
 	}
 	if exist, err := userExists(testUser); exist == true {
 		t.Errorf("test user should not exist")
+	}
+	if _, err := os.Stat(fmt.Sprintf("/home/%s", testUser)); err == nil {
+		t.Errorf("test user home directory should not exist")
 	}
 	if err := removeGoogleUser(testUser); err == nil {
 		t.Errorf("user has been removed and should return error but not")
