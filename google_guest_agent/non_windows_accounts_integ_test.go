@@ -1,3 +1,5 @@
+// +build integration
+
 package main
 
 import (
@@ -5,8 +7,6 @@ import (
 	"strings"
 	"testing"
 )
-
-// +build integration
 
 const testUser = "integration-test-user"
 
@@ -44,5 +44,18 @@ func TestRemoveGoogleUser(t *testing.T) {
 	}
 	if err := removeGoogleUser(testUser); err == nil {
 		t.Errorf("expected user has been removed and return error but not")
+	}
+}
+
+func TestGroupaddDuplicates(t *testing.T) {
+	cmd := exec.Command("groupadd", "integ-test-group")
+	ret := runCmdOutput(cmd)
+	if ret.ExitCode() != 0 {
+		t.Fatalf("got wrong exit code running \"groupadd integ-test-group\", expected 0 got %v\n", ret.ExitCode())
+	}
+	cmd = exec.Command("groupadd", "integ-test-group")
+	ret = runCmdOutput(cmd)
+	if ret.ExitCode() != 9 {
+		t.Fatalf("got wrong exit code running \"groupadd integ-test-group\", expected 9 got %v\n", ret.ExitCode())
 	}
 }
