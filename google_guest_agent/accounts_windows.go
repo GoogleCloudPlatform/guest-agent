@@ -26,6 +26,7 @@ var (
 	netAPI32                    = windows.NewLazySystemDLL("netapi32.dll")
 	procNetUserAdd              = netAPI32.NewProc("NetUserAdd")
 	procNetUserGetInfo          = netAPI32.NewProc("NetUserGetInfo")
+	procNetGroupGetUsers        = netAPI32.NewProc("NetGroupGetUsers")
 	procNetUserSetInfo          = netAPI32.NewProc("NetUserSetInfo")
 	procNetLocalGroupAddMembers = netAPI32.NewProc("NetLocalGroupAddMembers")
 )
@@ -50,12 +51,18 @@ type (
 		Lgrmi0_sid *syscall.SID
 	}
 
+	GROUP_USERS_INFO_0 struct {
+		Grui0_name LPWSTR
+	}
+
 	USER_INFO_1003 struct {
 		Usri1003_password LPWSTR
 	}
 )
 
 const (
+	MAX_PREFERRED_LENGTH = 100
+	
 	USER_PRIV_GUEST = 0
 	USER_PRIV_USER  = 1
 	USER_PRIV_ADMIN = 2
@@ -88,6 +95,7 @@ const (
 	UF_USE_AES_KEYS                           = 0x8000000
 )
 
+// https://docs.microsoft.com/en-us/windows/win32/api/lmaccess/nf-lmaccess-netusergetinfo
 func resetPwd(username, pwd string) error {
 	uPtr, err := syscall.UTF16PtrFromString(username)
 	if err != nil {
@@ -110,6 +118,7 @@ func resetPwd(username, pwd string) error {
 	return nil
 }
 
+// https://docs.microsoft.com/en-us/windows/win32/api/lmaccess/nf-lmaccess-netlocalgroupaddmembers
 func addUserToGroup(username, group string) error {
 	gPtr, err := syscall.UTF16PtrFromString(group)
 	if err != nil {
@@ -137,6 +146,7 @@ func addUserToGroup(username, group string) error {
 	return nil
 }
 
+// https://docs.microsoft.com/en-us/windows/win32/api/lmaccess/nf-lmaccess-netuseradd
 func createUser(username, pwd string) error {
 	uPtr, err := syscall.UTF16PtrFromString(username)
 	if err != nil {
@@ -165,8 +175,9 @@ func createUser(username, pwd string) error {
 	return nil
 }
 
-func userExists(name string) (bool, error) {
-	uPtr, err := syscall.UTF16PtrFromString(name)
+// https://docs.microsoft.com/en-us/windows/win32/api/lmaccess/nf-lmaccess-netusergetinfo
+func userExists(username string) (bool, error) {
+	uPtr, err := syscall.UTF16PtrFromString(username)
 	if err != nil {
 		return false, fmt.Errorf("error encoding username to UTF16: %v", err)
 	}
@@ -185,4 +196,38 @@ func userExists(name string) (bool, error) {
 
 func getUID(path string) string {
 	return ""
+}
+
+// https://docs.microsoft.com/en-us/windows/win32/api/lmaccess/nf-lmaccess-netgroupgetusers
+func userExistsInGroup(username, group string) (bool, error) {
+	pPtr, err := syscall.UTF16PtrFromString(group)
+	if err != nil {
+		return false, fmt.Errorf("error encoding group to UTF16: %v", err)
+	}
+
+	nArray := [MAX_PREFERRED_LENGTH]GROUP_USERS_INFO_0{}
+	ret, _, _ := procNetGroupGetUsers.Call(
+		uintptr(0),
+		uintptr(unsafe.Pointer(pPtr)),
+		uintptr(0),
+		uintptr(unsafe.Pointer(&nArray)),
+		uintptr(100),
+		uintptr(0),
+		uintptr(0),
+		uintptr(unsafe.Pointer(nil)),
+	)
+	if ret != 0 {
+		return false, fmt.Errorf("nonzero return code from NetGroupGetUsers: %s", syscall.Errno(ret))
+	}
+	uPtr, err := syscall.UTF16PtrFromString(username)
+	if err != nil {
+		return false, fmt.Errorf("error encoding username to UTF16: %v", err)
+	}
+	for _, user := range nArray {
+		if user.Grui0_name == uPtr {
+			return true, nil
+		}
+	}
+
+	return false, fmt.Errorf("not found user %s in group %s", username, group)
 }
