@@ -349,7 +349,7 @@ func removeExpiredKeys(keys []string) []string {
 
 // Replaces {user} or {group} in command string. Supports legacy python-era
 // user command overrides.
-func createUserGroupCmd(cmd, user, group string) *exec.Cmd {
+func createOrDeleteUserGroupCmd(cmd, user, group string) *exec.Cmd {
 	cmd = strings.Replace(cmd, "{user}", user, 1)
 	cmd = strings.Replace(cmd, "{group}", group, 1)
 	cmds := strings.Fields(cmd)
@@ -383,13 +383,13 @@ func createGoogleUser(user string) error {
 func removeGoogleUser(user string) error {
 	if config.Section("Accounts").Key("deprovision_remove").MustBool(false) {
 		userdel := config.Section("Accounts").Key("userdel_cmd").MustString("userdel -r {user}")
-		return runCmd(createUserGroupCmd(userdel, user, ""))
+		return runCmd(createOrDeleteUserGroupCmd(userdel, user, ""))
 	}
 	if err := updateAuthorizedKeysFile(user, []string{}); err != nil {
 		return err
 	}
 	gpasswddel := config.Section("Accounts").Key("gpasswd_remove_cmd").MustString("gpasswd -d {user} {group}")
-	return runCmd(createUserGroupCmd(gpasswddel, user, "google-sudoers"))
+	return runCmd(createOrDeleteUserGroupCmd(gpasswddel, user, "google-sudoers"))
 
 }
 
@@ -412,7 +412,7 @@ func createSudoersFile() error {
 // createSudoersGroup creates the google-sudoers group if it does not exist.
 func createSudoersGroup() error {
 	groupadd := config.Section("Accounts").Key("groupadd_cmd").MustString("groupadd {group}")
-	ret := runCmdOutput(createUserGroupCmd(groupadd, "", "google-sudoers"))
+	ret := runCmdOutput(createOrDeleteUserGroupCmd(groupadd, "", "google-sudoers"))
 	if ret.ExitCode() == 9 {
 		// 9 means group already exists.
 		return nil

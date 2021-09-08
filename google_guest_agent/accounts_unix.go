@@ -37,12 +37,12 @@ func createUser(username, uid string) error {
 	if uid != "" {
 		useradd = fmt.Sprintf("%s -u %s", useradd, uid)
 	}
-	return runCmd(createUserGroupCmd(useradd, username, ""))
+	return runCmd(createOrDeleteUserGroupCmd(useradd, username, ""))
 }
 
 func addUserToGroup(user, group string) error {
 	gpasswdadd := config.Section("Accounts").Key("gpasswd_add_cmd").MustString("gpasswd -a {user} {group}")
-	return runCmd(createUserGroupCmd(gpasswdadd, user, group))
+	return runCmd(createOrDeleteUserGroupCmd(gpasswdadd, user, group))
 }
 
 func userExists(name string) (bool, error) {
