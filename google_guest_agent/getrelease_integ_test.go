@@ -1,3 +1,4 @@
+//go:build integration
 // +build integration
 
 package main
@@ -8,7 +9,7 @@ import (
 
 func TestGetRelease(t *testing.T) {
 	osrelease := getRelease()
-	if osrelease.os != "" {
+	if osrelease.os == "" {
 		t.Errorf("failed to get os name")
 	}
 	if osrelease.version.String() == "" {
