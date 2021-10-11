@@ -351,19 +351,17 @@ func getWantedKeys(args []string, os string) ([]string, error) {
 	}
 
 	var mdkeys []string
-	suffixes := []string{"url"}
+	var suffixes []string
 	if os == "windows" {
-		// This ordering matters. URL is last on Windows, first otherwise.
 		suffixes = []string{"ps1", "cmd", "bat", "url"}
+	} else {
+		suffixes = []string{"url"}
+		// The 'bare' startup-script or shutdown-script key, not supported on Windows.
+		mdkeys = append(mdkeys, fmt.Sprintf("%s-script", prefix))
 	}
 
 	for _, suffix := range suffixes {
 		mdkeys = append(mdkeys, fmt.Sprintf("%s-script-%s", prefix, suffix))
-	}
-
-	// The 'bare' startup-script or shutdown-script key, not supported on Windows.
-	if os != "windows" {
-		mdkeys = append(mdkeys, fmt.Sprintf("%s-script", prefix))
 	}
 
 	return mdkeys, nil
