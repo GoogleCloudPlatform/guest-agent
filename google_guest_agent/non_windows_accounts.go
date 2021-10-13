@@ -486,7 +486,7 @@ func updateAuthorizedKeysFile(user string, keys []string) error {
 		userKeys = append(userKeys, key)
 	}
 
-	newfile, err := os.OpenFile(tempPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	newfile, err := os.OpenFile(tempPath, os.O_WRONLY|os.O_CREATE, 0600)
 	if err != nil {
 		return err
 	}
