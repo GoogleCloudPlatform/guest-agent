@@ -95,7 +95,7 @@ func TestAccountsDisabled(t *testing.T) {
 	}
 }
 
-func TestNewPwd(t *testing.T) {
+func testNewPwd(t *testing.T) {
 	minPasswordLength := 15
 	maxPasswordLength := 255
 	var tests = []struct {
