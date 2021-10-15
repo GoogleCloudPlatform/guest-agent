@@ -472,13 +472,17 @@ func main() {
 		return
 	}
 
-	for key, value := range scripts {
-		logger.Infof("Found %s in metadata.", key)
-		if err := runScript(ctx, key, value); err != nil {
-			logger.Infof("%s %s", key, err)
+	for _, wantedKey := range wantedKeys {
+		value, ok := scripts[wantedKey]
+		if !ok {
 			continue
 		}
-		logger.Infof("%s exit status 0", key)
+		logger.Infof("Found %s in metadata.", wantedKey)
+		if err := runScript(ctx, wantedKey, value); err != nil {
+			logger.Infof("%s %s", wantedKey, err)
+			continue
+		}
+		logger.Infof("%s exit status 0", wantedKey)
 	}
 
 	logger.Infof("Finished running %s scripts.", os.Args[1])
