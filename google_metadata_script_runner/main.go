@@ -319,13 +319,20 @@ func runCmd(c *exec.Cmd, name string) error {
 	pw.Close()
 
 	in := bufio.NewScanner(pr)
-	for in.Scan() {
+	for {
+		if !in.Scan() {
+			if err := in.Err(); err != nil {
+				logger.Errorf("error while communicating with %q script: %v", name, err)
+			}
+			break
+		}
 		logger.Log(logger.LogEntry{
 			Message:   fmt.Sprintf("%s: %s", name, in.Text()),
 			CallDepth: 3,
 			Severity:  logger.Info,
 		})
 	}
+	pr.Close()
 
 	return c.Wait()
 }
