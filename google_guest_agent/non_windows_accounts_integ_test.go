@@ -1,4 +1,3 @@
-//go:build integration
 // +build integration
 
 package main
@@ -12,62 +11,51 @@ import (
 )
 
 const (
-	testUser       = "integration-test-user"
-	expectedGroups = []string{"adm", "dip", "docker", "lxd", "plugdev", "video", "google-sudoers"}
+	testUser           = "integration-test-user"
+	defaultgroupstring = "adm,dip,docker,lxd,plugdev,video,google-sudoers"
 )
 
-func TestCreateGoogleUser(t *testing.T) {
+func TestCreateAndRemoveGoogleUser(t *testing.T) {
 	if exist, err := userExists(testUser); exist == true {
-		t.Errorf("test user should not exist")
+		t.Fatalf("test user should not exist")
 	}
 	if err := createGoogleUser(testUser); err != nil {
-		t.Errorf("failed creating test user")
+		t.Errorf("createGoogleUser failed creating test user")
 	}
 	if exist, err := userExists(testUser); exist != true || err != nil {
-		t.Errorf("tesr user should exist")
+		t.Errorf("test user should exist")
 	}
 	cmd := exec.Command("groups", testUser)
 	ret := runCmdOutput(cmd)
 	if ret.ExitCode() != 0 {
-		t.Errorf("test user should be added to group")
+		t.Errorf("failed looking up groups for user: stdout:%s stderr:%s", ret.Stdout(), ret.Stderr())
 	}
 	groups := strings.Split(strings.TrimSpace(strings.Split(ret.Stdout(), ":")[1]), " ")
+	expectedGroups := config.Section("Accounts").Key("groups").MustString(defaultgroupstring)
 	for _, group := range groups {
-		if !contains(group, expectedGroups) {
+		if !contains(group, strings.Split(expectedGroups, ",")) {
 			t.Errorf("test user has been added to an unexpected group %s", group)
-		}
-	}
-	for _, expected := range expectedGroups {
-		if !contains(expected, groups) {
-			t.Errorf("test user has not been added to group %s", expected)
 		}
 	}
 	if _, err := os.Stat(fmt.Sprintf("/home/%s", testUser)); err != nil {
 		t.Errorf("test user home directory is not exist")
 	}
 	if err := createGoogleUser(testUser); err == nil {
-		t.Errorf("user should exist and return error but not")
-	}
-}
-
-func TestRemoveGoogleUser(t *testing.T) {
-	if exist, err := userExists(testUser); exist == true {
-		t.Errorf("test user should not exist")
-	}
-	if err := createGoogleUser(testUser); err != nil {
-		t.Errorf("failed creating test user")
+		t.Errorf("createGoogleUser did not return error when creating user that already exists")
 	}
 	if err := removeGoogleUser(testUser); err != nil {
-		t.Errorf("failed when remove google user")
+		t.Errorf("removeGoogleUser did not remove user")
 	}
 	if exist, err := userExists(testUser); exist == true {
 		t.Errorf("test user should not exist")
 	}
-	if _, err := os.Stat(fmt.Sprintf("/home/%s", testUser)); err == nil {
-		t.Errorf("test user home directory should not exist")
+	if config.Section("Accounts").Key("deprovision_remove").MustBool(false) {
+		if _, err := os.Stat(fmt.Sprintf("/home/%s", testUser)); err == nil {
+			t.Errorf("test user home directory should not exist")
+		}
 	}
 	if err := removeGoogleUser(testUser); err == nil {
-		t.Errorf("user has been removed and should return error but not")
+		t.Errorf("removeGoogleUser did not return error when removing user that doesn't exist")
 	}
 }
 
