@@ -482,7 +482,8 @@ func configureIPv6() error {
 	return nil
 }
 
-// enableNetworkInterfaces runs `dhclient eth1 eth2 ... ethN`.
+// enableNetworkInterfaces runs `dhclient eth1 eth2 ... ethN`
+// and `dhclient -6 eth1 eth2 ... ethN`.
 // On RHEL7, it also calls disableNM for each interface.
 // On SLES, it calls enableSLESInterfaces instead of dhclient.
 func enableNetworkInterfaces() error {
@@ -503,6 +504,22 @@ func enableNetworkInterfaces() error {
 		}
 		googleInterfaces = append(googleInterfaces, iface.Name)
 	}
+	var googleIpv6Interfaces []string
+	for _, ni := range newMetadata.Instance.NetworkInterfaces[1:] {
+		if ni.DHCPv6Refresh == "" {
+			// This interface is not IPv6 enabled
+			continue
+		}
+		iface, err := getInterfaceByMAC(ni.Mac)
+		if err != nil {
+			if !containsString(ni.Mac, badMAC) {
+				logger.Errorf("Error getting interface: %s", err)
+				badMAC = append(badMAC, ni.Mac)
+			}
+			continue
+		}
+		googleIpv6Interfaces = append(googleIpv6Interfaces, iface.Name)
+	}
 
 	switch {
 	case osRelease.os == "sles":
@@ -521,13 +538,14 @@ func enableNetworkInterfaces() error {
 			return runCmd(exec.Command(dhcpCommand))
 		}
 
-		dhclientArgs := []string{}
-		// The dhclient_script key has historically only been supported on EL6.
-		if (osRelease.os == "rhel" || osRelease.os == "centos") && osRelease.version.major == 6 {
-			dhclientArgs = append(dhclientArgs, "-sf", config.Section("NetworkInterfaces").Key("dhclient_script").MustString("/sbin/google-dhclient-script"))
+		// Try IPv4 first as it's higher priority.
+		if err := runCmd(exec.Command("dhclient", googleInterfaces...)); err != nil {
+			return err
 		}
-		dhclientArgs = append(dhclientArgs, googleInterfaces...)
-		return runCmd(exec.Command("dhclient", dhclientArgs...))
+
+		var dhclientArgs6 []string
+		dhclientArgs6 = append([]string{"-6"}, googleIpv6Interfaces...)
+		return runCmd(exec.Command("dhclient", dhclientArgs6...))
 	}
 }
 
@@ -548,6 +566,7 @@ func enableSLESInterfaces(interfaces []string) error {
 		contents := []string{
 			googleComment,
 			"STARTMODE=hotplug",
+			// NOTE: 'dhcp' is the dhcp4+dhcp6 option.
 			"BOOTPROTO=dhcp",
 			fmt.Sprintf("DHCLIENT_ROUTE_PRIORITY=%d", priority),
 		}

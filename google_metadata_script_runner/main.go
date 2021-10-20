@@ -319,13 +319,20 @@ func runCmd(c *exec.Cmd, name string) error {
 	pw.Close()
 
 	in := bufio.NewScanner(pr)
-	for in.Scan() {
+	for {
+		if !in.Scan() {
+			if err := in.Err(); err != nil {
+				logger.Errorf("error while communicating with %q script: %v", name, err)
+			}
+			break
+		}
 		logger.Log(logger.LogEntry{
 			Message:   fmt.Sprintf("%s: %s", name, in.Text()),
 			CallDepth: 3,
 			Severity:  logger.Info,
 		})
 	}
+	pr.Close()
 
 	return c.Wait()
 }
@@ -351,19 +358,17 @@ func getWantedKeys(args []string, os string) ([]string, error) {
 	}
 
 	var mdkeys []string
-	suffixes := []string{"url"}
+	var suffixes []string
 	if os == "windows" {
-		// This ordering matters. URL is last on Windows, first otherwise.
 		suffixes = []string{"ps1", "cmd", "bat", "url"}
+	} else {
+		suffixes = []string{"url"}
+		// The 'bare' startup-script or shutdown-script key, not supported on Windows.
+		mdkeys = append(mdkeys, fmt.Sprintf("%s-script", prefix))
 	}
 
 	for _, suffix := range suffixes {
 		mdkeys = append(mdkeys, fmt.Sprintf("%s-script-%s", prefix, suffix))
-	}
-
-	// The 'bare' startup-script or shutdown-script key, not supported on Windows.
-	if os != "windows" {
-		mdkeys = append(mdkeys, fmt.Sprintf("%s-script", prefix))
 	}
 
 	return mdkeys, nil
@@ -474,13 +479,17 @@ func main() {
 		return
 	}
 
-	for key, value := range scripts {
-		logger.Infof("Found %s in metadata.", key)
-		if err := runScript(ctx, key, value); err != nil {
-			logger.Infof("%s %s", key, err)
+	for _, wantedKey := range wantedKeys {
+		value, ok := scripts[wantedKey]
+		if !ok {
 			continue
 		}
-		logger.Infof("%s exit status 0", key)
+		logger.Infof("Found %s in metadata.", wantedKey)
+		if err := runScript(ctx, wantedKey, value); err != nil {
+			logger.Infof("%s %s", wantedKey, err)
+			continue
+		}
+		logger.Infof("%s exit status 0", wantedKey)
 	}
 
 	logger.Infof("Finished running %s scripts.", os.Args[1])

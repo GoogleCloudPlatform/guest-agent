@@ -95,7 +95,10 @@ func TestAccountsDisabled(t *testing.T) {
 	}
 }
 
-func TestNewPwd(t *testing.T) {
+// rename this with leading disabled because this is a resource
+// intensive test. this test takes approx. 141 seconds to complete, next
+// longest test is 0.43 seconds.
+func disabledTestNewPwd(t *testing.T) {
 	minPasswordLength := 15
 	maxPasswordLength := 255
 	var tests = []struct {

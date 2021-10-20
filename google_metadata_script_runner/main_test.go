@@ -68,16 +68,16 @@ func TestGetWantedArgs(t *testing.T) {
 			"startup",
 			"linux",
 			[]string{
-				"startup-script-url",
 				"startup-script",
+				"startup-script-url",
 			},
 		},
 		{
 			"shutdown",
 			"linux",
 			[]string{
-				"shutdown-script-url",
 				"shutdown-script",
+				"shutdown-script-url",
 			},
 		},
 	}
