@@ -16,7 +16,7 @@ const (
 )
 
 func TestCreateAndRemoveGoogleUser(t *testing.T) {
-	if exist, err := userExists(testUser); exist == true {
+	if exist, err := userExists(testUser); exist {
 		t.Fatalf("test user should not exist")
 	}
 	if err := createGoogleUser(testUser); err != nil {
@@ -31,14 +31,15 @@ func TestCreateAndRemoveGoogleUser(t *testing.T) {
 		t.Errorf("failed looking up groups for user: stdout:%s stderr:%s", ret.Stdout(), ret.Stderr())
 	}
 	groups := strings.Split(strings.TrimSpace(strings.Split(ret.Stdout(), ":")[1]), " ")
-	expectedGroups := config.Section("Accounts").Key("groups").MustString(defaultgroupstring)
+	expectedGroupString := config.Section("Accounts").Key("groups").MustString(defaultgroupstring)
+	expectedGroups := strings.Split(expectedGroupString, ",")
 	for _, group := range groups {
-		if !contains(group, strings.Split(expectedGroups, ",")) {
+		if !contains(group, expectedGroups) {
 			t.Errorf("test user has been added to an unexpected group %s", group)
 		}
 	}
 	if _, err := os.Stat(fmt.Sprintf("/home/%s", testUser)); err != nil {
-		t.Errorf("test user home directory is not exist")
+		t.Errorf("test user home directory does not exist")
 	}
 	if err := createGoogleUser(testUser); err == nil {
 		t.Errorf("createGoogleUser did not return error when creating user that already exists")
@@ -48,11 +49,6 @@ func TestCreateAndRemoveGoogleUser(t *testing.T) {
 	}
 	if exist, err := userExists(testUser); exist == true {
 		t.Errorf("test user should not exist")
-	}
-	if config.Section("Accounts").Key("deprovision_remove").MustBool(false) {
-		if _, err := os.Stat(fmt.Sprintf("/home/%s", testUser)); err == nil {
-			t.Errorf("test user home directory should not exist")
-		}
 	}
 	if err := removeGoogleUser(testUser); err == nil {
 		t.Errorf("removeGoogleUser did not return error when removing user that doesn't exist")
