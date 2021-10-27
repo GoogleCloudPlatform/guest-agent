@@ -390,7 +390,6 @@ func removeGoogleUser(user string) error {
 	}
 	gpasswddel := config.Section("Accounts").Key("gpasswd_remove_cmd").MustString("gpasswd -d {user} {group}")
 	return runCmd(createUserGroupCmd(gpasswddel, user, "google-sudoers"))
-
 }
 
 // createSudoersFile creates the google_sudoers configuration file if it does
