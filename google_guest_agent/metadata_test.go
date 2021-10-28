@@ -100,3 +100,29 @@ func TestBlockProjectKeys(t *testing.T) {
 		}
 	}
 }
+
+func TestMalformedKeys(t *testing.T) {
+	tests := []struct {
+		json string
+		res  map[string][]string
+	}{
+		{
+			`{"instance": {"attributes": {"ssh-keys": "malformed-ssh-keys"}}}`,
+			map[string][]string{},
+		},
+		{
+			`{"instance": {"attributes": {"sshKeys": ":malformed-ssh-keys"}}}`,
+			map[string][]string{},
+		},
+	}
+	for _, test := range tests {
+		var md metadata
+		if err := json.Unmarshal([]byte(test.json), &md); err != nil {
+			t.Errorf("failed to unmarshal JSON: %v", err)
+		}
+		mdKeyMap := getNonExpiredKeys(md.Instance.Attributes.SSHKeys)
+		if !reflect.DeepEqual(mdKeyMap, test.res) {
+			t.Errorf("failed to hanldle malformed ssh keys, (got %v expected %v)", mdKeyMap, test.res)
+		}
+	}
+}

@@ -118,22 +118,7 @@ func (a *accountsMgr) set() error {
 		mdkeys = append(mdkeys, newMetadata.Project.Attributes.SSHKeys...)
 	}
 
-	mdKeyMap := make(map[string][]string)
-	for _, key := range removeExpiredKeys(mdkeys) {
-		idx := strings.Index(key, ":")
-		if idx == -1 {
-			logger.Debugf("invalid ssh key entry: %q", key)
-			continue
-		}
-		user := key[:idx]
-		if user == "" {
-			logger.Debugf("invalid ssh key entry: %q", key)
-			continue
-		}
-		userKeys := mdKeyMap[user]
-		userKeys = append(userKeys, key[idx+1:])
-		mdKeyMap[user] = userKeys
-	}
+	mdKeyMap := getNonExpiredKeys(mdkeys)
 
 	logger.Debugf("read google users file")
 	gUsers, err := readGoogleUsersFile()
@@ -195,6 +180,26 @@ func (a *accountsMgr) set() error {
 	}
 
 	return nil
+}
+
+func getNonExpiredKeys(mdkeys []string) map[string][]string {
+	mdKeyMap := make(map[string][]string)
+	for _, key := range removeExpiredKeys(mdkeys) {
+		idx := strings.Index(key, ":")
+		if idx == -1 {
+			logger.Debugf("invalid ssh key entry: %q", key)
+			continue
+		}
+		user := key[:idx]
+		if user == "" {
+			logger.Debugf("invalid ssh key entry: %q", key)
+			continue
+		}
+		userKeys := mdKeyMap[user]
+		userKeys = append(userKeys, key[idx+1:])
+		mdKeyMap[user] = userKeys
+	}
+	return mdKeyMap
 }
 
 // passwdEntry is a user.User with omitted passwd fields restored.
