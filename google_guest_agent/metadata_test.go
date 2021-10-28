@@ -101,7 +101,7 @@ func TestBlockProjectKeys(t *testing.T) {
 	}
 }
 
-func TestMalformedKeys(t *testing.T) {
+func TestGetNonExpiredKeys(t *testing.T) {
 	tests := []struct {
 		json string
 		res  map[string][]string
