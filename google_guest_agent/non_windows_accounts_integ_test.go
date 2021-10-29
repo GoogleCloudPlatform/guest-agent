@@ -16,7 +16,7 @@ const (
 )
 
 func TestCreateAndRemoveGoogleUser(t *testing.T) {
-	if exist, err := userExists(testUser); exist {
+	if exist, err := userExists(testUser); err != nil && exist {
 		t.Fatalf("test user should not exist")
 	}
 	if err := createGoogleUser(testUser); err != nil {
@@ -47,7 +47,7 @@ func TestCreateAndRemoveGoogleUser(t *testing.T) {
 	if err := removeGoogleUser(testUser); err != nil {
 		t.Errorf("removeGoogleUser did not remove user")
 	}
-	if exist, err := userExists(testUser); exist == true {
+	if exist, err := userExists(testUser); err != nil && exist == true {
 		t.Errorf("test user should not exist")
 	}
 	if err := removeGoogleUser(testUser); err == nil {
