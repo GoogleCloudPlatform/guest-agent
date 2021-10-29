@@ -24,6 +24,10 @@ import (
 	"testing"
 )
 
+const (
+	botoCfg = "/etc/boto.cfg"
+)
+
 // Agent will:
 // * systemd-notify --ready
 // * start snapshot listener (if enabled)
@@ -143,10 +147,6 @@ func TestInstanceSetupSSHKeysDisabled(t *testing.T) {
 	ctx := context.Background()
 	agentInit(ctx)
 
-	if _, err := os.Stat(tempdir + "/google_instance_id"); err != nil {
-		t.Fatal("instance ID File was not created by agentInit")
-	}
-
 	dir, err := os.Open(tempdir)
 	if err != nil {
 		t.Fatal("failed to open working dir")
@@ -158,7 +158,6 @@ func TestInstanceSetupSSHKeysDisabled(t *testing.T) {
 		t.Fatal("failed to read files")
 	}
 
-	var keys []string
 	for _, file := range files {
 		if strings.HasPrefix(file, "ssh_host_") {
 			t.Fatal("agentInit created SSH host keys when disabled")
@@ -174,16 +173,23 @@ func TestInstanceSetupBotoConfig(t *testing.T) {
 	config = cfg                    // set the global
 	defer func() { config = nil }() // unset at end of test
 
+	tempdir, err := ioutil.TempDir("/tmp", "test_instance_setup")
+	if err != nil {
+		t.Fatal("failed to create working dir")
+	}
+
 	// Configure a non-standard instance ID dir for us to play with.
 	config.Section("Instance").Key("instance_id_dir").SetValue(tempdir)
 	config.Section("InstanceSetup").Key("host_key_dir").SetValue(tempdir)
+
+	ctx := context.Background()
 
 	// Test it is created by default on first boot.
 
 	if err := os.Remove(botoCfg); err != nil {
 		t.Fatal("failed to remove boto config")
 	}
-	agentInit()
+	agentInit(ctx)
 	if _, err := os.Stat(botoCfg); err != nil {
 		t.Fatal("boto config was not created on first boot")
 	}
@@ -193,7 +199,7 @@ func TestInstanceSetupBotoConfig(t *testing.T) {
 	if err := os.Remove(botoCfg); err != nil {
 		t.Fatal("failed to remove boto config")
 	}
-	agentInit()
+	agentInit(ctx)
 	if _, err := os.Stat(botoCfg); err == nil || !os.IsNotExist(err) {
 		// If we didn't get an error, or if we got some other kind of error
 		t.Fatal("boto config was recreated after first boot")
@@ -210,7 +216,7 @@ func TestInstanceSetupBotoConfig(t *testing.T) {
 	}
 
 	config.Section("InstanceSetup").Key("set_boto_config").SetValue("false")
-	agentInit()
+	agentInit(ctx)
 
 	if _, err := os.Stat(botoCfg); err == nil || !os.IsNotExist(err) {
 		// If we didn't get an error, or if we got some other kind of error
