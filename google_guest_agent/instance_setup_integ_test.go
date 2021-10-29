@@ -40,12 +40,15 @@ import (
 //     * set boto config (if enabled)
 //     * write instance ID (again)
 
+// TestInstanceSetupSSHKeys validates SSH keys are generated on first boot and not changed afterward.
 func TestInstanceSetupSSHKeys(t *testing.T) {
 	cfg, err := parseConfig("") // get empty config
 	if err != nil {
 		t.Fatal("failed to init config object")
 	}
-	config = cfg // set the global
+	config = cfg                    // set the global
+	defer func() { config = nil }() // unset at end of test
+
 	tempdir, err := ioutil.TempDir("/tmp", "test_instance_setup")
 	if err != nil {
 		t.Fatal("failed to create working dir")
@@ -58,7 +61,6 @@ func TestInstanceSetupSSHKeys(t *testing.T) {
 	ctx := context.Background()
 	agentInit(ctx)
 
-	// Confirm instance ID file was written
 	if _, err := os.Stat(tempdir + "/google_instance_id"); err != nil {
 		t.Fatal("instance ID File was not created by agentInit")
 	}
@@ -87,8 +89,6 @@ func TestInstanceSetupSSHKeys(t *testing.T) {
 
 	// Remove one key file and run again to confirm SSH keys have not
 	// changed because the instance ID file has not changed.
-
-	t.Logf("got keys %v, remove key %q\n", keys, keys[0])
 	if err := os.Remove(tempdir + "/" + keys[0]); err != nil {
 		t.Fatal("failed to remove key file")
 	}
@@ -96,9 +96,8 @@ func TestInstanceSetupSSHKeys(t *testing.T) {
 	agentInit(ctx)
 
 	if _, err := dir.Seek(0, 0); err != nil {
-		t.Fatal("failed to seek dir for second check")
+		t.Fatal("failed to rewind dir for second check")
 	}
-
 	files2, err := dir.Readdirnames(0)
 	if err != nil {
 		t.Fatal("failed to read files")
@@ -107,18 +106,115 @@ func TestInstanceSetupSSHKeys(t *testing.T) {
 	var keys2 []string
 	for _, file := range files2 {
 		if strings.HasPrefix(file, "ssh_host_") {
-			keys2 = append(keys, file)
+			keys2 = append(keys2, file)
 		}
 		if file == keys[0] {
-			t.Fatal("agent recreated keys after boot")
+			t.Fatalf("agentInit recreated key %s", file)
 		}
 	}
-	t.Logf("got keys2 %v\n", keys)
 
 	if len(keys) == len(keys2) {
-		t.Fatal("agent recreated keys after boot")
+		t.Fatal("agentInit recreated SSH host keys")
+	}
+}
+
+// TestInstanceSetupSSHKeysDisabled validates the config option to disable host
+// key generation is respected.
+func TestInstanceSetupSSHKeysDisabled(t *testing.T) {
+	cfg, err := parseConfig("") // get empty config
+	if err != nil {
+		t.Fatal("failed to init config object")
+	}
+	config = cfg                    // set the global
+	defer func() { config = nil }() // unset at end of test
+
+	tempdir, err := ioutil.TempDir("/tmp", "test_instance_setup")
+	if err != nil {
+		t.Fatal("failed to create working dir")
+	}
+
+	// Configure a non-standard instance ID dir for us to play with.
+	config.Section("Instance").Key("instance_id_dir").SetValue(tempdir)
+	config.Section("InstanceSetup").Key("host_key_dir").SetValue(tempdir)
+
+	// Disable SSH host key generation.
+	config.Section("InstanceSetup").Key("set_host_keys").SetValue("false")
+
+	ctx := context.Background()
+	agentInit(ctx)
+
+	if _, err := os.Stat(tempdir + "/google_instance_id"); err != nil {
+		t.Fatal("instance ID File was not created by agentInit")
+	}
+
+	dir, err := os.Open(tempdir)
+	if err != nil {
+		t.Fatal("failed to open working dir")
+	}
+	defer dir.Close()
+
+	files, err := dir.Readdirnames(0)
+	if err != nil {
+		t.Fatal("failed to read files")
+	}
+
+	var keys []string
+	for _, file := range files {
+		if strings.HasPrefix(file, "ssh_host_") {
+			t.Fatal("agentInit created SSH host keys when disabled")
+		}
 	}
 }
 
 func TestInstanceSetupBotoConfig(t *testing.T) {
+	cfg, err := parseConfig("") // get empty config
+	if err != nil {
+		t.Fatal("failed to init config object")
+	}
+	config = cfg                    // set the global
+	defer func() { config = nil }() // unset at end of test
+
+	// Configure a non-standard instance ID dir for us to play with.
+	config.Section("Instance").Key("instance_id_dir").SetValue(tempdir)
+	config.Section("InstanceSetup").Key("host_key_dir").SetValue(tempdir)
+
+	// Test it is created by default on first boot.
+
+	if err := os.Remove(botoCfg); err != nil {
+		t.Fatal("failed to remove boto config")
+	}
+	agentInit()
+	if _, err := os.Stat(botoCfg); err != nil {
+		t.Fatal("boto config was not created on first boot")
+	}
+
+	// Test it is not recreated on subsequent invocations.
+
+	if err := os.Remove(botoCfg); err != nil {
+		t.Fatal("failed to remove boto config")
+	}
+	agentInit()
+	if _, err := os.Stat(botoCfg); err == nil || !os.IsNotExist(err) {
+		// If we didn't get an error, or if we got some other kind of error
+		t.Fatal("boto config was recreated after first boot")
+	}
+
+	// Test it is not created if disabled in config.
+
+	if err := os.Remove(botoCfg); err != nil {
+		t.Fatal("failed to remove boto config")
+	}
+	// Removing instance ID simulates first boot.
+	if err := os.Remove(tempdir + "/google_instance_id"); err != nil {
+		t.Fatal("failed to remove instance ID file")
+	}
+
+	config.Section("InstanceSetup").Key("set_boto_config").SetValue("false")
+	agentInit()
+
+	if _, err := os.Stat(botoCfg); err == nil || !os.IsNotExist(err) {
+		// If we didn't get an error, or if we got some other kind of error
+		t.Fatal("boto config was created when disabled in config")
+	}
+
 }
