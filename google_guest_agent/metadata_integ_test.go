@@ -8,8 +8,8 @@ import (
 )
 
 const (
-	malformedKey  = "malformed-ssh-keys";
-	malformedKey2 = ":malformed-ssh-keys";
+	malformedKey  = "malformed-ssh-keys"
+	malformedKey2 = ":malformed-ssh-keys"
 )
 
 func TestMalformedSSHKeys(t *testing.T) {
