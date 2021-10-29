@@ -46,7 +46,7 @@ func TestInstanceSetupSSHKeys(t *testing.T) {
 		t.Fatal("failed to init config object")
 	}
 	config = cfg // set the global
-	tempdir, err := ioutil.TempDir("test_instance_setup")
+	tempdir, err := ioutil.TempDir("/tmp", "test_instance_setup")
 	if err != nil {
 		t.Fatal("failed to create working dir")
 	}
@@ -99,13 +99,13 @@ func TestInstanceSetupSSHKeys(t *testing.T) {
 		t.Fatal("failed to seek dir for second check")
 	}
 
-	files, err := dir.Readdirnames(0)
+	files2, err := dir.Readdirnames(0)
 	if err != nil {
 		t.Fatal("failed to read files")
 	}
 
 	var keys2 []string
-	for _, file := range files {
+	for _, file := range files2 {
 		if strings.HasPrefix(file, "ssh_host_") {
 			keys2 = append(keys, file)
 		}
