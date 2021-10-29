@@ -28,22 +28,6 @@ const (
 	botoCfg = "/etc/boto.cfg"
 )
 
-// Agent will:
-// * systemd-notify --ready
-// * start snapshot listener (if enabled)
-// * run scripts
-// * set IO scheduler
-//
-// If network enabled, agent will also:
-//   * set metadata global
-//   * sysctl overcommit (e2 only)
-//
-//   If instance ID missing or changes, will also:
-//     * write instance ID (if missing)
-//     * set host keys (if enabled)
-//     * set boto config (if enabled)
-//     * write instance ID (again)
-
 // TestInstanceSetupSSHKeys validates SSH keys are generated on first boot and not changed afterward.
 func TestInstanceSetupSSHKeys(t *testing.T) {
 	cfg, err := parseConfig("") // get empty config
@@ -184,18 +168,23 @@ func TestInstanceSetupBotoConfig(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Test it is created by default on first boot.
-
-	if err := os.Remove(botoCfg); err != nil {
-		t.Fatal("failed to remove boto config")
+	if err := os.Rename(botoCfg, botoCfg+".bak"); err != nil {
+		t.Fatalf("failed to move boto config: %v", err)
 	}
+	defer func() {
+		// Restore file at end of test.
+		if err := os.Rename(botoCfg+".bak", botoCfg); err != nil {
+			t.Fatalf("failed to restore boto config: %v", err)
+		}
+	}()
+
+	// Test it is created by default on first boot
 	agentInit(ctx)
 	if _, err := os.Stat(botoCfg); err != nil {
 		t.Fatal("boto config was not created on first boot")
 	}
 
-	// Test it is not recreated on subsequent invocations.
-
+	// Test it is not recreated on subsequent invocations
 	if err := os.Remove(botoCfg); err != nil {
 		t.Fatal("failed to remove boto config")
 	}
@@ -204,17 +193,38 @@ func TestInstanceSetupBotoConfig(t *testing.T) {
 		// If we didn't get an error, or if we got some other kind of error
 		t.Fatal("boto config was recreated after first boot")
 	}
+}
+
+func TestInstanceSetupBotoConfigDisabled(t *testing.T) {
+	cfg, err := parseConfig("") // get empty config
+	if err != nil {
+		t.Fatal("failed to init config object")
+	}
+	config = cfg                    // set the global
+	defer func() { config = nil }() // unset at end of test
+
+	tempdir, err := ioutil.TempDir("/tmp", "test_instance_setup")
+	if err != nil {
+		t.Fatal("failed to create working dir")
+	}
+
+	// Configure a non-standard instance ID dir for us to play with.
+	config.Section("Instance").Key("instance_id_dir").SetValue(tempdir)
+	config.Section("InstanceSetup").Key("host_key_dir").SetValue(tempdir)
+
+	ctx := context.Background()
+
+	if err := os.Rename(botoCfg, botoCfg+".bak"); err != nil {
+		t.Fatalf("failed to move boto config: %v", err)
+	}
+	defer func() {
+		// Restore file at end of test.
+		if err := os.Rename(botoCfg+".bak", botoCfg); err != nil {
+			t.Fatalf("failed to restore boto config: %v", err)
+		}
+	}()
 
 	// Test it is not created if disabled in config.
-
-	if err := os.Remove(botoCfg); err != nil {
-		t.Fatal("failed to remove boto config")
-	}
-	// Removing instance ID simulates first boot.
-	if err := os.Remove(tempdir + "/google_instance_id"); err != nil {
-		t.Fatal("failed to remove instance ID file")
-	}
-
 	config.Section("InstanceSetup").Key("set_boto_config").SetValue("false")
 	agentInit(ctx)
 
@@ -222,5 +232,4 @@ func TestInstanceSetupBotoConfig(t *testing.T) {
 		// If we didn't get an error, or if we got some other kind of error
 		t.Fatal("boto config was created when disabled in config")
 	}
-
 }
