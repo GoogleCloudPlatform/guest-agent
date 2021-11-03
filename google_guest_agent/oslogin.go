@@ -276,13 +276,13 @@ func updatePAMsshd(pamsshd string, enable, twofactor bool) string {
 	authGroup := "auth       [default=ignore] pam_group.so"
 	accountOSLogin := "account    [success=ok ignore=ignore default=die] pam_oslogin_login.so"
 	accountOSLoginAdmin := "account    [success=ok default=ignore] pam_oslogin_admin.so"
-	sessionHomeDir := "session    [success=ok default=ignore] pam_mkhomedir.so"
+	sessionHomeDir := "session    [success=ok default=ignore] pam_mkhomedir.so umask=0077"
 
 	if runtime.GOOS == "freebsd" {
 		authOSLogin = "auth       optional pam_oslogin_login.so"
 		authGroup = "auth       optional pam_group.so"
 		accountOSLogin = "account    requisite pam_oslogin_login.so"
-		accountOSLoginAdmin = "account    optional pam_oslogin_admin.so"
+		accountOSLoginAdmin = "account    optional pam_oslogin_admin.so umask=0077"
 		sessionHomeDir = "session    optional pam_mkhomedir.so"
 	}
 
