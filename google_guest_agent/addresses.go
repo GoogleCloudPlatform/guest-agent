@@ -431,7 +431,7 @@ func (a *addressMgr) set() error {
 func configureIPv6() error {
 	var newNi, oldNi networkInterfaces
 	if len(newMetadata.Instance.NetworkInterfaces) == 0 {
-		return fmt.Errorf("No interfaces found in metadata")
+		return fmt.Errorf("no interfaces found in metadata")
 	}
 	newNi = newMetadata.Instance.NetworkInterfaces[0]
 	if len(oldMetadata.Instance.NetworkInterfaces) > 0 {
@@ -541,6 +541,10 @@ func enableNetworkInterfaces() error {
 		// Try IPv4 first as it's higher priority.
 		if err := runCmd(exec.Command("dhclient", googleInterfaces...)); err != nil {
 			return err
+		}
+
+		if len(googleIpv6Interfaces) == 0 {
+			return nil
 		}
 
 		var dhclientArgs6 []string
