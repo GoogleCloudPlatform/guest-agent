@@ -17,7 +17,6 @@ Type=notify
 ExecStart=/usr/bin/google_guest_agent
 OOMScoreAdjust=-999
 Restart=always
-StandardOutput=journal+console
 
 [Install]
 WantedBy=sshd.service
