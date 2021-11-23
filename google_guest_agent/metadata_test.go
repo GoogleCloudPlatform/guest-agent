@@ -121,8 +121,22 @@ func TestGetNonExpiredKeys(t *testing.T) {
 			t.Errorf("failed to unmarshal JSON: %v", err)
 		}
 		mdKeyMap := getNonExpiredKeys(md.Instance.Attributes.SSHKeys)
-		if !reflect.DeepEqual(mdKeyMap, test.res) {
-			t.Errorf("failed to hanldle malformed ssh keys, (got %v expected %v)", mdKeyMap, test.res)
+		for k, v := range mdKeyMap {
+			if !sliceEqual(v, test.res[k]) {
+				t.Errorf("failed to hanldle malformed ssh keys, (got %v expected %v)", mdKeyMap, test.res)
+			}
 		}
 	}
+}
+
+func sliceEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
