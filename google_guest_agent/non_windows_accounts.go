@@ -73,7 +73,7 @@ func (a *accountsMgr) diff() bool {
 
 	// If any on-disk keys have expired.
 	for _, keys := range sshKeys {
-		if len(keys) != len(getNonExpiredKeys(keys)) {
+		if len(keys) != len(removeExpiredKeys(keys)) {
 			return true
 		}
 	}
@@ -118,7 +118,7 @@ func (a *accountsMgr) set() error {
 		mdkeys = append(mdkeys, newMetadata.Project.Attributes.SSHKeys...)
 	}
 
-	mdKeyMap := getNonExpiredKeys(mdkeys)
+	mdKeyMap := removeExpiredKeys(mdkeys)
 
 	logger.Debugf("read google users file")
 	gUsers, err := readGoogleUsersFile()
@@ -182,12 +182,12 @@ func (a *accountsMgr) set() error {
 	return nil
 }
 
-// getNonExpiredKeys returns the keys which are not expired and non-expiring key.
+// removeExpiredKeys returns the keys which are not expired and non-expiring key.
 // valid formats are:
 // user:ssh-rsa [KEY_VALUE] [USERNAME]
 // user:ssh-rsa [KEY_VALUE]
 // user:ssh-rsa [KEY_VALUE] google-ssh {"userName":"[USERNAME]","expireOn":"[EXPIRE_TIME]"}
-func getNonExpiredKeys(mdkeys []string) map[string][]string {
+func removeExpiredKeys(mdkeys []string) map[string][]string {
 	mdKeyMap := make(map[string][]string)
 	for i := 0; i < len(mdkeys); i++ {
 		key := strings.Trim(mdkeys[i], " ")

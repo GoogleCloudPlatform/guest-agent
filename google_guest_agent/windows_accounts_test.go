@@ -269,7 +269,7 @@ func TestGetNonExpiredKeys(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		ret := getNonExpiredKeys([]string{tt.key})
+		ret := removeExpiredKeys([]string{tt.key})
 		if tt.valid {
 			if len(ret) == 0 || ret[`user`][0] != tt.userKeys {
 				t.Errorf("valid key was removed: %q", tt.key)
