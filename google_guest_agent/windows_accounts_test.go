@@ -216,7 +216,7 @@ func TestCompareAccounts(t *testing.T) {
 	}
 }
 
-func TestGetNonExpiredKeys(t *testing.T) {
+func TestRemoveExpiredKeys(t *testing.T) {
 	var tests = []struct {
 		key      string
 		valid    bool
