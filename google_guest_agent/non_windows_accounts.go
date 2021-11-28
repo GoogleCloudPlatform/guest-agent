@@ -73,7 +73,7 @@ func (a *accountsMgr) diff() bool {
 
 	// If any on-disk keys have expired.
 	for _, keys := range sshKeys {
-		if len(keys) != len(removeExpiredKeys(keys)) {
+		if len(keys) != len(getNonExpiredKeys(keys)) {
 			return true
 		}
 	}
@@ -182,9 +182,19 @@ func (a *accountsMgr) set() error {
 	return nil
 }
 
+// getNonExpiredKeys returns the keys which are not expired and non-expiring key.
+// valid formats are:
+// user:ssh-rsa [KEY_VALUE] [USERNAME]
+// user:ssh-rsa [KEY_VALUE]
+// user:ssh-rsa [KEY_VALUE] google-ssh {"userName":"[USERNAME]","expireOn":"[EXPIRE_TIME]"}
 func getNonExpiredKeys(mdkeys []string) map[string][]string {
 	mdKeyMap := make(map[string][]string)
-	for _, key := range removeExpiredKeys(mdkeys) {
+	for i := 0; i < len(mdkeys); i++ {
+		key := strings.Trim(mdkeys[i], " ")
+		if key == "" {
+			logger.Debugf("invalid ssh key entry: %q", key)
+			continue
+		}
 		idx := strings.Index(key, ":")
 		if idx == -1 {
 			logger.Debugf("invalid ssh key entry: %q", key)
@@ -195,6 +205,25 @@ func getNonExpiredKeys(mdkeys []string) map[string][]string {
 			logger.Debugf("invalid ssh key entry: %q", key)
 			continue
 		}
+		fields := strings.SplitN(key, " ", 4)
+		if len(fields) == 3 && fields[2] == "google-ssh" {
+				logger.Debugf("invalid ssh key entry: %q", key)
+				// expiring key without expiration format.
+				continue
+		}
+		if len(fields) > 3 {
+			lkey := linuxKey{}
+			if err := json.Unmarshal([]byte(fields[3]), &lkey); err != nil {
+				// invalid expiration format.
+				logger.Debugf("invalid ssh key entry: %q", key)
+				continue
+			}
+			if lkey.expired() {
+				logger.Debugf("expired ssh key entry: %q", key)
+				continue
+			}
+		}
+		// key which is not expired or non-expiring key, add it.
 		userKeys := mdKeyMap[user]
 		userKeys = append(userKeys, key[idx+1:])
 		mdKeyMap[user] = userKeys
@@ -316,41 +345,7 @@ func (k linuxKey) expired() bool {
 	return t.Before(time.Now())
 }
 
-// removeExpiredKeys returns the provided list of keys with expired keys removed.
-// valid formats are:
-// ssh-rsa [KEY_VALUE] [USERNAME]
-// ssh-rsa [KEY_VALUE]
-// ssh-rsa [KEY_VALUE] google-ssh {"userName":"[USERNAME]","expireOn":"[EXPIRE_TIME]"}
-//
-// see: https://cloud.google.com/compute/docs/instances/adding-removing-ssh-keys#sshkeyformat
-func removeExpiredKeys(keys []string) []string {
-	var res []string
-	for i := 0; i < len(keys); i++ {
-		key := strings.Trim(keys[i], " ")
-		if key == "" {
-			continue
-		}
-		fields := strings.SplitN(key, " ", 4)
-		if len(fields) < 3 || fields[2] != "google-ssh" {
-			// non-expiring key, add it.
-			res = append(res, key)
-			continue
-		}
-		if len(fields) < 4 {
-			// expiring key without expiration format.
-			continue
-		}
-		lkey := linuxKey{}
-		if err := json.Unmarshal([]byte(fields[3]), &lkey); err != nil {
-			// invalid expiration format.
-			continue
-		}
-		if !lkey.expired() {
-			res = append(res, key)
-		}
-	}
-	return res
-}
+
 
 // Replaces {user} or {group} in command string. Supports legacy python-era
 // user command overrides.

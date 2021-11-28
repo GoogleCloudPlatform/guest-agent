@@ -216,27 +216,62 @@ func TestCompareAccounts(t *testing.T) {
 	}
 }
 
-func TestRemoveExpiredKeys(t *testing.T) {
+func TestGetNonExpiredKeys(t *testing.T) {
 	var tests = []struct {
-		key   string
-		valid bool
+		key      string
+		valid    bool
+		userKeys string
 	}{
-		{`user:ssh-rsa [KEY] google-ssh {"userName":"user@email.com", "expireOn":"2028-11-08T19:30:47+0000"}`, true},
-		{`user:ssh-rsa [KEY] google-ssh {"userName":"user@email.com", "expireOn":"2028-11-08T19:30:47+0700"}`, true},
-		{`user:ssh-rsa [KEY] google-ssh {"userName":"user@email.com", "expireOn":"2028-11-08T19:30:47+0700", "futureField": "UNUSED_FIELDS_IGNORED"}`, true},
-		{`user:ssh-rsa [KEY] google-ssh {"userName":"user@email.com", "expireOn":"2018-11-08T19:30:46+0000"}`, false},
-		{`user:ssh-rsa [KEY] google-ssh {"userName":"user@email.com", "expireOn":"2018-11-08T19:30:46+0700"}`, false},
-		{`user:ssh-rsa [KEY] google-ssh {"userName":"user@email.com", "expireOn":"INVALID_TIMESTAMP"}`, false},
-		{`user:ssh-rsa [KEY] google-ssh`, false},
-		{`user:ssh-rsa [KEY] user`, true},
-		{`user:ssh-rsa [KEY]`, true},
-		{},
+		{`user:ssh-rsa [KEY] google-ssh {"userName":"user@email.com", "expireOn":"2028-11-08T19:30:47+0000"}`,
+			true,
+			`ssh-rsa [KEY] google-ssh {"userName":"user@email.com", "expireOn":"2028-11-08T19:30:47+0000"}`,
+		},
+		{`user:ssh-rsa [KEY] google-ssh {"userName":"user@email.com", "expireOn":"2028-11-08T19:30:47+0700"}`,
+			true,
+			`ssh-rsa [KEY] google-ssh {"userName":"user@email.com", "expireOn":"2028-11-08T19:30:47+0700"}`,
+		},
+		{`user:ssh-rsa [KEY] google-ssh {"userName":"user@email.com", "expireOn":"2028-11-08T19:30:47+0700", "futureField": "UNUSED_FIELDS_IGNORED"}`,
+			true,
+			`ssh-rsa [KEY] google-ssh {"userName":"user@email.com", "expireOn":"2028-11-08T19:30:47+0700", "futureField": "UNUSED_FIELDS_IGNORED"}`,
+		},
+		{`user:ssh-rsa [KEY] google-ssh {"userName":"user@email.com", "expireOn":"2018-11-08T19:30:46+0000"}`,
+			false,
+			``,
+		},
+		{`user:ssh-rsa [KEY] google-ssh {"userName":"user@email.com", "expireOn":"2018-11-08T19:30:46+0700"}`,
+			false,
+			``,
+		},
+		{`user:ssh-rsa [KEY] google-ssh {"userName":"user@email.com", "expireOn":"INVALID_TIMESTAMP"}`,
+			false,
+			``,
+		},
+		{`user:ssh-rsa [KEY] google-ssh`,
+			false,
+			``,
+		},
+		{`user:ssh-rsa [KEY] user`,
+			true,
+			`ssh-rsa [KEY] user`,
+		},
+		{`user:ssh-rsa [KEY]`,
+			true,
+			`ssh-rsa [KEY]`,
+		},
+		{`malformed-ssh-keys [KEY] google-ssh`,
+			false,
+			``,
+		},
+		{`:malformed-ssh-keys [KEY] google-ssh`,
+			false,
+			``,
+		},
 	}
 
 	for _, tt := range tests {
-		ret := removeExpiredKeys([]string{tt.key})
+		ret := getNonExpiredKeys([]string{tt.key})
 		if tt.valid {
-			if len(ret) == 0 || ret[0] != tt.key {
+			if len(ret) == 0 || ret[`user`][0] != tt.userKeys {
 				t.Errorf("valid key was removed: %q", tt.key)
 			}
 		}
