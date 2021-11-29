@@ -94,8 +94,8 @@ func (a *accountsMgr) timeout() bool {
 func (a *accountsMgr) disabled(os string) bool {
 	oslogin, _, _ := getOSLoginEnabled(newMetadata)
 	return false ||
-		os == "windows" || oslogin ||
-		!config.Section("Daemons").Key("accounts_daemon").MustBool(true)
+			os == "windows" || oslogin ||
+			!config.Section("Daemons").Key("accounts_daemon").MustBool(true)
 }
 
 func (a *accountsMgr) set() error {
@@ -207,9 +207,9 @@ func removeExpiredKeys(mdkeys []string) map[string][]string {
 		}
 		fields := strings.SplitN(key, " ", 4)
 		if len(fields) == 3 && fields[2] == "google-ssh" {
-				logger.Debugf("invalid ssh key entry: %q", key)
-				// expiring key without expiration format.
-				continue
+			logger.Debugf("invalid ssh key entry: %q", key)
+			// expiring key without expiration format.
+			continue
 		}
 		if len(fields) > 3 {
 			lkey := linuxKey{}
@@ -344,8 +344,6 @@ func (k linuxKey) expired() bool {
 	}
 	return t.Before(time.Now())
 }
-
-
 
 // Replaces {user} or {group} in command string. Supports legacy python-era
 // user command overrides.
