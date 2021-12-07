@@ -33,14 +33,14 @@ func TestAddAndRemoveLocalRoute(t *testing.T) {
 	}
 
 	// test add local route need to make sure instance already remove local route
-	if err := removeLocalRoute(ip, defaultInterface) {
+	if err := removeLocalRoute(ip, defaultInterface); err != nil {
 		t.Fatalf("failed to remove local route, err %v", err)
 	}
-	if err := addLocalRoute(ip, defaultInterface) {
+	if err := addLocalRoute(ip, defaultInterface); err != nil {
 		t.Fatalf("add test local route should not failed, err %v", err)
 	}
 
-	res := runCmdOutput(fmt.Sprintf('ip route list table local type local scope host dev %s proto 66', defaultInterface))
+	res := runCmdOutput(fmt.Sprintf("ip route list table local type local scope host dev %s proto 66", defaultInterface))
 	if res.ExitCode() != 0 {
 		t.Fatalf("ip route list should not failed, err %v", err)
 	}
@@ -50,7 +50,7 @@ func TestAddAndRemoveLocalRoute(t *testing.T) {
 	}
 
 	// test remove local route
-	if err := removeLocalRoute(ip, defaultInterface) {
+	if err := removeLocalRoute(ip, defaultInterface); err != nil {
 		t.Fatalf("add test local route should not failed")
 	}
 
