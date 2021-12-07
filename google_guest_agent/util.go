@@ -23,6 +23,7 @@ func GetMetadataHTTPResponse(path string) (*http.Response, error) {
 	return resp, nil
 }
 
+// GetMetadata returns a metadata value for the specified key if it is present, and error if not.
 func GetMetadata(path string) (string, error) {
 	resp, err := GetMetadataHTTPResponse(path)
 	if err != nil {
