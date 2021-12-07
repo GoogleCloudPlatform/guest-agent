@@ -54,7 +54,7 @@ func TestAddAndRemoveLocalRoute(t *testing.T) {
 		t.Fatalf("add test local route should not failed")
 	}
 
-	res := runCmdOutput(fmt.Sprintf('ip route list table local type local scope host dev %s proto 66', defaultInterface))
+	res := runCmdOutput(fmt.Sprintf("ip route list table local type local scope host dev %s proto 66", defaultInterface))
 	if res.ExitCode() != 0 {
 		t.Fatalf("ip route list should not failed, err %s", res.err)
 	}
