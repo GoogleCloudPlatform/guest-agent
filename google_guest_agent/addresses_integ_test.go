@@ -17,83 +17,82 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"testing"
 )
 
-func TestAddAndRemoveLocalRoute(t *testing.T) {
-	defaultInterface, err := getDefaultInterface()
-	if err != nil {
-		t.Fatalf("failed to get default interface, err %v", err)
-	}
-	ip, err := GetMetadata("network-interfaces/0/ip")
-	if err != nil {
-		t.Fatalf("failed to get network ip, err %v", err)
-	}
+const testIp = "192.168.0.0"
 
-	// test add local route need to make sure instance already remove local route
-	if err := removeLocalRoute(ip, defaultInterface); err != nil {
+func TestAddAndRemoveLocalRoute(t *testing.T) {
+	metdata, err := getMetadata(context.Context(), false)
+	if err != nil {
+		t.Fatalf("failed to get metadata, err %v", err)
+	}
+	iface, err := getInterfaceByMAC(metdata.Instance.NetworkInterfaces[0].Mac)
+	if err != nil {
+		t.Fatalf("failed to get interface from mac, err %v", err)
+	}
+	// test add local route
+	if err := removeLocalRoute(testIp, iface.Name); err != nil {
 		t.Fatalf("failed to remove local route, err %v", err)
 	}
-	if err := addLocalRoute(ip, defaultInterface); err != nil {
+	if err := addLocalRoute(testIp, iface.Name); err != nil {
 		t.Fatalf("add test local route should not failed, err %v", err)
 	}
 
-	res := runCmdOutput(fmt.Sprintf("ip route list table local type local scope host dev %s proto 66", defaultInterface))
-	if res.ExitCode() != 0 {
-		t.Fatalf("ip route list should not failed, err %v", err)
+	res, err := getLocalRoutes(iface.Name)
+	if err != nil {
+		t.Fatalf("get local route should not failed, err %v", err)
 	}
-
-	if !strings.Contains(res.Stdout(), fmt.Sprintf("local %s/24", ip)) {
-		t.Fatalf("route %s is not added", ip)
+	exist := false
+	for _, route := range res {
+		if strings.Contains(route, fmt.Sprintf("local %s/24", testIp)) {
+			exist = true
+		}
+	}
+	if !exist {
+		t.Fatalf("route %s is not added", testIp)
 	}
 
 	// test remove local route
-	if err := removeLocalRoute(ip, defaultInterface); err != nil {
+	if err := removeLocalRoute(testIp, iface.Name); err != nil {
 		t.Fatalf("add test local route should not failed")
 	}
-
-	res := runCmdOutput(fmt.Sprintf("ip route list table local type local scope host dev %s proto 66", defaultInterface))
-	if res.ExitCode() != 0 {
+	res, err := getLocalRoutes(iface.Name)
+	if err != nil {
 		t.Fatalf("ip route list should not failed, err %s", res.err)
 	}
-	if strings.Contains(res.Stdout(), fmt.Sprintf("local %s/24", ip)) {
-		t.Fatalf("route %s should be removed but exist", ip)
+
+	for _, route := range res {
+		if strings.Contains(route, fmt.Sprintf("local %s/24", testIp)) {
+			t.Fatalf("route %s should be removed but exist", testIp)
+		}
 	}
 }
 
 func TestGetLocalRoute(t *testing.T) {
-	defaultInterface, err := getDefaultInterface()
+	metdata, err := getMetadata(context.Context(), false)
 	if err != nil {
-		t.Fatalf("failed to get default interface, err %v", err)
+		t.Fatalf("failed to get metadata, err %v", err)
 	}
-	routes, err := getLocalRoutes(defaultInterface)
+	iface, err := getInterfaceByMAC(metdata.Instance.NetworkInterfaces[0].Mac)
+	if err != nil {
+		t.Fatalf("failed to get interface from mac, err %v", err)
+	}
+
+	if err := addLocalRoute(testIp, iface.Name); err != nil {
+		t.Fatalf("add test local route should not failed, err %v", err)
+	}
+	routes, err := getLocalRoutes(iface.Name)
 	if err != nil {
 		t.Fatalf("get local routes should not failed, err %v", err)
 	}
 	if len(routes) != 1 {
 		t.Fatal("find unexpected local route %s.", routes[0])
 	}
-	ip, err := GetMetadata("network-interfaces/0/ip")
-	if err != nil {
-		t.Fatalf("failed to get network ip, err %v", err)
-	}
-	if routes[0] != ip {
+	if routes[0] != testIp {
 		t.Fatal("find unexpected local route %s.", routes[0])
 	}
-}
-
-func getDefaultInterface(t *testing.T) (string, error) {
-	var defaultInterface string
-	re, err := getRelease()
-	if err != nil {
-		return nil, err
-	}
-	if re.os == "debian" && (re.version.major == 10 || re.version.major == 11) || re.os == "ubuntu" {
-		defaultInterface = "ens4"
-	} else {
-		defaultInterface = "eth0"
-	}
-	return defaultInterface, err
 }
