@@ -218,8 +218,8 @@ func TestCompareAccounts(t *testing.T) {
 
 func TestRemoveExpiredKeys(t *testing.T) {
 	var tests = []struct {
-		key      string
-		expectedValid    int
+		key           string
+		expectedValid int
 	}{
 		{`user:ssh-rsa [KEY] google-ssh {"userName":"user@email.com", "expireOn":"2028-11-08T19:30:47+0000"}`,
 			1,
@@ -257,14 +257,9 @@ func TestRemoveExpiredKeys(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		ret := removeExpiredKeys([]string{tt.key})
-		if tt.valid {
-			if len(ret) == 0 || ret[`user`][0] != tt.userKeys {
-				t.Errorf("valid key was removed: %q", tt.key)
-			}
-		}
-		if !tt.valid && len(ret) == 1 {
-			t.Errorf("invalid key was kept: %q", tt.key)
+		ret := getUserKeys([]string{tt.key})
+		if userKeys, ok := ret["user"]; !ok || len(userKeys) != tt.expectedValid {
+			t.Errorf("expected %d valid keys from getUserKeys", tt.expectedValid)
 		}
 	}
 }
