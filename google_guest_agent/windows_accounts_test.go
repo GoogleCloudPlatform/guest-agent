@@ -219,8 +219,7 @@ func TestCompareAccounts(t *testing.T) {
 func TestRemoveExpiredKeys(t *testing.T) {
 	var tests = []struct {
 		key      string
-		valid    bool
-		userKeys string
+		expectedValid    int
 	}{
 		{`user:ssh-rsa [KEY] google-ssh {"userName":"user@email.com", "expireOn":"2028-11-08T19:30:47+0000"}`,
 			true,
