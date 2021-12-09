@@ -216,7 +216,7 @@ func TestCompareAccounts(t *testing.T) {
 	}
 }
 
-func TestRemoveExpiredKeys(t *testing.T) {
+func TestGetUserKeys(t *testing.T) {
 	var tests = []struct {
 		key           string
 		expectedValid int
@@ -243,7 +243,7 @@ func TestRemoveExpiredKeys(t *testing.T) {
 			0,
 		},
 		{`user:ssh-rsa [KEY] user`,
-			0,
+			1,
 		},
 		{`user:ssh-rsa [KEY]`,
 			1,
@@ -258,8 +258,14 @@ func TestRemoveExpiredKeys(t *testing.T) {
 
 	for _, tt := range tests {
 		ret := getUserKeys([]string{tt.key})
-		if userKeys, ok := ret["user"]; !ok || len(userKeys) != tt.expectedValid {
-			t.Errorf("expected %d valid keys from getUserKeys", tt.expectedValid)
+		if tt.expectedValid != 0 {
+			if userKeys, ok := ret["user"]; !ok || len(userKeys) != tt.expectedValid {
+				t.Errorf("expected %d valid keys from getUserKeys, but %d", tt.expectedValid, len(userKeys))
+			}
+		} else{
+			if userKeys, ok := ret["user"]; ok {
+				t.Errorf("expected no user in map, but userKeys is %s", userKeys)
+			}
 		}
 	}
 }
