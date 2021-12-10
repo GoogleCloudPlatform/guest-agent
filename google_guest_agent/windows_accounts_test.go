@@ -262,7 +262,7 @@ func TestGetUserKeys(t *testing.T) {
 			if userKeys, ok := ret["user"]; !ok || len(userKeys) != tt.expectedValid {
 				t.Errorf("expected %d valid keys from getUserKeys, but %d", tt.expectedValid, len(userKeys))
 			}
-		} else{
+		} else {
 			if userKeys, ok := ret["user"]; ok {
 				t.Errorf("expected no user in map, but userKeys is %s", userKeys)
 			}
