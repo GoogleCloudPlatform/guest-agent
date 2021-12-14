@@ -258,8 +258,8 @@ func TestGetUserKeys(t *testing.T) {
 
 	for _, tt := range tests {
 		ret := getUserKeys([]string{tt.key})
-			if userKeys, _ := ret["user"]; len(userKeys) != tt.expectedValid {
-				t.Errorf("expected %d valid keys from getUserKeys, but %d", tt.expectedValid, len(userKeys))
-			}
+		if userKeys, _ := ret["user"]; len(userKeys) != tt.expectedValid {
+			t.Errorf("expected %d valid keys from getUserKeys, but %d", tt.expectedValid, len(userKeys))
+		}
 	}
 }
