@@ -146,6 +146,19 @@ func getLocalRoutes(ifname string) ([]string, error) {
 			res = append(res, line)
 		}
 	}
+	// and again for IPv6 routes
+	args = fmt.Sprintf("-6 %s", args)
+	out := runCmdOutput(exec.Command("ip", strings.Split(args, " ")...))
+	if out.ExitCode() != 0 {
+		return nil, error(out)
+	}
+	for _, line := range strings.Split(out.Stdout(), "\n") {
+		line = strings.TrimPrefix(line, "local ")
+		line = strings.TrimSpace(line)
+		if line != "" {
+			res = append(res, line)
+		}
+	}
 	return res, nil
 }
 
