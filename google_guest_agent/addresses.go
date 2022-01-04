@@ -146,6 +146,21 @@ func getLocalRoutes(ifname string) ([]string, error) {
 			res = append(res, line)
 		}
 	}
+
+	// and again for IPv6 routes, without 'scope host' which is IPv4 only
+	args = fmt.Sprintf("-6 route list table local type local dev %s proto %s", ifname, protoID)
+	out = runCmdOutput(exec.Command("ip", strings.Split(args, " ")...))
+	if out.ExitCode() != 0 {
+		return nil, error(out)
+	}
+	for _, line := range strings.Split(out.Stdout(), "\n") {
+		line = strings.TrimPrefix(line, "local ")
+		line = strings.Split(line, " ")[0]
+		line = strings.TrimSpace(line)
+		if line != "" {
+			res = append(res, line)
+		}
+	}
 	return res, nil
 }
 
