@@ -31,7 +31,7 @@ import (
 const defaultEtag = "NONE"
 
 var (
-	metadataURL       = "http://169.254.169.254/computeMetadata/v1/"
+	metadataURL       = "http://169.254.169.254/computeMetadata/v1"
 	metadataRecursive = "/?recursive=true&alt=json"
 	metadataHang      = "&wait_for_change=true&timeout_sec=60"
 	defaultTimeout    = 70 * time.Second
