@@ -104,13 +104,15 @@ func (a *accountsMgr) set() error {
 		sshKeys = make(map[string][]string)
 	}
 
-	logger.Debugf("create sudoers file if needed")
-	if err := createSudoersFile(); err != nil {
-		logger.Errorf("Error creating google-sudoers file: %v.", err)
-	}
-	logger.Debugf("create sudoers group if needed")
-	if err := createSudoersGroup(); err != nil {
-		logger.Errorf("Error creating google-sudoers group: %v.", err)
+        if config.Section("Accounts").Key("setup").MustBool(true) {
+		logger.Debugf("create sudoers file if needed")
+		if err := createSudoersFile(); err != nil {
+			logger.Errorf("Error creating google-sudoers file: %v.", err)
+		}
+		logger.Debugf("create sudoers group if needed")
+		if err := createSudoersGroup(); err != nil {
+			logger.Errorf("Error creating google-sudoers group: %v.", err)
+		}
 	}
 
 	mdkeys := newMetadata.Instance.Attributes.SSHKeys
