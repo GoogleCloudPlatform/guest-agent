@@ -1,4 +1,4 @@
-//  Copyright 2017 Google Inc. All Rights Reserved.
+//  Copyright 2022 Google LLC
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -442,7 +442,7 @@ func (a *addressMgr) set() error {
 	return nil
 }
 
-// Enables or disables IPv6 on the primary interface.
+// Enables or disables IPv6 on network interfaces.
 func configureIPv6() error {
 	var newNi, oldNi networkInterfaces
 	if len(newMetadata.Instance.NetworkInterfaces) == 0 {
@@ -560,6 +560,13 @@ func enableNetworkInterfaces() error {
 
 		if len(googleIpv6Interfaces) == 0 {
 			return nil
+		}
+		for _, iface := range googleIpv6Interfaces {
+			// Enable kernel to accept to route advertisements.
+			val := fmt.Sprintf("net.ipv6.conf.%s.accept_ra_rt_info_max_plen=128", iface)
+			if err := runCmd(exec.Command("sysctl", val)); err != nil {
+				return err
+			}
 		}
 
 		var dhclientArgs6 []string
