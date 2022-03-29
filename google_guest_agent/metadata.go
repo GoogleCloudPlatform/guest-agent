@@ -106,6 +106,7 @@ type project struct {
 type attributes struct {
 	BlockProjectKeys      bool
 	EnableOSLogin         *bool
+	EnableWindowsSSH      *bool
 	TwoFactor             *bool
 	SecurityKey           *bool
 	SSHKeys               []string
@@ -167,6 +168,7 @@ func (a *attributes) UnmarshalJSON(b []byte) error {
 		DisableAddressManager string      `json:"disable-address-manager"`
 		EnableDiagnostics     string      `json:"enable-diagnostics"`
 		EnableOSLogin         string      `json:"enable-oslogin"`
+		EnableWindowsSSH      string      `json:"enable-windows-ssh"`
 		EnableWSFC            string      `json:"enable-wsfc"`
 		OldSSHKeys            string      `json:"sshKeys"`
 		SSHKeys               string      `json:"ssh-keys"`
@@ -204,6 +206,10 @@ func (a *attributes) UnmarshalJSON(b []byte) error {
 	value, err = strconv.ParseBool(temp.EnableOSLogin)
 	if err == nil {
 		a.EnableOSLogin = mkbool(value)
+	}
+	value, err = strconv.ParseBool(temp.EnableWindowsSSH)
+	if err == nil {
+		a.EnableWindowsSSH = mkbool(value)
 	}
 	value, err = strconv.ParseBool(temp.EnableWSFC)
 	if err == nil {
