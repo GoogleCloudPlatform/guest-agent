@@ -43,7 +43,7 @@ var badExpire []string
 
 //CheckExpired takes a time string and determines if it represents a time in the past.
 func CheckExpired(expireOn string) bool {
-    t, err := time.Parse(time.RFC3339, expireOn)
+	t, err := time.Parse(time.RFC3339, expireOn)
 	if err != nil {
 		t2, err2 := time.Parse("2006-01-02T15:04:05-0700", expireOn)
 		if err2 != nil {

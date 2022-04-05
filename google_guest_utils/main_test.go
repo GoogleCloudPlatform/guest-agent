@@ -48,11 +48,11 @@ func stringSliceEqual(a, b []string) bool {
 
 func TestValidateKey(t *testing.T) {
 	table := []struct {
-		key   string
+		key    string
 		valKey []string
 	}{
 		{`usera:ssh-rsa AAAA1234 google-ssh {"userName":"usera@example.com","expireOn":"2095-04-23T12:34:56+0000"}`,
-		[]string{"usera", `ssh-rsa AAAA1234 google-ssh {"userName":"usera@example.com","expireOn":"2095-04-23T12:34:56+0000"}`}},
+			[]string{"usera", `ssh-rsa AAAA1234 google-ssh {"userName":"usera@example.com","expireOn":"2095-04-23T12:34:56+0000"}`}},
 		{`usera:ssh-rsa AAAA1234 google-ssh {"userName":"usera@example.com","expireOn":"2021-04-23T12:34:56+0000"}`, nil},
 		{`usera:ssh-rsa AAAA1234 google-ssh {"userName":"usera@example.com","expireOn":"Apri 4, 2056"}`, nil},
 		{`usera:ssh-rsa AAAA1234 google-ssh`, nil},

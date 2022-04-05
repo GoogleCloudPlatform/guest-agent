@@ -195,7 +195,7 @@ func getUserKeys(mdkeys []string) map[string][]string {
 		}
 		user := validatedKeyData[0]
 		keyVal := validatedKeyData[1]
-		
+
 		// key which is not expired or non-expiring key, add it.
 		userKeys := mdKeyMap[user]
 		userKeys = append(userKeys, keyVal)
