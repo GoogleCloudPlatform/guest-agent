@@ -17,7 +17,6 @@ package main
 import (
 	"bufio"
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -26,8 +25,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 
+	utils "github.com/GoogleCloudPlatform/guest-agent/google_guest_utils"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 )
 
@@ -190,42 +189,16 @@ func (a *accountsMgr) set() error {
 func getUserKeys(mdkeys []string) map[string][]string {
 	mdKeyMap := make(map[string][]string)
 	for i := 0; i < len(mdkeys); i++ {
-		key := strings.Trim(mdkeys[i], " ")
-		if key == "" {
-			logger.Debugf("invalid ssh key entry: %q", key)
+		validatedKeyData := utils.ValidateKey(mdkeys[i])
+		if validatedKeyData == nil {
 			continue
 		}
-		idx := strings.Index(key, ":")
-		if idx == -1 {
-			logger.Debugf("invalid ssh key entry: %q", key)
-			continue
-		}
-		user := key[:idx]
-		if user == "" {
-			logger.Debugf("invalid ssh key entry: %q", key)
-			continue
-		}
-		fields := strings.SplitN(key, " ", 4)
-		if len(fields) == 3 && fields[2] == "google-ssh" {
-			logger.Debugf("invalid ssh key entry: %q", key)
-			// expiring key without expiration format.
-			continue
-		}
-		if len(fields) > 3 {
-			lkey := linuxKey{}
-			if err := json.Unmarshal([]byte(fields[3]), &lkey); err != nil {
-				// invalid expiration format.
-				logger.Debugf("invalid ssh key entry: %q", key)
-				continue
-			}
-			if lkey.expired() {
-				logger.Debugf("expired ssh key entry: %q", key)
-				continue
-			}
-		}
+		user := validatedKeyData[0]
+		keyVal := validatedKeyData[1]
+		
 		// key which is not expired or non-expiring key, add it.
 		userKeys := mdKeyMap[user]
-		userKeys = append(userKeys, key[idx+1:])
+		userKeys = append(userKeys, keyVal)
 		mdKeyMap[user] = userKeys
 	}
 	return mdKeyMap
@@ -328,21 +301,6 @@ func readGoogleUsersFile() (map[string]string, error) {
 		}
 	}
 	return res, nil
-}
-
-type linuxKey windowsKey
-
-// expired returns true if the key's expireOn field is in the past, false otherwise.
-func (k linuxKey) expired() bool {
-	t, err := time.Parse("2006-01-02T15:04:05-0700", k.ExpireOn)
-	if err != nil {
-		if !containsString(k.ExpireOn, badExpire) {
-			logger.Errorf("Error parsing time: %v.", err)
-			badExpire = append(badExpire, k.ExpireOn)
-		}
-		return true
-	}
-	return t.Before(time.Now())
 }
 
 // Replaces {user} or {group} in command string. Supports legacy python-era
