@@ -24,6 +24,7 @@ import (
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 )
 
+//ContainsString checks for the presence of a string in a slice.
 func ContainsString(s string, ss []string) bool {
 	for _, a := range ss {
 		if a == s {
@@ -40,14 +41,19 @@ type sshKeyData struct {
 
 var badExpire []string
 
+//CheckExpired takes a time string and determines if it represents a time in the past.
 func CheckExpired(expireOn string) bool {
-	t, err := time.Parse("2006-01-02T15:04:05-0700", expireOn)
+    t, err := time.Parse(time.RFC3339, expireOn)
 	if err != nil {
-		if !ContainsString(expireOn, badExpire) {
-			logger.Errorf("Error parsing time: %v.", err)
-			badExpire = append(badExpire, expireOn)
+		t2, err2 := time.Parse("2006-01-02T15:04:05-0700", expireOn)
+		if err2 != nil {
+			if !ContainsString(expireOn, badExpire) {
+				logger.Errorf("Error parsing time %v.", err)
+				badExpire = append(badExpire, expireOn)
+			}
+			return true
 		}
-		return true
+		t = t2
 	}
 	return t.Before(time.Now())
 
@@ -57,9 +63,11 @@ func (k sshKeyData) expired() bool {
 	return CheckExpired(k.ExpireOn)
 }
 
-func ValidateKey(raw_key string) []string {
+//ValidateKey takes a string and determines if it is a valid SSH key and returns
+//the user and key if valid, nil otherwise.
+func ValidateKey(rawKey string) []string {
 
-	key := strings.Trim(raw_key, " ")
+	key := strings.Trim(rawKey, " ")
 	if key == "" {
 		logger.Debugf("Invalid ssh key entry: %q", key)
 		return nil
@@ -92,7 +100,7 @@ func ValidateKey(raw_key string) []string {
 			return nil
 		}
 	}
-	var validated_key_data []string
-	validated_key_data = append(validated_key_data, user, key[idx+1:])
-	return validated_key_data
+	var validatedKeyData []string
+	validatedKeyData = append(validatedKeyData, user, key[idx+1:])
+	return validatedKeyData
 }

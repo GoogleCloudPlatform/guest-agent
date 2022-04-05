@@ -49,7 +49,7 @@ func stringSliceEqual(a, b []string) bool {
 func TestValidateKey(t *testing.T) {
 	table := []struct {
 		key   string
-		val_key []string
+		valKey []string
 	}{
 		{`usera:ssh-rsa AAAA1234 google-ssh {"userName":"usera@example.com","expireOn":"2095-04-23T12:34:56+0000"}`,
 		[]string{"usera", `ssh-rsa AAAA1234 google-ssh {"userName":"usera@example.com","expireOn":"2095-04-23T12:34:56+0000"}`}},
@@ -62,7 +62,7 @@ func TestValidateKey(t *testing.T) {
 	}
 
 	for _, tt := range table {
-		if got, want := ValidateKey(tt.key), tt.val_key; !stringSliceEqual(got, want) {
+		if got, want := ValidateKey(tt.key), tt.valKey; !stringSliceEqual(got, want) {
 			t.Errorf("ValidateKey(%s) incorrect return: got %v, want %v", tt.key, got, want)
 		}
 	}

@@ -108,8 +108,6 @@ func printCreds(creds *credsJSON) error {
 	return err
 }
 
-var badExpire []string
-
 func (k windowsKey) expired() bool {
 	return utils.CheckExpired(k.ExpireOn)
 }
