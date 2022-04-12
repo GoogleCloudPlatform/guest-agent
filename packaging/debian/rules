@@ -7,6 +7,7 @@ export DH_OPTIONS
 export DH_GOPKG := github.com/GoogleCloudPlatform/guest-agent
 export CGO_ENABLED := 0
 export GOCACHE := /tmp/.cache
+export GOPROXY := https://proxy.golang.org
 export GO111MODULE := on
 
 %:
