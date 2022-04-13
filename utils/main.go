@@ -18,10 +18,9 @@ package utils
 
 import (
 	"encoding/json"
+	"errors"
 	"strings"
 	"time"
-
-	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 )
 
 //ContainsString checks for the presence of a string in a slice.
@@ -39,68 +38,60 @@ type sshKeyData struct {
 	UserName string
 }
 
-var badExpire []string
 
 //CheckExpired takes a time string and determines if it represents a time in the past.
-func CheckExpired(expireOn string) bool {
+func CheckExpired(expireOn string) (bool, error) {
 	t, err := time.Parse(time.RFC3339, expireOn)
 	if err != nil {
 		t2, err2 := time.Parse("2006-01-02T15:04:05-0700", expireOn)
 		if err2 != nil {
-			if !ContainsString(expireOn, badExpire) {
-				logger.Errorf("Error parsing time %v.", err)
-				badExpire = append(badExpire, expireOn)
-			}
-			return true
+			return true, err //Return RFC3339 error
 		}
 		t = t2
 	}
-	return t.Before(time.Now())
+	return t.Before(time.Now()), nil
 
 }
 
-func (k sshKeyData) expired() bool {
-	return CheckExpired(k.ExpireOn)
-}
+//func (k sshKeyData) expired() bool {
+//	return CheckExpired(k.ExpireOn)
+//}
 
-//ValidateKey takes a string and determines if it is a valid SSH key and returns
+//GetUserKey takes a string and determines if it is a valid SSH key and returns
 //the user and key if valid, nil otherwise.
-func ValidateKey(rawKey string) []string {
+func GetUserKey(rawKey string) (string, string, error) {
 
 	key := strings.Trim(rawKey, " ")
 	if key == "" {
-		logger.Debugf("Invalid ssh key entry: %q", key)
-		return nil
+		return "", "", errors.New("Invalid ssh key entry- empty key")
 	}
 	idx := strings.Index(key, ":")
 	if idx == -1 {
-		logger.Debugf("Invalid ssh key entry: %q", key)
-		return nil
+		return "", "", errors.New("Invalid ssh key entry - unrecognized format")
 	}
 	user := key[:idx]
 	if user == "" {
-		logger.Debugf("invalid ssh key entry: %q", key)
-		return nil
+		return "", "", errors.New("Invalid ssh key entry - user missing")
 	}
 	fields := strings.SplitN(key, " ", 4)
 	if len(fields) == 3 && fields[2] == "google-ssh" {
-		logger.Debugf("invalid ssh key entry: %q", key)
 		// expiring key without expiration format.
-		return nil
+		return "", "", errors.New("Invalid ssh key entry - expiration missing")
 	}
 	if len(fields) > 3 {
 		lkey := sshKeyData{}
 		if err := json.Unmarshal([]byte(fields[3]), &lkey); err != nil {
 			// invalid expiration format.
-			logger.Debugf("invalid ssh key entry: %q", key)
-			return nil
+			return "", "", err
 		}
-		if lkey.expired() {
-			logger.Debugf("expired ssh key entry: %q", key)
-			return nil
+	    expired, err := CheckExpired(lkey.ExpireOn)
+		if err != nil {
+			return "", "", err
+		}
+		if expired {
+			return "", "", errors.New("Invalid ssh key entry - expired key")
 		}
 	}
-	var validatedKeyData []string
-	validatedKeyData = append(validatedKeyData, user, key[idx+1:])
-	return validatedKeyData
+
+	return user, key[idx+1:], nil
 }

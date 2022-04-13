@@ -189,13 +189,12 @@ func (a *accountsMgr) set() error {
 func getUserKeys(mdkeys []string) map[string][]string {
 	mdKeyMap := make(map[string][]string)
 	for i := 0; i < len(mdkeys); i++ {
-		validatedKeyData := utils.ValidateKey(mdkeys[i])
-		if validatedKeyData == nil {
+		user, keyVal, err := utils.GetUserKey(mdkeys[i])
+		if err != nil {
+			logger.Debugf("%s: %s", err.Error, mdkeys[i])
 			continue
 		}
-		user := validatedKeyData[0]
-		keyVal := validatedKeyData[1]
-
+		
 		// key which is not expired or non-expiring key, add it.
 		userKeys := mdKeyMap[user]
 		userKeys = append(userKeys, keyVal)

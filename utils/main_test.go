@@ -34,36 +34,28 @@ func TestContainsString(t *testing.T) {
 	}
 }
 
-func stringSliceEqual(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i, v := range a {
-		if v != b[i] {
-			return false
-		}
-	}
-	return true
-}
-
-func TestValidateKey(t *testing.T) {
+func TestGetUserKey(t *testing.T) {
 	table := []struct {
 		key    string
-		valKey []string
+		user   string
+		keyVal string
+		haserr bool
 	}{
 		{`usera:ssh-rsa AAAA1234 google-ssh {"userName":"usera@example.com","expireOn":"2095-04-23T12:34:56+0000"}`,
-			[]string{"usera", `ssh-rsa AAAA1234 google-ssh {"userName":"usera@example.com","expireOn":"2095-04-23T12:34:56+0000"}`}},
-		{`usera:ssh-rsa AAAA1234 google-ssh {"userName":"usera@example.com","expireOn":"2021-04-23T12:34:56+0000"}`, nil},
-		{`usera:ssh-rsa AAAA1234 google-ssh {"userName":"usera@example.com","expireOn":"Apri 4, 2056"}`, nil},
-		{`usera:ssh-rsa AAAA1234 google-ssh`, nil},
-		{"    ", nil},
-		{"ssh-rsa AAAA1234", nil},
-		{":ssh-rsa AAAA1234", nil},
+			"usera", `ssh-rsa AAAA1234 google-ssh {"userName":"usera@example.com","expireOn":"2095-04-23T12:34:56+0000"}`, false},
+		{`usera:ssh-rsa AAAA1234 google-ssh {"userName":"usera@example.com","expireOn":"2021-04-23T12:34:56+0000"}`, "", "", true},
+		{`usera:ssh-rsa AAAA1234 google-ssh {"userName":"usera@example.com","expireOn":"Apri 4, 2056"}`, "", "", true},
+		{`usera:ssh-rsa AAAA1234 google-ssh`, "", "", true},
+		{"    ", "", "", true},
+		{"ssh-rsa AAAA1234", "", "", true},
+		{":ssh-rsa AAAA1234", "", "", true},
 	}
 
 	for _, tt := range table {
-		if got, want := ValidateKey(tt.key), tt.valKey; !stringSliceEqual(got, want) {
-			t.Errorf("ValidateKey(%s) incorrect return: got %v, want %v", tt.key, got, want)
+		u, k, err := GetUserKey(tt.key)
+		e := err != nil
+		if u != tt.user || k != tt.keyVal || e != tt.haserr {
+			t.Errorf("GetUserKey(%s) incorrect return: got user: %s, key: %s, error: %v - want user %s, key: %s, error: %v", tt.key, u, k, e, tt.user, tt.keyVal, tt.haserr)
 		}
 	}
 }
