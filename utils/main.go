@@ -38,7 +38,6 @@ type sshKeyData struct {
 	UserName string
 }
 
-
 //CheckExpired takes a time string and determines if it represents a time in the past.
 func CheckExpired(expireOn string) (bool, error) {
 	t, err := time.Parse(time.RFC3339, expireOn)
@@ -84,7 +83,7 @@ func GetUserKey(rawKey string) (string, string, error) {
 			// invalid expiration format.
 			return "", "", err
 		}
-	    expired, err := CheckExpired(lkey.ExpireOn)
+		expired, err := CheckExpired(lkey.ExpireOn)
 		if err != nil {
 			return "", "", err
 		}

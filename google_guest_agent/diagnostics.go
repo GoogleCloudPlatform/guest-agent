@@ -44,7 +44,7 @@ type diagnosticsEntry struct {
 func (k diagnosticsEntry) expired() bool {
 	expired, err := utils.CheckExpired(k.ExpireOn)
 	if err != nil {
-		logger.Debugf(err.Error()) 
+		logger.Debugf(err.Error())
 	}
 	return expired
 }
