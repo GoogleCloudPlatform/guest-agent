@@ -21,7 +21,7 @@ import (
 	"strconv"
 	"sync/atomic"
 
-	utils "github.com/GoogleCloudPlatform/guest-agent/google_guest_utils"
+	"github.com/GoogleCloudPlatform/guest-agent/utils"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 )
 
