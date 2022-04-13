@@ -191,10 +191,10 @@ func getUserKeys(mdkeys []string) map[string][]string {
 	for i := 0; i < len(mdkeys); i++ {
 		user, keyVal, err := utils.GetUserKey(mdkeys[i])
 		if err != nil {
-			logger.Debugf("%s: %s", err.Error, mdkeys[i])
+			logger.Debugf("%s: %s", err.Error(), mdkeys[i])
 			continue
 		}
-		
+
 		// key which is not expired or non-expiring key, add it.
 		userKeys := mdKeyMap[user]
 		userKeys = append(userKeys, keyVal)

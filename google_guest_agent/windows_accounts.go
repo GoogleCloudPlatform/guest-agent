@@ -109,7 +109,11 @@ func printCreds(creds *credsJSON) error {
 }
 
 func (k windowsKey) expired() bool {
-	return utils.CheckExpired(k.ExpireOn)
+	expired, err := utils.CheckExpired(k.ExpireOn)
+	if err != nil {
+		logger.Debugf(err.Error()) 
+	}
+	return expired
 }
 
 func (k windowsKey) createOrResetPwd() (*credsJSON, error) {
