@@ -52,17 +52,13 @@ func CheckExpired(expireOn string) (bool, error) {
 
 }
 
-//func (k sshKeyData) expired() bool {
-//	return CheckExpired(k.ExpireOn)
-//}
-
 //GetUserKey takes a string and determines if it is a valid SSH key and returns
 //the user and key if valid, nil otherwise.
 func GetUserKey(rawKey string) (string, string, error) {
 
 	key := strings.Trim(rawKey, " ")
 	if key == "" {
-		return "", "", errors.New("Invalid ssh key entry- empty key")
+		return "", "", errors.New("Invalid ssh key entry - empty key")
 	}
 	idx := strings.Index(key, ":")
 	if idx == -1 {

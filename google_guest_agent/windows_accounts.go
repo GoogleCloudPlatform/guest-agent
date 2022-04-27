@@ -112,6 +112,7 @@ func (k windowsKey) expired() bool {
 	expired, err := utils.CheckExpired(k.ExpireOn)
 	if err != nil {
 		logger.Debugf(err.Error())
+		return true
 	}
 	return expired
 }
