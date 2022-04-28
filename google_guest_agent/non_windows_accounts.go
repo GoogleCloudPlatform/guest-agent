@@ -181,6 +181,8 @@ func (a *accountsMgr) set() error {
 	return nil
 }
 
+var badSSHKeys []string
+
 // getUserKeys returns the keys which are not expired and non-expiring key.
 // valid formats are:
 // user:ssh-rsa [KEY_VALUE] [USERNAME]
@@ -189,16 +191,22 @@ func (a *accountsMgr) set() error {
 func getUserKeys(mdkeys []string) map[string][]string {
 	mdKeyMap := make(map[string][]string)
 	for i := 0; i < len(mdkeys); i++ {
-		user, keyVal, err := utils.GetUserKey(mdkeys[i])
-		if err != nil {
-			logger.Debugf("%s: %s", err.Error(), mdkeys[i])
-			continue
-		}
+        trimmedKey := strings.Trim(mdkeys[i], " ")
+		if trimmedKey != "" {
+			user, keyVal, err := utils.GetUserKey(trimmedKey)
+			if err != nil {
+				if !utils.ContainsString(trimmedKey, badSSHKeys) {
+					logger.Errorf("%s: %s", err.Error(), trimmedKey)
+					badSSHKeys = append(badSSHKeys, trimmedKey)
+				}
+				continue
+			}
 
-		// key which is not expired or non-expiring key, add it.
-		userKeys := mdKeyMap[user]
-		userKeys = append(userKeys, keyVal)
-		mdKeyMap[user] = userKeys
+			// key which is not expired or non-expiring key, add it.
+			userKeys := mdKeyMap[user]
+			userKeys = append(userKeys, keyVal)
+			mdKeyMap[user] = userKeys			
+		}
 	}
 	return mdKeyMap
 }

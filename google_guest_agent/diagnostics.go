@@ -44,7 +44,10 @@ type diagnosticsEntry struct {
 func (k diagnosticsEntry) expired() bool {
 	expired, err := utils.CheckExpired(k.ExpireOn)
 	if err != nil {
-		logger.Debugf(err.Error())
+		if !utils.ContainsString(k.ExpireOn, badExpire) {
+			logger.Errorf("error parsing time: %s", err)
+			badExpire = append(badExpire, k.ExpireOn)
+		}
 		return true
 	}
 	return expired
