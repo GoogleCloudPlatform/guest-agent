@@ -191,7 +191,7 @@ var badSSHKeys []string
 func getUserKeys(mdkeys []string) map[string][]string {
 	mdKeyMap := make(map[string][]string)
 	for i := 0; i < len(mdkeys); i++ {
-        trimmedKey := strings.Trim(mdkeys[i], " ")
+		trimmedKey := strings.Trim(mdkeys[i], " ")
 		if trimmedKey != "" {
 			user, keyVal, err := utils.GetUserKey(trimmedKey)
 			if err != nil {
@@ -205,7 +205,7 @@ func getUserKeys(mdkeys []string) map[string][]string {
 			// key which is not expired or non-expiring key, add it.
 			userKeys := mdKeyMap[user]
 			userKeys = append(userKeys, keyVal)
-			mdKeyMap[user] = userKeys			
+			mdKeyMap[user] = userKeys
 		}
 	}
 	return mdKeyMap
