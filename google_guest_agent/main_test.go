@@ -13,23 +13,3 @@
 //  limitations under the License.
 
 package main
-
-import (
-	"testing"
-)
-
-func TestContainsString(t *testing.T) {
-	table := []struct {
-		a     string
-		slice []string
-		want  bool
-	}{
-		{"a", []string{"a", "b"}, true},
-		{"c", []string{"a", "b"}, false},
-	}
-	for _, tt := range table {
-		if got, want := containsString(tt.a, tt.slice), tt.want; got != want {
-			t.Errorf("containsString(%s, %v) incorrect return: got %v, want %t", tt.a, tt.slice, got, want)
-		}
-	}
-}

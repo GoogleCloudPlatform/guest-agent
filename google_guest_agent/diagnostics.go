@@ -20,8 +20,8 @@ import (
 	"reflect"
 	"strconv"
 	"sync/atomic"
-	"time"
 
+	"github.com/GoogleCloudPlatform/guest-agent/utils"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 )
 
@@ -42,15 +42,15 @@ type diagnosticsEntry struct {
 }
 
 func (k diagnosticsEntry) expired() bool {
-	t, err := time.Parse(time.RFC3339, k.ExpireOn)
+	expired, err := utils.CheckExpired(k.ExpireOn)
 	if err != nil {
-		if !containsString(k.ExpireOn, badExpire) {
-			logger.Errorf("Error parsing time: %s", err)
+		if !utils.ContainsString(k.ExpireOn, badExpire) {
+			logger.Errorf("error parsing time: %s", err)
 			badExpire = append(badExpire, k.ExpireOn)
 		}
 		return true
 	}
-	return t.Before(time.Now())
+	return expired
 }
 
 type diagnosticsMgr struct{}
@@ -100,7 +100,7 @@ func (d *diagnosticsMgr) set() error {
 	}
 
 	strEntry := newMetadata.Instance.Attributes.Diagnostics
-	if containsString(strEntry, diagnosticsEntries) {
+	if utils.ContainsString(strEntry, diagnosticsEntries) {
 		return nil
 	}
 	diagnosticsEntries = append(diagnosticsEntries, strEntry)

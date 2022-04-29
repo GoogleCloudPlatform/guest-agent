@@ -27,8 +27,8 @@ import (
 	"hash"
 	"math/big"
 	"reflect"
-	"time"
 
+	"github.com/GoogleCloudPlatform/guest-agent/utils"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 )
 
@@ -111,15 +111,15 @@ func printCreds(creds *credsJSON) error {
 var badExpire []string
 
 func (k windowsKey) expired() bool {
-	t, err := time.Parse(time.RFC3339, k.ExpireOn)
+	expired, err := utils.CheckExpired(k.ExpireOn)
 	if err != nil {
-		if !containsString(k.ExpireOn, badExpire) {
+		if !utils.ContainsString(k.ExpireOn, badExpire) {
 			logger.Errorf("error parsing time: %s", err)
 			badExpire = append(badExpire, k.ExpireOn)
 		}
 		return true
 	}
-	return t.Before(time.Now())
+	return expired
 }
 
 func (k windowsKey) createOrResetPwd() (*credsJSON, error) {
@@ -281,7 +281,7 @@ func compareAccounts(newKeys windowsKeys, oldStrKeys []string) windowsKeys {
 	for _, s := range oldStrKeys {
 		var key windowsKey
 		if err := json.Unmarshal([]byte(s), &key); err != nil {
-			if !containsString(s, badReg) {
+			if !utils.ContainsString(s, badReg) {
 				logger.Errorf("Bad windows key from registry: %s", err)
 				badReg = append(badReg, s)
 			}

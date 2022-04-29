@@ -270,15 +270,6 @@ func runCmdOutputWithTimeout(timeoutSec time.Duration, name string, args ...stri
 	return execResult
 }
 
-func containsString(s string, ss []string) bool {
-	for _, a := range ss {
-		if a == s {
-			return true
-		}
-	}
-	return false
-}
-
 func logFormatWindows(e logger.LogEntry) string {
 	now := time.Now().Format("2006/01/02 15:04:05")
 	// 2006/01/02 15:04:05 GCEGuestAgent This is a log message.

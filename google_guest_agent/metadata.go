@@ -25,6 +25,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/GoogleCloudPlatform/guest-agent/utils"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 )
 
@@ -140,7 +141,7 @@ func (k *windowsKeys) UnmarshalJSON(b []byte) error {
 	for _, jskey := range strings.Split(s, "\n") {
 		var wk windowsKey
 		if err := json.Unmarshal([]byte(jskey), &wk); err != nil {
-			if !containsString(jskey, badKeys) {
+			if !utils.ContainsString(jskey, badKeys) {
 				logger.Errorf("failed to unmarshal windows key from metadata: %s", err)
 				badKeys = append(badKeys, jskey)
 			}
