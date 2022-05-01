@@ -152,6 +152,25 @@ func (k windowsKey) createOrResetPwd() (*credsJSON, error) {
 	return createcredsJSON(k, pwd)
 }
 
+func createSshUser(user string) error {
+	pwd, err := newPwd(20)
+	if err != nil {
+		return fmt.Errorf("error creating password: %v", err)
+	}
+	if _, err := userExists(user); err == nil {
+		return nil
+	}
+	logger.Infof("Creating user %s", user)
+	if err := createUser(user, pwd); err != nil {
+		return fmt.Errorf("error running createUser: %v", err)
+	}
+
+	if err := addUserToGroup(user, "Administrators"); err != nil {
+		return fmt.Errorf("error running addUserToGroup: %v", err)
+	}
+	return nil
+}
+
 func createcredsJSON(k windowsKey, pwd string) (*credsJSON, error) {
 	mod, err := base64.StdEncoding.DecodeString(k.Modulus)
 	if err != nil {
@@ -198,10 +217,40 @@ func createcredsJSON(k windowsKey, pwd string) (*credsJSON, error) {
 	}, nil
 }
 
+func getWinSshEnabled(md *metadata) bool {
+	var enable bool
+	if md.Project.Attributes.EnableWindowsSSH != nil {
+		enable = *md.Project.Attributes.EnableWindowsSSH
+	}
+	if md.Instance.Attributes.EnableWindowsSSH != nil {
+		enable = *md.Instance.Attributes.EnableWindowsSSH
+	}
+	return enable
+}
+
 type winAccountsMgr struct{}
 
 func (a *winAccountsMgr) diff() bool {
-	return !reflect.DeepEqual(newMetadata.Instance.Attributes.WindowsKeys, oldMetadata.Instance.Attributes.WindowsKeys)
+	oldSshEnable := getWinSshEnabled(oldMetadata)
+
+	sshEnable := getWinSshEnabled(newMetadata)
+	if !reflect.DeepEqual(newMetadata.Instance.Attributes.WindowsKeys, oldMetadata.Instance.Attributes.WindowsKeys) {
+		return true
+	}
+	if !compareStringSlice(newMetadata.Instance.Attributes.SSHKeys, oldMetadata.Instance.Attributes.SSHKeys) {
+		return true
+	}
+	if !compareStringSlice(newMetadata.Project.Attributes.SSHKeys, oldMetadata.Project.Attributes.SSHKeys) {
+		return true
+	}
+	if newMetadata.Instance.Attributes.BlockProjectKeys != oldMetadata.Instance.Attributes.BlockProjectKeys {
+		return true
+	}
+	if sshEnable != oldSshEnable {
+		return true
+	}
+
+	return false
 }
 
 func (a *winAccountsMgr) timeout() bool {
@@ -229,6 +278,46 @@ func (a *winAccountsMgr) disabled(os string) (disabled bool) {
 var badKeys []string
 
 func (a *winAccountsMgr) set() error {
+	oldSshEnable := getWinSshEnabled(oldMetadata)
+	sshEnable := getWinSshEnabled(newMetadata)
+
+	if sshEnable != oldSshEnable {
+		if sshEnable {
+			validSshVersion, err := checkWindowsSshVersion(8, 6)
+			if err != nil {
+				logger.Warningf("Cannot determine OpenSSH Version: %v", err)
+			} else if !validSshVersion {
+				logger.Warningf("Detected OpenSSH version may be incompatible with enable_windows_ssh.")
+			}
+			windowsServiceStartAuto("sshd")
+			windowsStartService("sshd")
+			if sshKeys == nil {
+				logger.Debugf("initialize sshKeys map")
+				sshKeys = make(map[string][]string)
+			}
+			mdkeys := newMetadata.Instance.Attributes.SSHKeys
+			if !newMetadata.Instance.Attributes.BlockProjectKeys {
+				mdkeys = append(mdkeys, newMetadata.Project.Attributes.SSHKeys...)
+			}
+
+			mdKeyMap := getUserKeys(mdkeys)
+
+			for user := range mdKeyMap {
+				if err := createSshUser(user); err != nil {
+					logger.Errorf("Error creating user: %s", err)
+					continue
+				}
+			}
+
+		} else {
+			windowsStopService("sshd")
+			windowsServiceStartDisable("sshd")
+		}
+	}
+
+	status := windowsServiceStartStatus("sshd")
+	logger.Debugf("Windows SSH Status: %v", status)
+
 	newKeys := newMetadata.Instance.Attributes.WindowsKeys
 	regKeys, err := readRegMultiString(regKeyBase, accountRegKey)
 	if err != nil && err != errRegNotExist {

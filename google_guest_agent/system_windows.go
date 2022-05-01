@@ -15,11 +15,16 @@
 package main
 
 import (
+	"os/exec"
+	"strconv"
+	"strings"
+
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 	"golang.org/x/sys/windows/registry"
 )
 
 var errRegNotExist = registry.ErrNotExist
+var startRegKey = "Start"
 
 type (
 	DWORD  uint32
@@ -53,6 +58,34 @@ func readRegMultiString(key, name string) ([]string, error) {
 	return s, nil
 }
 
+func readRegString(key, name string) (string, error) {
+	k, err := registry.OpenKey(registry.LOCAL_MACHINE, key, registry.QUERY_VALUE)
+	if err != nil {
+		return "", err
+	}
+	defer k.Close()
+
+	s, _, err := k.GetStringValue(name)
+	if err != nil {
+		return "", err
+	}
+	return s, nil
+}
+
+func readRegInteger(key, name string) (uint64, error) {
+	k, err := registry.OpenKey(registry.LOCAL_MACHINE, key, registry.QUERY_VALUE)
+	if err != nil {
+		return 0, err
+	}
+	defer k.Close()
+
+	i, _, err := k.GetIntegerValue(name)
+	if err != nil {
+		return 0, err
+	}
+	return i, nil
+}
+
 func writeRegMultiString(key, name string, value []string) error {
 	k, err := registry.OpenKey(registry.LOCAL_MACHINE, key, registry.WRITE)
 	if err != nil {
@@ -71,4 +104,109 @@ func deleteRegKey(key, name string) error {
 	defer k.Close()
 
 	return k.DeleteValue(name)
+}
+
+func windowsStartService(servicename string) error {
+	if windowsServiceRunning(servicename) {
+		return nil
+	}
+	return runCmd(exec.Command("net", "start", servicename))
+}
+
+func windowsStopService(servicename string) error {
+	if !windowsServiceRunning(servicename) {
+		return nil
+	}
+	return runCmd(exec.Command("net", "stop", servicename))
+}
+
+func windowsServiceStartAuto(servicename string) error {
+	if windowsServiceStartStatus(servicename) {
+		return nil
+	}
+	return runCmd(exec.Command("sc", "config", servicename, "start=auto"))
+}
+
+func windowsServiceStartDisable(servicename string) error {
+	if !windowsServiceStartStatus(servicename) {
+		return nil
+	}
+	return runCmd(exec.Command("sc", "config", servicename, "start=disabled"))
+}
+
+func windowsServiceStartStatus(servicename string) bool {
+	regKey := `SYSTEM\CurrentControlSet\Services\` + servicename
+	logger.Infof("regKey: %s", regKey)
+	status, err := readRegInteger(regKey, startRegKey)
+	logger.Infof("Status Value %d", status)
+	logger.Infof("Update %s", "3")
+	if err != nil && err != errRegNotExist {
+		logger.Infof("Error: %s", err)
+		return false
+	}
+	return status == 2
+}
+
+var getSshdPath = func() (string, error) {
+	regKey := `SYSTEM\CurrentControlSet\Services\sshd`
+	sshd_bin, err := readRegString(regKey, "ImagePath")
+	if err != nil {
+		return "", err
+	}
+	return string(sshd_bin), nil
+}
+
+var getPowershellOutput = func(cmd string) ([]byte, error) {
+	return exec.Command("powershell", "-c", cmd).Output()
+}
+
+var getWindowsSshVersion = func() (int, int, error) {
+	sshd_bin, err := getSshdPath()
+	if err != nil {
+		return 0, 0, err
+	}
+	psMajor := "(Get-Item '" + sshd_bin + "').VersionInfo.FileMajorPart"
+	major, err := getPowershellOutput(psMajor)
+	if err != nil {
+		return 0, 0, err
+	}
+	psMinor := "(Get-Item '" + sshd_bin + "').VersionInfo.FileMinorPart"
+	minor, err := getPowershellOutput(psMinor)
+	if err != nil {
+		return 0, 0, err
+	}
+	majorStr := strings.TrimSpace(string(major))
+	minorStr := strings.TrimSpace(string(minor))
+
+	majorVer, err := strconv.Atoi(majorStr)
+	if err != nil {
+		return 0, 0, err
+	}
+	minorVer, err := strconv.Atoi(minorStr)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	return majorVer, minorVer, nil
+}
+
+func checkWindowsSshVersion(minVerMajor int, minVerMinor int) (bool, error) {
+	majorVer, minorVer, err := getWindowsSshVersion()
+	if err != nil {
+		return false, err
+	}
+
+	if majorVer > minVerMajor {
+		return true, nil
+	} else if majorVer == minVerMajor {
+		if minorVer >= minVerMinor {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func windowsServiceRunning(servicename string) bool {
+	res := runCmdOutput(exec.Command("sc", "query", servicename))
+	return strings.Contains(res.Stdout(), "RUNNING")
 }
