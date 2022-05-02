@@ -12,6 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+//go:build !windows
 // +build !windows
 
 package main
@@ -36,4 +37,28 @@ func writeRegMultiString(key, name string, value []string) error {
 
 func deleteRegKey(key, name string) error {
 	return nil
+}
+
+func checkWindowsSSHVersion(minVerMajor int, minVerMinor int) (bool, error) {
+	return false, nil
+}
+
+func windowsStartService(servicename string) error {
+	return nil
+}
+
+func windowsStopService(servicename string) error {
+	return nil
+}
+
+func windowsServiceStartAuto(servicename string) error {
+	return nil
+}
+
+func windowsServiceStartDisable(servicename string) error {
+	return nil
+}
+
+func windowsServiceStartStatus(servicename string) bool {
+	return false
 }
