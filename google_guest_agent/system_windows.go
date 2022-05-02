@@ -147,7 +147,7 @@ func windowsServiceStartStatus(servicename string) bool {
 	return status == 2
 }
 
-var getSshdPath = func() (string, error) {
+var getSSHdPath = func() (string, error) {
 	regKey := `SYSTEM\CurrentControlSet\Services\sshd`
 	sshd_bin, err := readRegString(regKey, "ImagePath")
 	if err != nil {
@@ -160,8 +160,8 @@ var getPowershellOutput = func(cmd string) ([]byte, error) {
 	return exec.Command("powershell", "-c", cmd).Output()
 }
 
-var getWindowsSshVersion = func() (int, int, error) {
-	sshd_bin, err := getSshdPath()
+var getWindowsSSHVersion = func() (int, int, error) {
+	sshd_bin, err := getSSHdPath()
 	if err != nil {
 		return 0, 0, err
 	}
@@ -190,8 +190,8 @@ var getWindowsSshVersion = func() (int, int, error) {
 	return majorVer, minorVer, nil
 }
 
-func checkWindowsSshVersion(minVerMajor int, minVerMinor int) (bool, error) {
-	majorVer, minorVer, err := getWindowsSshVersion()
+func checkWindowsSSHVersion(minVerMajor int, minVerMinor int) (bool, error) {
+	majorVer, minorVer, err := getWindowsSSHVersion()
 	if err != nil {
 		return false, err
 	}

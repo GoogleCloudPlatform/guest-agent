@@ -108,12 +108,12 @@ func getMetadata(key string, recurse bool) ([]byte, error) {
 	return md, nil
 }
 
-func parseSshKeys(username string, rawKeys string) []string {
+func parseSSHKeys(username string, rawKeys string) []string {
 	var keyList []string
 	keys := strings.Split(rawKeys, "\n")
 	for _, key := range keys {
-		key_split := strings.SplitN(key, ":", 2)
-		if len(key_split) != 2 {
+		keySplit := strings.SplitN(key, ":", 2)
+		if len(keySplit) != 2 {
 			continue
 		}
 
@@ -140,7 +140,7 @@ func getUserKeys(username string) []string {
 	instanceKeys, err := getMetadataKey("/instance/attributes/ssh-keys")
 
 	if err == nil {
-		instanceKeyList := parseSshKeys(username, instanceKeys)
+		instanceKeyList := parseSSHKeys(username, instanceKeys)
 		userKeyList = append(userKeyList, instanceKeyList...)
 	}
 
@@ -148,7 +148,7 @@ func getUserKeys(username string) []string {
 		projectKeys, err := getMetadataKey("/project/attributes/ssh-keys")
 
 		if err == nil {
-			projectKeyList := parseSshKeys(username, projectKeys)
+			projectKeyList := parseSSHKeys(username, projectKeys)
 			userKeyList = append(userKeyList, projectKeyList...)
 		}
 	}

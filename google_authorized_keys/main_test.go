@@ -37,8 +37,8 @@ func stringSliceEqual(a, b []string) bool {
 	return true
 }
 
-func TestParseSshKeys(t *testing.T) {
-	raw_keys := `
+func TestParseSSHKeys(t *testing.T) {
+	rawKeys := `
 # Here is some random data in the file.
 usera:ssh-rsa AAAA1234USERA
 userb:ssh-rsa AAAA1234USERB
@@ -53,8 +53,8 @@ usera:ssh-rsa AAAA1234 google-ssh {"userName":"usera@example.com","expireOn":"20
 
 	user := "usera"
 
-	if got, want := parseSshKeys(user, raw_keys), expected; !stringSliceEqual(got, want) {
-		t.Errorf("ParseSshKeys(%s,%s) incorrect return: got %v, want %v", user, raw_keys, got, want)
+	if got, want := parseSSHKeys(user, rawKeys), expected; !stringSliceEqual(got, want) {
+		t.Errorf("ParseSSHKeys(%s,%s) incorrect return: got %v, want %v", user, rawKeys, got, want)
 	}
 
 }

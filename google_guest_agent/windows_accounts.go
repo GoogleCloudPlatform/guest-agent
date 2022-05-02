@@ -152,7 +152,7 @@ func (k windowsKey) createOrResetPwd() (*credsJSON, error) {
 	return createcredsJSON(k, pwd)
 }
 
-func createSshUser(user string) error {
+func createSSHUser(user string) error {
 	pwd, err := newPwd(20)
 	if err != nil {
 		return fmt.Errorf("error creating password: %v", err)
@@ -217,7 +217,7 @@ func createcredsJSON(k windowsKey, pwd string) (*credsJSON, error) {
 	}, nil
 }
 
-func getWinSshEnabled(md *metadata) bool {
+func getWinSSHEnabled(md *metadata) bool {
 	var enable bool
 	if md.Project.Attributes.EnableWindowsSSH != nil {
 		enable = *md.Project.Attributes.EnableWindowsSSH
@@ -231,9 +231,9 @@ func getWinSshEnabled(md *metadata) bool {
 type winAccountsMgr struct{}
 
 func (a *winAccountsMgr) diff() bool {
-	oldSshEnable := getWinSshEnabled(oldMetadata)
+	oldSSHEnable := getWinSSHEnabled(oldMetadata)
 
-	sshEnable := getWinSshEnabled(newMetadata)
+	sshEnable := getWinSSHEnabled(newMetadata)
 	if !reflect.DeepEqual(newMetadata.Instance.Attributes.WindowsKeys, oldMetadata.Instance.Attributes.WindowsKeys) {
 		return true
 	}
@@ -246,7 +246,7 @@ func (a *winAccountsMgr) diff() bool {
 	if newMetadata.Instance.Attributes.BlockProjectKeys != oldMetadata.Instance.Attributes.BlockProjectKeys {
 		return true
 	}
-	if sshEnable != oldSshEnable {
+	if sshEnable != oldSSHEnable {
 		return true
 	}
 
@@ -278,15 +278,15 @@ func (a *winAccountsMgr) disabled(os string) (disabled bool) {
 var badKeys []string
 
 func (a *winAccountsMgr) set() error {
-	oldSshEnable := getWinSshEnabled(oldMetadata)
-	sshEnable := getWinSshEnabled(newMetadata)
+	oldSSHEnable := getWinSSHEnabled(oldMetadata)
+	sshEnable := getWinSSHEnabled(newMetadata)
 
-	if sshEnable != oldSshEnable {
+	if sshEnable != oldSSHEnable {
 		if sshEnable {
-			validSshVersion, err := checkWindowsSshVersion(8, 6)
+			validSSHVersion, err := checkWindowsSSHVersion(8, 6)
 			if err != nil {
 				logger.Warningf("Cannot determine OpenSSH Version: %v", err)
-			} else if !validSshVersion {
+			} else if !validSSHVersion {
 				logger.Warningf("Detected OpenSSH version may be incompatible with enable_windows_ssh.")
 			}
 			windowsServiceStartAuto("sshd")
@@ -303,7 +303,7 @@ func (a *winAccountsMgr) set() error {
 			mdKeyMap := getUserKeys(mdkeys)
 
 			for user := range mdKeyMap {
-				if err := createSshUser(user); err != nil {
+				if err := createSSHUser(user); err != nil {
 					logger.Errorf("Error creating user: %s", err)
 					continue
 				}
