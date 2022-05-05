@@ -136,12 +136,8 @@ func windowsServiceStartDisable(servicename string) error {
 
 func windowsServiceStartStatus(servicename string) bool {
 	regKey := `SYSTEM\CurrentControlSet\Services\` + servicename
-	logger.Infof("regKey: %s", regKey)
 	status, err := readRegInteger(regKey, startRegKey)
-	logger.Infof("Status Value %d", status)
-	logger.Infof("Update %s", "3")
 	if err != nil && err != errRegNotExist {
-		logger.Infof("Error: %s", err)
 		return false
 	}
 	return status == 2
