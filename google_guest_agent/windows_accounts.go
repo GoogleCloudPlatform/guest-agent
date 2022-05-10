@@ -289,8 +289,8 @@ func (a *winAccountsMgr) set() error {
 			} else if !validSSHVersion {
 				logger.Warningf("Detected OpenSSH version may be incompatible with enable_windows_ssh.")
 			}
-			windowsServiceStartAuto("sshd")
-			windowsStartService("sshd")
+			setWindowsServiceStartModeAuto("sshd")
+			windowsServiceStart("sshd")
 			if sshKeys == nil {
 				logger.Debugf("initialize sshKeys map")
 				sshKeys = make(map[string][]string)
@@ -305,17 +305,16 @@ func (a *winAccountsMgr) set() error {
 			for user := range mdKeyMap {
 				if err := createSSHUser(user); err != nil {
 					logger.Errorf("Error creating user: %s", err)
-					continue
 				}
 			}
 
 		} else {
-			windowsStopService("sshd")
-			windowsServiceStartDisable("sshd")
+			windowsServiceStop("sshd")
+			setWindowsServiceStartModeDisable("sshd")
 		}
 	}
 
-	status := windowsServiceStartStatus("sshd")
+	status := checkWindowsServiceStartMode("sshd")
 	logger.Debugf("Windows SSH Status: %v", status)
 
 	newKeys := newMetadata.Instance.Attributes.WindowsKeys

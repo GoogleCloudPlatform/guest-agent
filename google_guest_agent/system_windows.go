@@ -106,41 +106,46 @@ func deleteRegKey(key, name string) error {
 	return k.DeleteValue(name)
 }
 
-func windowsStartService(servicename string) error {
-	if windowsServiceRunning(servicename) {
+func windowsServiceStart(servicename string) error {
+	if checkWindowsServiceRunning(servicename) {
 		return nil
 	}
 	return runCmd(exec.Command("net", "start", servicename))
 }
 
-func windowsStopService(servicename string) error {
-	if !windowsServiceRunning(servicename) {
+func windowsServiceStop(servicename string) error {
+	if !checkWindowsServiceRunning(servicename) {
 		return nil
 	}
 	return runCmd(exec.Command("net", "stop", servicename))
 }
 
-func windowsServiceStartAuto(servicename string) error {
-	if windowsServiceStartStatus(servicename) {
+func setWindowsServiceStartModeAuto(servicename string) error {
+	if checkWindowsServiceStartMode(servicename) {
 		return nil
 	}
 	return runCmd(exec.Command("sc", "config", servicename, "start=auto"))
 }
 
-func windowsServiceStartDisable(servicename string) error {
-	if !windowsServiceStartStatus(servicename) {
+func setWindowsServiceStartModeDisable(servicename string) error {
+	if !checkWindowsServiceStartMode(servicename) {
 		return nil
 	}
 	return runCmd(exec.Command("sc", "config", servicename, "start=disabled"))
 }
 
-func windowsServiceStartStatus(servicename string) bool {
+func checkWindowsServiceStartMode(servicename string) bool {
 	regKey := `SYSTEM\CurrentControlSet\Services\` + servicename
 	status, err := readRegInteger(regKey, startRegKey)
 	if err != nil && err != errRegNotExist {
 		return false
 	}
-	return status == 2
+	return status == 2 // Windows Service Start Type "Automatic"
+}
+
+func checkWindowsServiceRunning(servicename string) bool {
+	res := runCmdOutput(exec.Command("sc", "query", servicename))
+	return strings.Contains(res.Stdout(), "RUNNING")
 }
 
 var getSSHdPath = func() (string, error) {
@@ -200,9 +205,4 @@ func checkWindowsSSHVersion(minVerMajor int, minVerMinor int) (bool, error) {
 		}
 	}
 	return false, nil
-}
-
-func windowsServiceRunning(servicename string) bool {
-	res := runCmdOutput(exec.Command("sc", "query", servicename))
-	return strings.Contains(res.Stdout(), "RUNNING")
 }
