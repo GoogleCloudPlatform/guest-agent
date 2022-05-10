@@ -42,22 +42,22 @@ func checkWindowsSSHVersion(minVerMajor int, minVerMinor int) (bool, error) {
 	return false, nil
 }
 
-func windowsStartService(servicename string) error {
+func windowsServiceStart(servicename string) error {
 	return nil
 }
 
-func windowsStopService(servicename string) error {
+func windowsServiceStop(servicename string) error {
 	return nil
 }
 
-func windowsServiceStartAuto(servicename string) error {
+func setWindowsServiceStartModeAuto(servicename string) error {
 	return nil
 }
 
-func windowsServiceStartDisable(servicename string) error {
+func setWindowsServiceStartModeDisable(servicename string) error {
 	return nil
 }
 
-func windowsServiceStartStatus(servicename string) bool {
+func checkWindowsServiceStartMode(servicename string) bool {
 	return false
 }
