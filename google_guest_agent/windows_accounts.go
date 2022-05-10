@@ -314,9 +314,6 @@ func (a *winAccountsMgr) set() error {
 		}
 	}
 
-	status := checkWindowsServiceStartMode("sshd")
-	logger.Debugf("Windows SSH Status: %v", status)
-
 	newKeys := newMetadata.Instance.Attributes.WindowsKeys
 	regKeys, err := readRegMultiString(regKeyBase, accountRegKey)
 	if err != nil && err != errRegNotExist {
