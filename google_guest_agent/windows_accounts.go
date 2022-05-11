@@ -35,6 +35,8 @@ import (
 var (
 	accountRegKey = "PublicKeys"
 	credsWriter   = &serialPort{"COM4"}
+	minSSHVersion = versionInfo{8, 6}
+	sshdRegKey    = `SYSTEM\CurrentControlSet\Services\sshd`
 )
 
 // newPwd will generate a random password that meets Windows complexity
@@ -283,12 +285,23 @@ func (a *winAccountsMgr) set() error {
 
 	if sshEnable != oldSSHEnable {
 		if sshEnable {
-			validSSHVersion, err := checkWindowsSSHVersion(8, 6)
+			sshdPath, err := getWindowsServiceImagePath(sshdRegKey)
 			if err != nil {
-				logger.Warningf("Cannot determine OpenSSH Version: %v", err)
-			} else if !validSSHVersion {
-				logger.Warningf("Detected OpenSSH version may be incompatible with enable_windows_ssh.")
+				logger.Warningf("Cannot determine sshd path: %v", err)
+			} else {
+				sshdVersion, err := getWindowsExeVersion(sshdPath)
+				if err != nil {
+					logger.Warningf("Cannot determine OpenSSH Version: %v", err)
+				} else {
+					validOpenSSHVersion := checkMinimumVersion(sshdVersion, minSSHVersion)
+					if !validOpenSSHVersion {
+						logger.Warningf("Detected OpenSSH version may be incompatible with "+
+							"enable_windows_ssh. Found Version: %d.%d, Need Version: %d.%d",
+							sshdVersion.major, sshdVersion.minor, minSSHVersion.major, minSSHVersion.minor)
+					}
+				}
 			}
+
 			setWindowsServiceStartModeAuto("sshd")
 			windowsServiceStart("sshd")
 			if sshKeys == nil {

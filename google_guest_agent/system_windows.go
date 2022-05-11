@@ -148,61 +148,61 @@ func checkWindowsServiceRunning(servicename string) bool {
 	return strings.Contains(res.Stdout(), "RUNNING")
 }
 
-var getSSHdPath = func() (string, error) {
-	regKey := `SYSTEM\CurrentControlSet\Services\sshd`
-	sshd_bin, err := readRegString(regKey, "ImagePath")
+func getWindowsServiceImagePath(regKey string) (string, error) {
+	imagePath, err := readRegString(regKey, "ImagePath")
 	if err != nil {
 		return "", err
 	}
-	return string(sshd_bin), nil
+	return string(imagePath), nil
 }
 
 var getPowershellOutput = func(cmd string) ([]byte, error) {
 	return exec.Command("powershell", "-c", cmd).Output()
 }
 
-var getWindowsSSHVersion = func() (int, int, error) {
-	sshd_bin, err := getSSHdPath()
+type versionInfo struct {
+	major int
+	minor int
+}
+
+func getWindowsExeVersion(path string) (versionInfo, error) {
+	verInfo := versionInfo{0, 0}
+
+	verMajor := "(Get-Item '" + path + "').VersionInfo.FileMajorPart"
+	major, err := getPowershellOutput(verMajor)
 	if err != nil {
-		return 0, 0, err
+		return verInfo, err
 	}
-	psMajor := "(Get-Item '" + sshd_bin + "').VersionInfo.FileMajorPart"
-	major, err := getPowershellOutput(psMajor)
+	verMinor := "(Get-Item '" + path + "').VersionInfo.FileMinorPart"
+	minor, err := getPowershellOutput(verMinor)
 	if err != nil {
-		return 0, 0, err
-	}
-	psMinor := "(Get-Item '" + sshd_bin + "').VersionInfo.FileMinorPart"
-	minor, err := getPowershellOutput(psMinor)
-	if err != nil {
-		return 0, 0, err
+		return verInfo, err
 	}
 	majorStr := strings.TrimSpace(string(major))
 	minorStr := strings.TrimSpace(string(minor))
 
 	majorVer, err := strconv.Atoi(majorStr)
 	if err != nil {
-		return 0, 0, err
+		return verInfo, err
 	}
+	verInfo.major = majorVer
+
 	minorVer, err := strconv.Atoi(minorStr)
 	if err != nil {
-		return 0, 0, err
+		return verInfo, err
 	}
+	verInfo.minor = minorVer
 
-	return majorVer, minorVer, nil
+	return verInfo, nil
 }
 
-func checkWindowsSSHVersion(minVerMajor int, minVerMinor int) (bool, error) {
-	majorVer, minorVer, err := getWindowsSSHVersion()
-	if err != nil {
-		return false, err
-	}
-
-	if majorVer > minVerMajor {
-		return true, nil
-	} else if majorVer == minVerMajor {
-		if minorVer >= minVerMinor {
-			return true, nil
+func checkMinimumVersion(checkVersion versionInfo, minVersion versionInfo) bool {
+	if checkVersion.major > minVersion.major {
+		return true
+	} else if checkVersion.major == minVersion.major {
+		if checkVersion.minor >= minVersion.minor {
+			return true
 		}
 	}
-	return false, nil
+	return false
 }

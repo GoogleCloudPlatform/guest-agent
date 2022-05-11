@@ -38,8 +38,21 @@ func deleteRegKey(key, name string) error {
 	return nil
 }
 
-func checkWindowsSSHVersion(minVerMajor int, minVerMinor int) (bool, error) {
-	return false, nil
+func getWindowsServiceImagePath(regKey string) (string, error) {
+	return "", nil
+}
+
+type versionInfo struct {
+	major int
+	minor int
+}
+
+func getWindowsExeVersion(path string) (versionInfo, error) {
+	return nil, nil
+}
+
+func checkMinimumVersion(checkVersion versionInfo, minVersion versionInfo) bool {
+	return false
 }
 
 func windowsServiceStart(servicename string) error {

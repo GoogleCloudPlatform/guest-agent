@@ -27,7 +27,7 @@ func powershellVersionOutput(cmd string, major []byte, minor []byte) []byte {
 	return minor
 }
 
-func TestGetWindowsSSHVersion(t *testing.T) {
+func TestGetWindowsExeVersion(t *testing.T) {
 
 	tests := []struct {
 		name              string
@@ -42,9 +42,6 @@ func TestGetWindowsSSHVersion(t *testing.T) {
 				getPowershellOutput = func(cmd string) ([]byte, error) {
 					return powershellVersionOutput(cmd, []byte("8\r\n"), []byte("6\r\n")), nil
 				}
-				getSSHdPath = func() (string, error) {
-					return `C:\Program Files\OpenSSH\sshd.exe`, nil
-				}
 			},
 			major:     8,
 			minor:     6,
@@ -55,9 +52,6 @@ func TestGetWindowsSSHVersion(t *testing.T) {
 			fakePowershellOut: func() {
 				getPowershellOutput = func(cmd string) ([]byte, error) {
 					return powershellVersionOutput(cmd, []byte(""), []byte("")), errors.New("Test Error")
-				}
-				getSSHdPath = func() (string, error) {
-					return `C:\Program Files\OpenSSH\sshd.exe`, nil
 				}
 			},
 			major:     0,
@@ -70,9 +64,6 @@ func TestGetWindowsSSHVersion(t *testing.T) {
 				getPowershellOutput = func(cmd string) ([]byte, error) {
 					return powershellVersionOutput(cmd, []byte(""), []byte("")), nil
 				}
-				getSSHdPath = func() (string, error) {
-					return `C:\Program Files\OpenSSH\sshd.exe`, nil
-				}
 			},
 			major:     0,
 			minor:     0,
@@ -84,25 +75,8 @@ func TestGetWindowsSSHVersion(t *testing.T) {
 				getPowershellOutput = func(cmd string) ([]byte, error) {
 					return powershellVersionOutput(cmd, []byte("8\r\n"), []byte("")), nil
 				}
-				getSSHdPath = func() (string, error) {
-					return `C:\Program Files\OpenSSH\sshd.exe`, nil
-				}
 			},
-			major:     0,
-			minor:     0,
-			expectErr: true,
-		},
-		{
-			name: "Test cannot get sshd path",
-			fakePowershellOut: func() {
-				getPowershellOutput = func(cmd string) ([]byte, error) {
-					return powershellVersionOutput(cmd, []byte("8\r\n"), []byte("6\r\n")), nil
-				}
-				getSSHdPath = func() (string, error) {
-					return "", errors.New("Test Error")
-				}
-			},
-			major:     0,
+			major:     8,
 			minor:     0,
 			expectErr: true,
 		},
@@ -113,10 +87,10 @@ func TestGetWindowsSSHVersion(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.fakePowershellOut()
-			mj, mn, err := getWindowsSSHVersion()
+			verInfo, err := getWindowsExeVersion(`C:\Path\to\sshd.exe`)
 			errFound := err != nil
-			if mj != tt.major || mn != tt.minor || errFound != tt.expectErr {
-				t.Errorf("getWindowsSSHVersion incorrect return: got %d.%d, error: %v - want %d.%d, error: %v", mj, mn, errFound, tt.major, tt.minor, tt.expectErr)
+			if verInfo.major != tt.major || verInfo.minor != tt.minor || errFound != tt.expectErr {
+				t.Errorf("getWindowsSSHVersion incorrect return: got %d.%d, error: %v - want %d.%d, error: %v", verInfo.major, verInfo.minor, errFound, tt.major, tt.minor, tt.expectErr)
 			}
 		})
 	}
@@ -124,102 +98,39 @@ func TestGetWindowsSSHVersion(t *testing.T) {
 	getPowershellOutput = origGetPowershellOutput
 }
 
-func TestCheckWindowsSSHVersion(t *testing.T) {
-
+func TestCheckMinimumVersion(t *testing.T) {
 	tests := []struct {
-		name              string
-		fakeGetSSHVersion func(int, int)
-		major             int
-		minor             int
-		minMajor          int
-		minMinor          int
-		expectOk          bool
-		expectErr         bool
+		version    versionInfo
+		minVersion versionInfo
+		ok         bool
 	}{
 		{
-			name: "Test basic functionality",
-			fakeGetSSHVersion: func(maj int, min int) {
-				getWindowsSSHVersion = func() (int, int, error) {
-					return maj, min, nil
-				}
-			},
-			major:     8,
-			minor:     6,
-			minMajor:  8,
-			minMinor:  6,
-			expectOk:  true,
-			expectErr: false,
+			version:    versionInfo{8, 6},
+			minVersion: versionInfo{8, 6},
+			ok:         true,
 		},
 		{
-			name: "Test newer major version",
-			fakeGetSSHVersion: func(maj int, min int) {
-				getWindowsSSHVersion = func() (int, int, error) {
-					return maj, min, nil
-				}
-			},
-			major:     9,
-			minor:     3,
-			minMajor:  8,
-			minMinor:  6,
-			expectOk:  true,
-			expectErr: false,
+			version:    versionInfo{9, 3},
+			minVersion: versionInfo{8, 6},
+			ok:         true,
 		},
 		{
-			name: "Test older minor version",
-			fakeGetSSHVersion: func(maj int, min int) {
-				getWindowsSSHVersion = func() (int, int, error) {
-					return maj, min, nil
-				}
-			},
-			major:     8,
-			minor:     3,
-			minMajor:  8,
-			minMinor:  6,
-			expectOk:  false,
-			expectErr: false,
+			version:    versionInfo{8, 3},
+			minVersion: versionInfo{8, 6},
+			ok:         false,
 		},
 		{
-			name: "Test older major version",
-			fakeGetSSHVersion: func(maj int, min int) {
-				getWindowsSSHVersion = func() (int, int, error) {
-					return maj, min, nil
-				}
-			},
-			major:     7,
-			minor:     9,
-			minMajor:  8,
-			minMinor:  6,
-			expectOk:  false,
-			expectErr: false,
-		},
-		{
-			name: "Test error from getting version",
-			fakeGetSSHVersion: func(maj int, min int) {
-				getWindowsSSHVersion = func() (int, int, error) {
-					return maj, min, errors.New("Test Error")
-				}
-			},
-			major:     0,
-			minor:     0,
-			minMajor:  8,
-			minMinor:  6,
-			expectOk:  false,
-			expectErr: true,
+			version:    versionInfo{7, 9},
+			minVersion: versionInfo{8, 6},
+			ok:         false,
 		},
 	}
-
-	origGetWindowsSSHVersion := getWindowsSSHVersion
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tt.fakeGetSSHVersion(tt.major, tt.minor)
-			ok, err := checkWindowsSSHVersion(tt.minMajor, tt.minMinor)
-			errFound := err != nil
-			if ok != tt.expectOk || errFound != tt.expectErr {
-				t.Errorf("checkWindowsSSHVersion(%d, %d) for version %d.%d incorrect return: got %v, error: %v - want %v, error: %v", tt.minMajor, tt.minMinor, tt.major, tt.minor, ok, errFound, tt.expectOk, tt.expectErr)
-			}
-		})
+		check := checkMinimumVersion(tt.version, tt.minVersion)
+		if check != tt.ok {
+			t.Errorf("CheckMinimumVersion not correct: Got: %v, Want: %v for Version %d.%d with Min Version of %d.%d",
+				check, tt.ok, tt.version.major, tt.version.minor, tt.minVersion.major, tt.minVersion.minor)
+		}
 	}
-
-	getWindowsSSHVersion = origGetWindowsSSHVersion
 }
