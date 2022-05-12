@@ -15,87 +15,55 @@
 package main
 
 import (
-	"errors"
-	"strings"
 	"testing"
 )
 
-func powershellVersionOutput(cmd string, major []byte, minor []byte) []byte {
-	if strings.Contains(cmd, "FileMajorPart") {
-		return major
-	}
-	return minor
-}
-
-func TestGetWindowsExeVersion(t *testing.T) {
-
+func TestParseVersionInfo(t *testing.T) {
 	tests := []struct {
-		name              string
-		fakePowershellOut func()
-		major             int
-		minor             int
-		expectErr         bool
+		psOutput    []byte
+		expectedVer versionInfo
+		expectErr   bool
 	}{
 		{
-			name: "Test basic functionality",
-			fakePowershellOut: func() {
-				getPowershellOutput = func(cmd string) ([]byte, error) {
-					return powershellVersionOutput(cmd, []byte("8\r\n"), []byte("6\r\n")), nil
-				}
-			},
-			major:     8,
-			minor:     6,
-			expectErr: false,
+			psOutput:    []byte("8.6.0.0\r\n"),
+			expectedVer: versionInfo{8, 6},
+			expectErr:   false,
 		},
 		{
-			name: "Test powershell error",
-			fakePowershellOut: func() {
-				getPowershellOutput = func(cmd string) ([]byte, error) {
-					return powershellVersionOutput(cmd, []byte(""), []byte("")), errors.New("Test Error")
-				}
-			},
-			major:     0,
-			minor:     0,
-			expectErr: true,
+			psOutput:    []byte("8.6.0.0"),
+			expectedVer: versionInfo{8, 6},
+			expectErr:   false,
 		},
 		{
-			name: "Test empty return value",
-			fakePowershellOut: func() {
-				getPowershellOutput = func(cmd string) ([]byte, error) {
-					return powershellVersionOutput(cmd, []byte(""), []byte("")), nil
-				}
-			},
-			major:     0,
-			minor:     0,
-			expectErr: true,
+			psOutput:    []byte("8.6\r\n"),
+			expectedVer: versionInfo{8, 6},
+			expectErr:   false,
 		},
 		{
-			name: "Test empty minor version",
-			fakePowershellOut: func() {
-				getPowershellOutput = func(cmd string) ([]byte, error) {
-					return powershellVersionOutput(cmd, []byte("8\r\n"), []byte("")), nil
-				}
-			},
-			major:     8,
-			minor:     0,
-			expectErr: true,
+			psOutput:    []byte("12345.34567.34566.3463456\r\n"),
+			expectedVer: versionInfo{12345, 34567},
+			expectErr:   false,
+		},
+		{
+			psOutput:    []byte("8\r\n"),
+			expectedVer: versionInfo{0, 0},
+			expectErr:   true,
+		},
+		{
+			psOutput:    []byte("\r\n"),
+			expectedVer: versionInfo{0, 0},
+			expectErr:   true,
 		},
 	}
-
-	origGetPowershellOutput := getPowershellOutput
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tt.fakePowershellOut()
-			verInfo, err := getWindowsExeVersion(`C:\Path\to\sshd.exe`)
-			errFound := err != nil
-			if verInfo.major != tt.major || verInfo.minor != tt.minor || errFound != tt.expectErr {
-				t.Errorf("getWindowsSSHVersion incorrect return: got %d.%d, error: %v - want %d.%d, error: %v", verInfo.major, verInfo.minor, errFound, tt.major, tt.minor, tt.expectErr)
-			}
-		})
+		verInfo, err := parseVersionInfo(tt.psOutput)
+		hasErr := err != nil
+		if verInfo != tt.expectedVer || hasErr != tt.expectErr {
+			t.Errorf("parseVersionInfo(%v) not correct: Got: %v, Error: %v, Want: %v, Error: %v",
+				tt.psOutput, verInfo, hasErr, tt.expectedVer, tt.expectErr)
+		}
 	}
-
-	getPowershellOutput = origGetPowershellOutput
 }
 
 func TestCheckMinimumVersion(t *testing.T) {

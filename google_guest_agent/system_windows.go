@@ -15,6 +15,7 @@
 package main
 
 import (
+	"fmt"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -156,44 +157,42 @@ func getWindowsServiceImagePath(regKey string) (string, error) {
 	return string(imagePath), nil
 }
 
-var getPowershellOutput = func(cmd string) ([]byte, error) {
-	return exec.Command("powershell", "-c", cmd).Output()
-}
-
 type versionInfo struct {
 	major int
 	minor int
 }
 
-func getWindowsExeVersion(path string) (versionInfo, error) {
+func parseVersionInfo(psOutput []byte) (versionInfo, error) {
 	verInfo := versionInfo{0, 0}
+	verStr := strings.TrimSpace(string(psOutput))
+	splitVer := strings.Split(verStr, ".")
 
-	verMajor := "(Get-Item '" + path + "').VersionInfo.FileMajorPart"
-	major, err := getPowershellOutput(verMajor)
-	if err != nil {
-		return verInfo, err
+	if len(splitVer) < 2 {
+		return verInfo, fmt.Errorf("Cannot parse OpenSSH version string: %v", verStr)
 	}
-	verMinor := "(Get-Item '" + path + "').VersionInfo.FileMinorPart"
-	minor, err := getPowershellOutput(verMinor)
-	if err != nil {
-		return verInfo, err
-	}
-	majorStr := strings.TrimSpace(string(major))
-	minorStr := strings.TrimSpace(string(minor))
 
-	majorVer, err := strconv.Atoi(majorStr)
+	majorVer, err := strconv.Atoi(splitVer[0])
 	if err != nil {
 		return verInfo, err
 	}
 	verInfo.major = majorVer
 
-	minorVer, err := strconv.Atoi(minorStr)
+	minorVer, err := strconv.Atoi(splitVer[1])
 	if err != nil {
 		return verInfo, err
 	}
 	verInfo.minor = minorVer
 
 	return verInfo, nil
+}
+
+func getWindowsExeVersion(path string) (versionInfo, error) {
+	psCmd := "(Get-Item '" + path + "').VersionInfo.FileVersion"
+	psVer, err := exec.Command("powershell", "-c", psCmd).Output()
+	if err != nil {
+		return versionInfo{0, 0}, err
+	}
+	return parseVersionInfo(psVer)
 }
 
 func checkMinimumVersion(checkVersion versionInfo, minVersion versionInfo) bool {
