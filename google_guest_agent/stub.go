@@ -48,7 +48,7 @@ type versionInfo struct {
 }
 
 func getWindowsExeVersion(path string) (versionInfo, error) {
-	return nil, nil
+	return versionInfo{0, 0}, nil
 }
 
 func checkMinimumVersion(checkVersion versionInfo, minVersion versionInfo) bool {
