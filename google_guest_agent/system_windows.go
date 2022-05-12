@@ -107,43 +107,6 @@ func deleteRegKey(key, name string) error {
 	return k.DeleteValue(name)
 }
 
-func windowsServiceStart(servicename string) error {
-	if checkWindowsServiceRunning(servicename) {
-		return nil
-	}
-	return runCmd(exec.Command("net", "start", servicename))
-}
-
-func windowsServiceStop(servicename string) error {
-	if !checkWindowsServiceRunning(servicename) {
-		return nil
-	}
-	return runCmd(exec.Command("net", "stop", servicename))
-}
-
-func setWindowsServiceStartModeAuto(servicename string) error {
-	if checkWindowsServiceStartMode(servicename) {
-		return nil
-	}
-	return runCmd(exec.Command("sc", "config", servicename, "start=auto"))
-}
-
-func setWindowsServiceStartModeDisable(servicename string) error {
-	if !checkWindowsServiceStartMode(servicename) {
-		return nil
-	}
-	return runCmd(exec.Command("sc", "config", servicename, "start=disabled"))
-}
-
-func checkWindowsServiceStartMode(servicename string) bool {
-	regKey := `SYSTEM\CurrentControlSet\Services\` + servicename
-	status, err := readRegInteger(regKey, startRegKey)
-	if err != nil && err != errRegNotExist {
-		return false
-	}
-	return status == 2 // Windows Service Start Type "Automatic"
-}
-
 func checkWindowsServiceRunning(servicename string) bool {
 	res := runCmdOutput(exec.Command("sc", "query", servicename))
 	return strings.Contains(res.Stdout(), "RUNNING")

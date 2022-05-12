@@ -302,8 +302,11 @@ func (a *winAccountsMgr) set() error {
 				}
 			}
 
-			setWindowsServiceStartModeAuto("sshd")
-			windowsServiceStart("sshd")
+			if !checkWindowsServiceRunning("sshd") {
+				logger.Warningf("The 'enable-windows-ssh' metadata key is set to 'true' " +
+					"but sshd does not appear to be running.")
+			}
+ 
 			if sshKeys == nil {
 				logger.Debugf("initialize sshKeys map")
 				sshKeys = make(map[string][]string)
@@ -320,10 +323,6 @@ func (a *winAccountsMgr) set() error {
 					logger.Errorf("Error creating user: %s", err)
 				}
 			}
-
-		} else {
-			windowsServiceStop("sshd")
-			setWindowsServiceStartModeDisable("sshd")
 		}
 	}
 

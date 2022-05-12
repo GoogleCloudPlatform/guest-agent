@@ -55,22 +55,6 @@ func checkMinimumVersion(checkVersion versionInfo, minVersion versionInfo) bool 
 	return false
 }
 
-func windowsServiceStart(servicename string) error {
-	return nil
-}
-
-func windowsServiceStop(servicename string) error {
-	return nil
-}
-
-func setWindowsServiceStartModeAuto(servicename string) error {
-	return nil
-}
-
-func setWindowsServiceStartModeDisable(servicename string) error {
-	return nil
-}
-
-func checkWindowsServiceStartMode(servicename string) bool {
+func checkWindowsServiceRunning(servicename string) bool {
 	return false
 }
