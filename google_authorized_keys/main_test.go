@@ -40,9 +40,8 @@ func stringSliceEqual(a, b []string) bool {
 func boolToStr(b *bool) string {
 	if b == nil {
 		return "<nil>"
-	} else {
-		return strconv.FormatBool(*b)
 	}
+	return strconv.FormatBool(*b)
 }
 
 var t = true
