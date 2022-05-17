@@ -113,11 +113,12 @@ func checkWindowsServiceRunning(servicename string) bool {
 }
 
 func getWindowsServiceImagePath(regKey string) (string, error) {
-	imagePath, err := readRegString(regKey, "ImagePath")
+	regValue, err := readRegString(regKey, "ImagePath")
 	if err != nil {
 		return "", err
 	}
-	return string(imagePath), nil
+	imagePath := strings.Trim(string(regValue), `"`)
+	return imagePath, nil
 }
 
 type versionInfo struct {
