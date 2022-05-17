@@ -283,8 +283,8 @@ func (a *winAccountsMgr) set() error {
 	oldSSHEnable := getWinSSHEnabled(oldMetadata)
 	sshEnable := getWinSSHEnabled(newMetadata)
 
-	if sshEnable != oldSSHEnable {
-		if sshEnable {
+	if sshEnable {
+		if sshEnable != oldSSHEnable {
 			sshdPath, err := getWindowsServiceImagePath(sshdRegKey)
 			if err != nil {
 				logger.Warningf("Cannot determine sshd path: %v", err)
@@ -306,22 +306,22 @@ func (a *winAccountsMgr) set() error {
 				logger.Warningf("The 'enable-windows-ssh' metadata key is set to 'true' " +
 					"but sshd does not appear to be running.")
 			}
+		}
 
-			if sshKeys == nil {
-				logger.Debugf("initialize sshKeys map")
-				sshKeys = make(map[string][]string)
-			}
-			mdkeys := newMetadata.Instance.Attributes.SSHKeys
-			if !newMetadata.Instance.Attributes.BlockProjectKeys {
-				mdkeys = append(mdkeys, newMetadata.Project.Attributes.SSHKeys...)
-			}
+		if sshKeys == nil {
+			logger.Debugf("initialize sshKeys map")
+			sshKeys = make(map[string][]string)
+		}
+		mdkeys := newMetadata.Instance.Attributes.SSHKeys
+		if !newMetadata.Instance.Attributes.BlockProjectKeys {
+			mdkeys = append(mdkeys, newMetadata.Project.Attributes.SSHKeys...)
+		}
 
-			mdKeyMap := getUserKeys(mdkeys)
+		mdKeyMap := getUserKeys(mdkeys)
 
-			for user := range mdKeyMap {
-				if err := createSSHUser(user); err != nil {
-					logger.Errorf("Error creating user: %s", err)
-				}
+		for user := range mdKeyMap {
+			if err := createSSHUser(user); err != nil {
+				logger.Errorf("Error creating user: %s", err)
 			}
 		}
 	}
