@@ -17,6 +17,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -37,7 +38,6 @@ var (
 	version           = "1.0.0"
 	metadataURL       = "http://169.254.169.254/computeMetadata/v1/"
 	metadataRecursive = "/?recursive=true&alt=json"
-	metadataHang      = "&wait_for_change=true&timeout_sec=2"
 	defaultTimeout    = 2 * time.Second
 )
 
@@ -61,12 +61,10 @@ func (s *serialPort) Write(b []byte) (int, error) {
 	return p.Write(b)
 }
 
-func getMetadataKey(key string) (string, error) {
-	md, err := getMetadata(key, false)
-	if err != nil {
-		return "", err
-	}
-	return string(md), nil
+func logFormatWindows(e logger.LogEntry) string {
+	now := time.Now().Format("2006/01/02 15:04:05")
+	// 2006/01/02 15:04:05 GCEMetadataScripts This is a log message.
+	return fmt.Sprintf("%s %s: %s", now, programName, e.Message)
 }
 
 func getMetadata(key string, recurse bool) ([]byte, error) {
@@ -76,7 +74,7 @@ func getMetadata(key string, recurse bool) ([]byte, error) {
 
 	url := metadataURL + key
 	if recurse {
-		url += metadataHang
+		url += metadataRecursive
 	}
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -108,9 +106,8 @@ func getMetadata(key string, recurse bool) ([]byte, error) {
 	return md, nil
 }
 
-func parseSSHKeys(username string, rawKeys string) []string {
+func parseSSHKeys(username string, keys []string) []string {
 	var keyList []string
-	keys := strings.Split(rawKeys, "\n")
 	for _, key := range keys {
 		keySplit := strings.SplitN(key, ":", 2)
 		if len(keySplit) != 2 {
@@ -129,31 +126,66 @@ func parseSSHKeys(username string, rawKeys string) []string {
 	return keyList
 }
 
-func getUserKeys(username string) []string {
+func getUserKeys(username string, instanceAttributes *attributes, projectAttributes *attributes) []string {
 	var userKeyList []string
-	blockProjectSSHKeys := false
-	bpskStr, err := getMetadataKey("/instance/attributes/block-project-ssh-keys")
-	if err == nil {
-		blockProjectSSHKeys, err = strconv.ParseBool(bpskStr)
-	}
 
-	instanceKeys, err := getMetadataKey("/instance/attributes/ssh-keys")
+	instanceKeyList := parseSSHKeys(username, instanceAttributes.SSHKeys)
+	userKeyList = append(userKeyList, instanceKeyList...)
 
-	if err == nil {
-		instanceKeyList := parseSSHKeys(username, instanceKeys)
-		userKeyList = append(userKeyList, instanceKeyList...)
-	}
+	if !instanceAttributes.BlockProjectSSHKeys {
 
-	if !blockProjectSSHKeys {
-		projectKeys, err := getMetadataKey("/project/attributes/ssh-keys")
+		projectKeyList := parseSSHKeys(username, projectAttributes.SSHKeys)
+		userKeyList = append(userKeyList, projectKeyList...)
 
-		if err == nil {
-			projectKeyList := parseSSHKeys(username, projectKeys)
-			userKeyList = append(userKeyList, projectKeyList...)
-		}
 	}
 
 	return userKeyList
+}
+
+func checkWinSSHEnabled(instanceAttributes *attributes, projectAttributes *attributes) bool {
+	if instanceAttributes.EnableWindowsSSH != nil {
+		return bool(*instanceAttributes.EnableWindowsSSH)
+	} else if projectAttributes.EnableWindowsSSH != nil {
+		return bool(*projectAttributes.EnableWindowsSSH)
+	}
+	return false
+}
+
+type attributes struct {
+	EnableWindowsSSH    *bool
+	BlockProjectSSHKeys bool
+	SSHKeys             []string
+}
+
+func getMetadataAttributes(metadataKey string) (*attributes, error) {
+	var a attributes
+	type jsonAttributes struct {
+		EnableWindowsSSH    string `json:"enable-windows-ssh"`
+		BlockProjectSSHKeys string `json:"block-project-ssh-keys"`
+		SSHKeys             string `json:"ssh-keys"`
+	}
+	var ja jsonAttributes
+	metadata, err := getMetadata(metadataKey, true)
+	if err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(metadata, &ja); err != nil {
+		return nil, err
+	}
+
+	value, err := strconv.ParseBool(ja.BlockProjectSSHKeys)
+	if err == nil {
+		a.BlockProjectSSHKeys = value
+	}
+
+	value, err = strconv.ParseBool(ja.EnableWindowsSSH)
+	if err == nil {
+		a.EnableWindowsSSH = &value
+	}
+	if ja.SSHKeys != "" {
+		a.SSHKeys = strings.Split(ja.SSHKeys, "\n")
+	}
+	return &a, nil
 }
 
 func main() {
@@ -167,12 +199,28 @@ func main() {
 
 	if runtime.GOOS == "windows" {
 		opts.Writers = []io.Writer{&serialPort{"COM1"}, os.Stderr}
+		opts.FormatFunction = logFormatWindows
 	} else {
 		opts.Writers = []io.Writer{os.Stderr}
 	}
 	logger.Init(ctx, opts)
-	logger.Debugf("Starting %s version %s for user %s.", programName, version, username)
 
-	userKeyList := getUserKeys(username)
+	instanceAttributes, err := getMetadataAttributes("instance/attributes/")
+	if err != nil {
+		logger.Errorf("Cannot read instance metadata attributes: %v", err)
+		os.Exit(1)
+	}
+	projectAttributes, err := getMetadataAttributes("project/attributes/")
+	if err != nil {
+		logger.Errorf("Cannot read project metadata attributes: %v", err)
+		os.Exit(1)
+	}
+
+	if runtime.GOOS == "windows" && !checkWinSSHEnabled(instanceAttributes, projectAttributes) {
+		logger.Errorf("Windows SSH not enabled with 'enable-windows-ssh' metadata key.")
+		os.Exit(1)
+	}
+
+	userKeyList := getUserKeys(username, instanceAttributes, projectAttributes)
 	fmt.Printf(strings.Join(userKeyList, "\n"))
 }

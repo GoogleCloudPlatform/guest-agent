@@ -19,8 +19,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
-
-	//"reflect"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
@@ -37,15 +37,27 @@ func stringSliceEqual(a, b []string) bool {
 	return true
 }
 
-func TestParseSSHKeys(t *testing.T) {
-	rawKeys := `
-# Here is some random data in the file.
-usera:ssh-rsa AAAA1234USERA
-userb:ssh-rsa AAAA1234USERB
-usera:ssh-rsa AAAA1234 google-ssh {"userName":"usera@example.com","expireOn":"2095-04-23T12:34:56+0000"}
-usera:ssh-rsa AAAA1234 google-ssh {"userName":"usera@example.com","expireOn":"2020-04-23T12:34:56+0000"}
+func boolToStr(b *bool) string {
+	if b == nil {
+		return "<nil>"
+	} else {
+		return strconv.FormatBool(*b)
+	}
+}
 
-`
+var t = true
+var f = false
+var truebool *bool = &t
+var falsebool *bool = &f
+
+func TestParseSSHKeys(t *testing.T) {
+	keys := []string{
+		"# Here is some random data in the file.",
+		"usera:ssh-rsa AAAA1234USERA",
+		"userb:ssh-rsa AAAA1234USERB",
+		`usera:ssh-rsa AAAA1234 google-ssh {"userName":"usera@example.com","expireOn":"2095-04-23T12:34:56+0000"}`,
+		`usera:ssh-rsa AAAA1234 google-ssh {"userName":"usera@example.com","expireOn":"2020-04-23T12:34:56+0000"}`,
+	}
 	expected := []string{
 		"ssh-rsa AAAA1234USERA",
 		`ssh-rsa AAAA1234 google-ssh {"userName":"usera@example.com","expireOn":"2095-04-23T12:34:56+0000"}`,
@@ -53,128 +65,169 @@ usera:ssh-rsa AAAA1234 google-ssh {"userName":"usera@example.com","expireOn":"20
 
 	user := "usera"
 
-	if got, want := parseSSHKeys(user, rawKeys), expected; !stringSliceEqual(got, want) {
-		t.Errorf("ParseSSHKeys(%s,%s) incorrect return: got %v, want %v", user, rawKeys, got, want)
+	if got, want := parseSSHKeys(user, keys), expected; !stringSliceEqual(got, want) {
+		t.Errorf("ParseSSHKeys(%s,%s) incorrect return: got %v, want %v", user, keys, got, want)
 	}
 
 }
 
-func TestGetUserKeys(t *testing.T) {
-	blockProjectKeys := "False"
-	instanceKeys := "name:ssh-rsa [KEY] instance1\nothername:ssh-rsa [KEY] instance2"
-	projectKeys := "name:ssh-rsa [KEY] project1\nothername:ssh-rsa [KEY] project2"
-	var req int
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if req == 0 {
-			fmt.Fprintf(w, blockProjectKeys)
-		} else if req == 1 {
-			fmt.Fprintf(w, instanceKeys)
-		} else {
-			fmt.Fprintf(w, projectKeys)
-		}
-		req++
-	}))
-	defer ts.Close()
-
-	metadataURL = ts.URL
-	// So that the test wont timeout.
-	defaultTimeout = 1 * time.Second
-
-	want := []string{"ssh-rsa [KEY] instance1", "ssh-rsa [KEY] project1"}
-	got := getUserKeys("name")
-
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("Did not get expected keys.\ngot:\n'%#v'\nwant:\n'%#v'", got, want)
+func TestCheckWinSSHEnabled(t *testing.T) {
+	tests := []struct {
+		instanceEnable *bool
+		projectEnable  *bool
+		expected       bool
+	}{
+		{
+			instanceEnable: truebool,
+			projectEnable:  nil,
+			expected:       true,
+		},
+		{
+			instanceEnable: falsebool,
+			projectEnable:  nil,
+			expected:       false,
+		},
+		{
+			instanceEnable: falsebool,
+			projectEnable:  truebool,
+			expected:       false,
+		},
+		{
+			instanceEnable: nil,
+			projectEnable:  truebool,
+			expected:       true,
+		},
+		{
+			instanceEnable: nil,
+			projectEnable:  falsebool,
+			expected:       false,
+		},
+		{
+			instanceEnable: nil,
+			projectEnable:  nil,
+			expected:       false,
+		},
 	}
-
+	for _, tt := range tests {
+		instanceAttributes := attributes{EnableWindowsSSH: tt.instanceEnable}
+		projectAttributes := attributes{EnableWindowsSSH: tt.projectEnable}
+		if got, want := checkWinSSHEnabled(&instanceAttributes, &projectAttributes), tt.expected; got != want {
+			t.Errorf("checkWinSSHEnabled(%s, %s) incorrect return: got %v, want %v", boolToStr(tt.instanceEnable), boolToStr(tt.projectEnable), got, want)
+		}
+	}
 }
 
-func TestGetUserKeysBlockedProject(t *testing.T) {
-	blockProjectKeys := "True"
-	instanceKeys := "name:ssh-rsa [KEY] instance1\nothername:ssh-rsa [KEY] instance2"
-	projectKeys := "name:ssh-rsa [KEY] project1\nothername:ssh-rsa [KEY] project2"
-	var req int
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if req == 0 {
-			fmt.Fprintf(w, blockProjectKeys)
-		} else if req == 1 {
-			fmt.Fprintf(w, instanceKeys)
-		} else {
-			fmt.Fprintf(w, projectKeys)
-		}
-		req++
-	}))
-	defer ts.Close()
-
-	metadataURL = ts.URL
-	// So that the test wont timeout.
-	defaultTimeout = 1 * time.Second
-
-	want := []string{"ssh-rsa [KEY] instance1"}
-
-	got := getUserKeys("name")
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("Did not get expected keys.\ngot:\n'%#v'\nwant:\n'%#v'", got, want)
+func TestGetUserKeysNew(t *testing.T) {
+	tests := []struct {
+		userName         string
+		instanceMetadata attributes
+		projectMetadata  attributes
+		expectedKeys     []string
+	}{
+		{
+			userName: "name",
+			instanceMetadata: attributes{BlockProjectSSHKeys: false,
+				SSHKeys: []string{"name:ssh-rsa [KEY] instance1", "othername:ssh-rsa [KEY] instance2"},
+			},
+			projectMetadata: attributes{
+				SSHKeys: []string{"name:ssh-rsa [KEY] project1", "othername:ssh-rsa [KEY] project2"},
+			},
+			expectedKeys: []string{"ssh-rsa [KEY] instance1", "ssh-rsa [KEY] project1"},
+		},
+		{
+			userName: "name",
+			instanceMetadata: attributes{BlockProjectSSHKeys: true,
+				SSHKeys: []string{"name:ssh-rsa [KEY] instance1", "othername:ssh-rsa [KEY] instance2"},
+			},
+			projectMetadata: attributes{
+				SSHKeys: []string{"name:ssh-rsa [KEY] project1", "othername:ssh-rsa [KEY] project2"},
+			},
+			expectedKeys: []string{"ssh-rsa [KEY] instance1"},
+		},
+		{
+			userName: "name",
+			instanceMetadata: attributes{BlockProjectSSHKeys: false,
+				SSHKeys: []string{"name:ssh-rsa [KEY] instance1", "othername:ssh-rsa [KEY] instance2"},
+			},
+			projectMetadata: attributes{
+				SSHKeys: nil,
+			},
+			expectedKeys: []string{"ssh-rsa [KEY] instance1"},
+		},
+		{
+			userName: "name",
+			instanceMetadata: attributes{BlockProjectSSHKeys: false,
+				SSHKeys: nil,
+			},
+			projectMetadata: attributes{
+				SSHKeys: []string{"name:ssh-rsa [KEY] project1", "othername:ssh-rsa [KEY] project2"},
+			},
+			expectedKeys: []string{"ssh-rsa [KEY] project1"},
+		},
 	}
 
+	for count, tt := range tests {
+		if got, want := getUserKeys(tt.userName, &tt.instanceMetadata, &tt.projectMetadata), tt.expectedKeys; !stringSliceEqual(got, want) {
+			t.Errorf("getUserKeys[%d] incorrect return: got %v, want %v", count, got, want)
+		}
+	}
 }
 
-func TestGetUserKeysEmptyProject(t *testing.T) {
-	blockProjectKeys := "False"
-	instanceKeys := "name:ssh-rsa [KEY] instance1\nothername:ssh-rsa [KEY] instance2"
-	projectKeys := ""
-	var req int
+func TestGetMetadataAttributes(t *testing.T) {
+	tests := []struct {
+		metadata  string
+		att       *attributes
+		expectErr bool
+	}{
+		{
+			metadata:  `{"enable-windows-ssh":"true","ssh-keys":"name:ssh-rsa [KEY] instance1\nothername:ssh-rsa [KEY] instance2","block-project-ssh-keys":"false","other-metadata":"foo"}`,
+			att:       &attributes{EnableWindowsSSH: truebool, SSHKeys: []string{"name:ssh-rsa [KEY] instance1", "othername:ssh-rsa [KEY] instance2"}, BlockProjectSSHKeys: false},
+			expectErr: false,
+		},
+		{
+			metadata:  `{"enable-windows-ssh":"true","ssh-keys":"name:ssh-rsa [KEY] instance1\nothername:ssh-rsa [KEY] instance2","block-project-ssh-keys":"true","other-metadata":"foo"}`,
+			att:       &attributes{EnableWindowsSSH: truebool, SSHKeys: []string{"name:ssh-rsa [KEY] instance1", "othername:ssh-rsa [KEY] instance2"}, BlockProjectSSHKeys: true},
+			expectErr: false,
+		},
+		{
+			metadata:  `{"ssh-keys":"name:ssh-rsa [KEY] instance1\nothername:ssh-rsa [KEY] instance2","block-project-ssh-keys":"false","other-metadata":"foo"}`,
+			att:       &attributes{EnableWindowsSSH: nil, SSHKeys: []string{"name:ssh-rsa [KEY] instance1", "othername:ssh-rsa [KEY] instance2"}, BlockProjectSSHKeys: false},
+			expectErr: false,
+		},
+		{
+			metadata:  `{"enable-windows-ssh":"false","ssh-keys":"name:ssh-rsa [KEY] instance1\nothername:ssh-rsa [KEY] instance2","other-metadata":"foo"}`,
+			att:       &attributes{EnableWindowsSSH: falsebool, SSHKeys: []string{"name:ssh-rsa [KEY] instance1", "othername:ssh-rsa [KEY] instance2"}, BlockProjectSSHKeys: false},
+			expectErr: false,
+		},
+		{
+			metadata:  `BADJSON`,
+			att:       nil,
+			expectErr: true,
+		},
+	}
+
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if req == 0 {
-			fmt.Fprintf(w, blockProjectKeys)
-		} else if req == 1 {
-			fmt.Fprintf(w, instanceKeys)
-		} else {
-			fmt.Fprintf(w, projectKeys)
-		}
-		req++
+		// Get test number from request path
+		tnum, _ := strconv.Atoi(strings.Split(r.URL.Path, "/")[2])
+		fmt.Fprintf(w, tests[tnum].metadata)
 	}))
+
 	defer ts.Close()
 
 	metadataURL = ts.URL
-	// So that the test wont timeout.
 	defaultTimeout = 1 * time.Second
 
-	want := []string{"ssh-rsa [KEY] instance1"}
-	got := getUserKeys("name")
-
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("Did not get expected keys.\ngot:\n'%#v'\nwant:\n'%#v'", got, want)
-	}
-
-}
-
-func TestGetUserKeysEmptyInstance(t *testing.T) {
-	blockProjectKeys := "False"
-	instanceKeys := ""
-	projectKeys := "name:ssh-rsa [KEY] project1\nothername:ssh-rsa [KEY] project2"
-	var req int
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if req == 0 {
-			fmt.Fprintf(w, blockProjectKeys)
-		} else if req == 1 {
-			fmt.Fprintf(w, instanceKeys)
-		} else {
-			fmt.Fprintf(w, projectKeys)
+	for count, tt := range tests {
+		want := tt.att
+		hasErr := false
+		reqStr := fmt.Sprintf("/attributes/%d", count)
+		got, err := getMetadataAttributes(reqStr)
+		if err != nil {
+			hasErr = true
 		}
-		req++
-	}))
-	defer ts.Close()
 
-	metadataURL = ts.URL
-	// So that the test wont timeout.
-	defaultTimeout = 1 * time.Second
-
-	want := []string{"ssh-rsa [KEY] project1"}
-	got := getUserKeys("name")
-
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("Did not get expected keys.\ngot:\n'%#v'\nwant:\n'%#v'", got, want)
+		if !reflect.DeepEqual(got, want) || hasErr != tt.expectErr {
+			t.Errorf("Failed: Got: %v, Want: %v, Error: %v", got, want, err)
+		}
 	}
-
 }
