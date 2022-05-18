@@ -42,17 +42,8 @@ func getWindowsServiceImagePath(regKey string) (string, error) {
 	return "", nil
 }
 
-type versionInfo struct {
-	major int
-	minor int
-}
-
 func getWindowsExeVersion(path string) (versionInfo, error) {
 	return versionInfo{0, 0}, nil
-}
-
-func checkMinimumVersion(checkVersion versionInfo, minVersion versionInfo) bool {
-	return false
 }
 
 func checkWindowsServiceRunning(servicename string) bool {

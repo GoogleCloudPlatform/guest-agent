@@ -121,11 +121,6 @@ func getWindowsServiceImagePath(regKey string) (string, error) {
 	return imagePath, nil
 }
 
-type versionInfo struct {
-	major int
-	minor int
-}
-
 func parseVersionInfo(psOutput []byte) (versionInfo, error) {
 	verInfo := versionInfo{0, 0}
 	verStr := strings.TrimSpace(string(psOutput))
@@ -157,15 +152,4 @@ func getWindowsExeVersion(path string) (versionInfo, error) {
 		return versionInfo{0, 0}, err
 	}
 	return parseVersionInfo(psVer)
-}
-
-func checkMinimumVersion(checkVersion versionInfo, minVersion versionInfo) bool {
-	if checkVersion.major > minVersion.major {
-		return true
-	} else if checkVersion.major == minVersion.major {
-		if checkVersion.minor >= minVersion.minor {
-			return true
-		}
-	}
-	return false
 }

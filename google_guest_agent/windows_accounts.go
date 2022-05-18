@@ -279,27 +279,47 @@ func (a *winAccountsMgr) disabled(os string) (disabled bool) {
 
 var badKeys []string
 
+type versionInfo struct {
+	major int
+	minor int
+}
+
+func (v versionInfo) String() string {
+	return fmt.Sprintf("%d.%d", v.major, v.minor)
+}
+
+func verifyWinSSHVersion() error {
+	sshdPath, err := getWindowsServiceImagePath(sshdRegKey)
+	if err != nil {
+		return fmt.Errorf("Cannot determine sshd path: %v", err)
+	}
+
+	sshdVersion, err := getWindowsExeVersion(sshdPath)
+	if err != nil {
+		return fmt.Errorf("Cannot determine OpenSSH Version: %v", err)
+	}
+
+	versionError := fmt.Errorf("Detected OpenSSH version may be incompatible with enable_windows_ssh. Found Version: %s, Need Version: %s", sshdVersion, minSSHVersion)
+	if sshdVersion.major < minSSHVersion.major {
+		return versionError
+	}
+
+	if sshdVersion.major == minSSHVersion.major && sshdVersion.minor < minSSHVersion.minor {
+		return versionError
+	}
+
+	return nil
+}
+
 func (a *winAccountsMgr) set() error {
 	oldSSHEnable := getWinSSHEnabled(oldMetadata)
 	sshEnable := getWinSSHEnabled(newMetadata)
 
 	if sshEnable {
 		if sshEnable != oldSSHEnable {
-			sshdPath, err := getWindowsServiceImagePath(sshdRegKey)
+			err := verifyWinSSHVersion()
 			if err != nil {
-				logger.Warningf("Cannot determine sshd path: %v", err)
-			} else {
-				sshdVersion, err := getWindowsExeVersion(sshdPath)
-				if err != nil {
-					logger.Warningf("Cannot determine OpenSSH Version: %v", err)
-				} else {
-					validOpenSSHVersion := checkMinimumVersion(sshdVersion, minSSHVersion)
-					if !validOpenSSHVersion {
-						logger.Warningf("Detected OpenSSH version may be incompatible with "+
-							"enable_windows_ssh. Found Version: %d.%d, Need Version: %d.%d",
-							sshdVersion.major, sshdVersion.minor, minSSHVersion.major, minSSHVersion.minor)
-					}
-				}
+				logger.Warningf(err.Error())
 			}
 
 			if !checkWindowsServiceRunning("sshd") {
