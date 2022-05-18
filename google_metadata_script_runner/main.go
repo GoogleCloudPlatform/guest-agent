@@ -239,36 +239,21 @@ func getMetadata(key string, recurse bool) ([]byte, error) {
 	return md, nil
 }
 
-// runScript makes a temporary directory and temporary file for the script, downloads and then runs it.
-func runScript(ctx context.Context, key, value string) error {
-	var u *url.URL
-	if strings.HasSuffix(key, "-url") {
-		var err error
-		u, err = url.Parse(strings.TrimSpace(value))
-		if err != nil {
-			return err
-		}
-	}
-
-	// Make temp directory.
-	dir, err := ioutil.TempDir(config.Section("MetadataScripts").Key("run_dir").String(), "metadata-scripts")
-	if err != nil {
-		return err
-	}
-	defer os.RemoveAll(dir)
-
-	// These extensions need to be present on Windows. Doesn't hurt to add
-	// on other systems though.
-	tmpFile := filepath.Join(dir, key)
-	for _, ext := range []string{"bat", "cmd", "ps1"} {
-		if strings.HasSuffix(key, "-"+ext) || (u != nil && strings.HasSuffix(u.Path, "."+ext)) {
+func normalizeTmpFileForWindows(tmpFile string, metadataKey string, gcsScriptUrl *url.URL) string {
+	// If either the metadataKey ends in one of these extensions OR if this is a url startup script and if the 
+	// url path ends in one of these extensions, append the extension to the tmpFile name so that Windows can recognize it.
+	for _, ext := range []string{"bat", "cmd", "ps1", "exe"} {
+		if strings.HasSuffix(metadataKey, "-"+ext) || (gcsScriptUrl != nil && strings.HasSuffix(gcsScriptUrl.Path, "."+ext)) {
 			tmpFile = fmt.Sprintf("%s.%s", tmpFile, ext)
 			break
 		}
 	}
+	return tmpFile;
+}
 
+func initScriptTmpFile(ctx context.Context, value string, tmpFile string, gcsScriptUrl *url.URL) error {
 	// Create or download files.
-	if u != nil {
+	if gcsScriptUrl != nil {
 		file, err := os.OpenFile(tmpFile, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0755)
 		if err != nil {
 			return fmt.Errorf("error opening temp file: %v", err)
@@ -288,19 +273,50 @@ func runScript(ctx context.Context, key, value string) error {
 		}
 	}
 
-	// Craft the command to run.
-	var c *exec.Cmd
-	if strings.HasSuffix(tmpFile, ".ps1") {
-		c = exec.Command("powershell.exe", append(powerShellArgs, tmpFile)...)
-	} else {
-		if runtime.GOOS == "windows" {
-			c = exec.Command(tmpFile)
-		} else {
-			c = exec.Command(config.Section("MetadataScripts").Key("default_shell").MustString("/bin/bash"), "-c", tmpFile)
+	return nil
+}
+
+func setupAndRunScript(ctx context.Context, metadataKey string, value string) error {
+	// Make sure that the URL is valid for URL startup scripts
+	var gcsScriptUrl *url.URL
+	if strings.HasSuffix(metadataKey, "-url") {
+		var err error
+		gcsScriptUrl, err = url.Parse(strings.TrimSpace(value))
+		if err != nil {
+			return err
 		}
 	}
 
-	return runCmd(c, key)
+	// Make temp directory.
+	tmpDir, err := ioutil.TempDir(config.Section("MetadataScripts").Key("run_dir").String(), "metadata-scripts")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(tmpDir)
+
+	tmpFile := filepath.Join(tmpDir, metadataKey)
+	if runtime.GOOS == "windows" {
+		tmpFile = normalizeTmpFileForWindows(tmpFile, metadataKey, gcsScriptUrl)
+	}
+	initScriptTmpFile(ctx, value, tmpFile, gcsScriptUrl)
+
+	logger.Infof("Found %s in %s. Running now.", value, metadataKey)
+	return runScript(tmpFile, metadataKey)
+}
+
+// Craft the command to run.
+func runScript(tmpFile string, metadataKey string) error {
+	var cmd *exec.Cmd
+	if strings.HasSuffix(tmpFile, ".ps1") {
+		cmd = exec.Command("powershell.exe", append(powerShellArgs, tmpFile)...)
+	} else {
+		if runtime.GOOS == "windows" {
+			cmd = exec.Command(tmpFile)
+		} else {
+			cmd = exec.Command(config.Section("MetadataScripts").Key("default_shell").MustString("/bin/bash"), "-c", tmpFile)
+		}
+	}
+	return runCmd(cmd, metadataKey)
 }
 
 func runCmd(c *exec.Cmd, name string) error {
@@ -485,7 +501,7 @@ func main() {
 			continue
 		}
 		logger.Infof("Found %s in metadata.", wantedKey)
-		if err := runScript(ctx, wantedKey, value); err != nil {
+		if err := setupAndRunScript(ctx, wantedKey, value); err != nil {
 			logger.Infof("%s %s", wantedKey, err)
 			continue
 		}
