@@ -182,9 +182,9 @@ func TestNormalizeTmpFileForWindows(t *testing.T) {
 	tmpFilePath := "C:/Temp/file"
 
 	testCases := []struct {
-		metadataKey string
-		gcsScriptUrlPath string
-		want string
+		metadataKey      string
+		gcsScriptURLPath string
+		want             string
 	}{
 		{
 			"windows-startup-script-url",
@@ -219,14 +219,14 @@ func TestNormalizeTmpFileForWindows(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		url := url.URL {
-			Path: tc.gcsScriptUrlPath,
+		url := url.URL{
+			Path: tc.gcsScriptURLPath,
 		}
 		got := normalizeTmpFileForWindows(tmpFilePath, tc.metadataKey, &url)
 
 		if got != tc.want {
 			t.Errorf("Return didn't match expected output for inputs:\n fileName: %s, metadataKey: %s, gcsScriptUrl: %s\n Expected: %s\n Got: %s",
-			tmpFilePath, tc.metadataKey, tc.gcsScriptUrlPath, tc.want, got)
+				tmpFilePath, tc.metadataKey, tc.gcsScriptURLPath, tc.want, got)
 		}
 	}
 }

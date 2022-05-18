@@ -239,21 +239,21 @@ func getMetadata(key string, recurse bool) ([]byte, error) {
 	return md, nil
 }
 
-func normalizeTmpFileForWindows(tmpFile string, metadataKey string, gcsScriptUrl *url.URL) string {
-	// If either the metadataKey ends in one of these extensions OR if this is a url startup script and if the 
+func normalizeTmpFileForWindows(tmpFile string, metadataKey string, gcsScriptURL *url.URL) string {
+	// If either the metadataKey ends in one of these extensions OR if this is a url startup script and if the
 	// url path ends in one of these extensions, append the extension to the tmpFile name so that Windows can recognize it.
 	for _, ext := range []string{"bat", "cmd", "ps1", "exe"} {
-		if strings.HasSuffix(metadataKey, "-"+ext) || (gcsScriptUrl != nil && strings.HasSuffix(gcsScriptUrl.Path, "."+ext)) {
+		if strings.HasSuffix(metadataKey, "-"+ext) || (gcsScriptURL != nil && strings.HasSuffix(gcsScriptURL.Path, "."+ext)) {
 			tmpFile = fmt.Sprintf("%s.%s", tmpFile, ext)
 			break
 		}
 	}
-	return tmpFile;
+	return tmpFile
 }
 
-func initScriptTmpFile(ctx context.Context, value string, tmpFile string, gcsScriptUrl *url.URL) error {
+func initScriptTmpFile(ctx context.Context, value string, tmpFile string, gcsScriptURL *url.URL) error {
 	// Create or download files.
-	if gcsScriptUrl != nil {
+	if gcsScriptURL != nil {
 		file, err := os.OpenFile(tmpFile, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0755)
 		if err != nil {
 			return fmt.Errorf("error opening temp file: %v", err)
@@ -278,10 +278,10 @@ func initScriptTmpFile(ctx context.Context, value string, tmpFile string, gcsScr
 
 func setupAndRunScript(ctx context.Context, metadataKey string, value string) error {
 	// Make sure that the URL is valid for URL startup scripts
-	var gcsScriptUrl *url.URL
+	var gcsScriptURL *url.URL
 	if strings.HasSuffix(metadataKey, "-url") {
 		var err error
-		gcsScriptUrl, err = url.Parse(strings.TrimSpace(value))
+		gcsScriptURL, err = url.Parse(strings.TrimSpace(value))
 		if err != nil {
 			return err
 		}
@@ -296,9 +296,9 @@ func setupAndRunScript(ctx context.Context, metadataKey string, value string) er
 
 	tmpFile := filepath.Join(tmpDir, metadataKey)
 	if runtime.GOOS == "windows" {
-		tmpFile = normalizeTmpFileForWindows(tmpFile, metadataKey, gcsScriptUrl)
+		tmpFile = normalizeTmpFileForWindows(tmpFile, metadataKey, gcsScriptURL)
 	}
-	initScriptTmpFile(ctx, value, tmpFile, gcsScriptUrl)
+	initScriptTmpFile(ctx, value, tmpFile, gcsScriptURL)
 
 	logger.Infof("Found %s in %s. Running now.", value, metadataKey)
 	return runScript(tmpFile, metadataKey)
