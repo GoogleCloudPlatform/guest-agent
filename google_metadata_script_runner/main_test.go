@@ -187,34 +187,34 @@ func TestNormalizeFilePathForWindows(t *testing.T) {
 		want             string
 	}{
 		{
-			"windows-startup-script-url",
-			"gs://gcs-bucket/binary.exe",
-			"C:/Temp/file.exe",
+			metadataKey:      "windows-startup-script-url",
+			gcsScriptURLPath: "gs://gcs-bucket/binary.exe",
+			want:             "C:/Temp/file.exe",
 		},
 		{
-			"windows-startup-script-url",
-			"gs://gcs-bucket/binary",
-			"C:/Temp/file",
+			metadataKey:      "windows-startup-script-url",
+			gcsScriptURLPath: "gs://gcs-bucket/binary",
+			want:             "C:/Temp/file",
 		},
 		{
-			"windows-startup-script-ps1",
-			"gs://gcs-bucket/binary.ps1",
-			"C:/Temp/file.ps1",
+			metadataKey:      "windows-startup-script-ps1",
+			gcsScriptURLPath: "gs://gcs-bucket/binary.ps1",
+			want:             "C:/Temp/file.ps1",
 		},
 		{
-			"windows-startup-script-ps1",
-			"gs://gcs-bucket/binary",
-			"C:/Temp/file.ps1",
+			metadataKey:      "windows-startup-script-ps1",
+			gcsScriptURLPath: "gs://gcs-bucket/binary",
+			want:             "C:/Temp/file.ps1",
 		},
 		{
-			"windows-startup-script-bat",
-			"gs://gcs-bucket/binary.bat",
-			"C:/Temp/file.bat",
+			metadataKey:      "windows-startup-script-bat",
+			gcsScriptURLPath: "gs://gcs-bucket/binary.bat",
+			want:             "C:/Temp/file.bat",
 		},
 		{
-			"windows-startup-script-cmd",
-			"gs://gcs-bucket/binary.cmd",
-			"C:/Temp/file.cmd",
+			metadataKey:      "windows-startup-script-cmd",
+			gcsScriptURLPath: "gs://gcs-bucket/binary.cmd",
+			want:             "C:/Temp/file.cmd",
 		},
 	}
 
