@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"reflect"
 	"testing"
@@ -174,5 +175,58 @@ func TestGetMetadata(t *testing.T) {
 
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("metadata does not match expectation, got: %q, want: %q", got, want)
+	}
+}
+
+func TestNormalizeFilePathForWindows(t *testing.T) {
+	tmpFilePath := "C:/Temp/file"
+
+	testCases := []struct {
+		metadataKey      string
+		gcsScriptURLPath string
+		want             string
+	}{
+		{
+			metadataKey:      "windows-startup-script-url",
+			gcsScriptURLPath: "gs://gcs-bucket/binary.exe",
+			want:             "C:/Temp/file.exe",
+		},
+		{
+			metadataKey:      "windows-startup-script-url",
+			gcsScriptURLPath: "gs://gcs-bucket/binary",
+			want:             "C:/Temp/file",
+		},
+		{
+			metadataKey:      "windows-startup-script-ps1",
+			gcsScriptURLPath: "gs://gcs-bucket/binary.ps1",
+			want:             "C:/Temp/file.ps1",
+		},
+		{
+			metadataKey:      "windows-startup-script-ps1",
+			gcsScriptURLPath: "gs://gcs-bucket/binary",
+			want:             "C:/Temp/file.ps1",
+		},
+		{
+			metadataKey:      "windows-startup-script-bat",
+			gcsScriptURLPath: "gs://gcs-bucket/binary.bat",
+			want:             "C:/Temp/file.bat",
+		},
+		{
+			metadataKey:      "windows-startup-script-cmd",
+			gcsScriptURLPath: "gs://gcs-bucket/binary.cmd",
+			want:             "C:/Temp/file.cmd",
+		},
+	}
+
+	for _, tc := range testCases {
+		url := url.URL{
+			Path: tc.gcsScriptURLPath,
+		}
+		got := normalizeFilePathForWindows(tmpFilePath, tc.metadataKey, &url)
+
+		if got != tc.want {
+			t.Errorf("Return didn't match expected output for inputs:\n fileName: %s, metadataKey: %s, gcsScriptUrl: %s\n Expected: %s\n Got: %s",
+				tmpFilePath, tc.metadataKey, tc.gcsScriptURLPath, tc.want, got)
+		}
 	}
 }
