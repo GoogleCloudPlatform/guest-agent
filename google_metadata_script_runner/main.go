@@ -239,22 +239,22 @@ func getMetadata(key string, recurse bool) ([]byte, error) {
 	return md, nil
 }
 
-func normalizeTmpFileForWindows(tmpFile string, metadataKey string, gcsScriptURL *url.URL) string {
+func normalizeFilePathForWindows(filePath string, metadataKey string, gcsScriptURL *url.URL) string {
 	// If either the metadataKey ends in one of these extensions OR if this is a url startup script and if the
-	// url path ends in one of these extensions, append the extension to the tmpFile name so that Windows can recognize it.
+	// url path ends in one of these extensions, append the extension to the filePath name so that Windows can recognize it.
 	for _, ext := range []string{"bat", "cmd", "ps1", "exe"} {
 		if strings.HasSuffix(metadataKey, "-"+ext) || (gcsScriptURL != nil && strings.HasSuffix(gcsScriptURL.Path, "."+ext)) {
-			tmpFile = fmt.Sprintf("%s.%s", tmpFile, ext)
+			filePath = fmt.Sprintf("%s.%s", filePath, ext)
 			break
 		}
 	}
-	return tmpFile
+	return filePath
 }
 
-func initScriptTmpFile(ctx context.Context, value string, tmpFile string, gcsScriptURL *url.URL) error {
+func writeScriptToFile(ctx context.Context, value string, filePath string, gcsScriptURL *url.URL) error {
 	// Create or download files.
 	if gcsScriptURL != nil {
-		file, err := os.OpenFile(tmpFile, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0755)
+		file, err := os.OpenFile(filePath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0755)
 		if err != nil {
 			return fmt.Errorf("error opening temp file: %v", err)
 		}
@@ -268,7 +268,7 @@ func initScriptTmpFile(ctx context.Context, value string, tmpFile string, gcsScr
 	} else {
 		// Trim leading spaces and newlines.
 		value = strings.TrimLeft(value, " \n\v\f\t\r")
-		if err := ioutil.WriteFile(tmpFile, []byte(value), 0755); err != nil {
+		if err := ioutil.WriteFile(filePath, []byte(value), 0755); err != nil {
 			return fmt.Errorf("error writing temp file: %v", err)
 		}
 	}
@@ -296,24 +296,24 @@ func setupAndRunScript(ctx context.Context, metadataKey string, value string) er
 
 	tmpFile := filepath.Join(tmpDir, metadataKey)
 	if runtime.GOOS == "windows" {
-		tmpFile = normalizeTmpFileForWindows(tmpFile, metadataKey, gcsScriptURL)
+		tmpFile = normalizeFilePathForWindows(tmpFile, metadataKey, gcsScriptURL)
 	}
-	initScriptTmpFile(ctx, value, tmpFile, gcsScriptURL)
+	writeScriptToFile(ctx, value, tmpFile, gcsScriptURL)
 
 	logger.Infof("Found %s in %s. Running now.", value, metadataKey)
 	return runScript(tmpFile, metadataKey)
 }
 
 // Craft the command to run.
-func runScript(tmpFile string, metadataKey string) error {
+func runScript(filePath string, metadataKey string) error {
 	var cmd *exec.Cmd
-	if strings.HasSuffix(tmpFile, ".ps1") {
-		cmd = exec.Command("powershell.exe", append(powerShellArgs, tmpFile)...)
+	if strings.HasSuffix(filePath, ".ps1") {
+		cmd = exec.Command("powershell.exe", append(powerShellArgs, filePath)...)
 	} else {
 		if runtime.GOOS == "windows" {
-			cmd = exec.Command(tmpFile)
+			cmd = exec.Command(filePath)
 		} else {
-			cmd = exec.Command(config.Section("MetadataScripts").Key("default_shell").MustString("/bin/bash"), "-c", tmpFile)
+			cmd = exec.Command(config.Section("MetadataScripts").Key("default_shell").MustString("/bin/bash"), "-c", filePath)
 		}
 	}
 	return runCmd(cmd, metadataKey)

@@ -178,7 +178,7 @@ func TestGetMetadata(t *testing.T) {
 	}
 }
 
-func TestNormalizeTmpFileForWindows(t *testing.T) {
+func TestNormalizeFilePathForWindows(t *testing.T) {
 	tmpFilePath := "C:/Temp/file"
 
 	testCases := []struct {
@@ -222,7 +222,7 @@ func TestNormalizeTmpFileForWindows(t *testing.T) {
 		url := url.URL{
 			Path: tc.gcsScriptURLPath,
 		}
-		got := normalizeTmpFileForWindows(tmpFilePath, tc.metadataKey, &url)
+		got := normalizeFilePathForWindows(tmpFilePath, tc.metadataKey, &url)
 
 		if got != tc.want {
 			t.Errorf("Return didn't match expected output for inputs:\n fileName: %s, metadataKey: %s, gcsScriptUrl: %s\n Expected: %s\n Got: %s",
