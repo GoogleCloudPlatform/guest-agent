@@ -236,6 +236,9 @@ func (a *winAccountsMgr) diff() bool {
 	oldSSHEnable := getWinSSHEnabled(oldMetadata)
 
 	sshEnable := getWinSSHEnabled(newMetadata)
+	if sshEnable != oldSSHEnable {
+		return true
+	}
 	if !reflect.DeepEqual(newMetadata.Instance.Attributes.WindowsKeys, oldMetadata.Instance.Attributes.WindowsKeys) {
 		return true
 	}
@@ -246,9 +249,6 @@ func (a *winAccountsMgr) diff() bool {
 		return true
 	}
 	if newMetadata.Instance.Attributes.BlockProjectKeys != oldMetadata.Instance.Attributes.BlockProjectKeys {
-		return true
-	}
-	if sshEnable != oldSSHEnable {
 		return true
 	}
 
