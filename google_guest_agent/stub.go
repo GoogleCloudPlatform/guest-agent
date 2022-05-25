@@ -37,3 +37,15 @@ func writeRegMultiString(key, name string, value []string) error {
 func deleteRegKey(key, name string) error {
 	return nil
 }
+
+func getWindowsServiceImagePath(regKey string) (string, error) {
+	return "", nil
+}
+
+func getWindowsExeVersion(path string) (versionInfo, error) {
+	return versionInfo{0, 0}, nil
+}
+
+func checkWindowsServiceRunning(servicename string) bool {
+	return false
+}

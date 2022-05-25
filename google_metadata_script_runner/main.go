@@ -38,9 +38,9 @@ import (
 	"time"
 
 	"cloud.google.com/go/storage"
+	"github.com/GoogleCloudPlatform/guest-agent/utils"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 	"github.com/go-ini/ini"
-	"github.com/tarm/serial"
 )
 
 var (
@@ -416,21 +416,6 @@ func getExistingKeys(wanted []string) (map[string]string, error) {
 	return nil, nil
 }
 
-type serialPort struct {
-	port string
-}
-
-func (s *serialPort) Write(b []byte) (int, error) {
-	c := &serial.Config{Name: s.port, Baud: 115200}
-	p, err := serial.OpenPort(c)
-	if err != nil {
-		return 0, err
-	}
-	defer p.Close()
-
-	return p.Write(b)
-}
-
 func logFormatWindows(e logger.LogEntry) string {
 	now := time.Now().Format("2006/01/02 15:04:05")
 	// 2006/01/02 15:04:05 GCEMetadataScripts This is a log message.
@@ -454,7 +439,7 @@ func main() {
 	cfgfile := configPath
 	if runtime.GOOS == "windows" {
 		cfgfile = winConfigPath
-		opts.Writers = []io.Writer{&serialPort{"COM1"}, os.Stdout}
+		opts.Writers = []io.Writer{&utils.SerialPort{Port: "COM1"}, os.Stdout}
 		opts.FormatFunction = logFormatWindows
 	} else {
 		opts.Writers = []io.Writer{os.Stdout}

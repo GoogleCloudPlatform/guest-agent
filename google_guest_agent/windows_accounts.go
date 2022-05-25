@@ -27,6 +27,8 @@ import (
 	"hash"
 	"math/big"
 	"reflect"
+	"strconv"
+	"strings"
 
 	"github.com/GoogleCloudPlatform/guest-agent/utils"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
@@ -34,7 +36,9 @@ import (
 
 var (
 	accountRegKey = "PublicKeys"
-	credsWriter   = &serialPort{"COM4"}
+	credsWriter   = &utils.SerialPort{Port: "COM4"}
+	minSSHVersion = versionInfo{8, 6}
+	sshdRegKey    = `SYSTEM\CurrentControlSet\Services\sshd`
 )
 
 // newPwd will generate a random password that meets Windows complexity
@@ -152,6 +156,25 @@ func (k windowsKey) createOrResetPwd() (*credsJSON, error) {
 	return createcredsJSON(k, pwd)
 }
 
+func createSSHUser(user string) error {
+	pwd, err := newPwd(20)
+	if err != nil {
+		return fmt.Errorf("error creating password: %v", err)
+	}
+	if _, err := userExists(user); err == nil {
+		return nil
+	}
+	logger.Infof("Creating user %s", user)
+	if err := createUser(user, pwd); err != nil {
+		return fmt.Errorf("error running createUser: %v", err)
+	}
+
+	if err := addUserToGroup(user, "Administrators"); err != nil {
+		return fmt.Errorf("error running addUserToGroup: %v", err)
+	}
+	return nil
+}
+
 func createcredsJSON(k windowsKey, pwd string) (*credsJSON, error) {
 	mod, err := base64.StdEncoding.DecodeString(k.Modulus)
 	if err != nil {
@@ -198,10 +221,40 @@ func createcredsJSON(k windowsKey, pwd string) (*credsJSON, error) {
 	}, nil
 }
 
+func getWinSSHEnabled(md *metadata) bool {
+	var enable bool
+	if md.Project.Attributes.EnableWindowsSSH != nil {
+		enable = *md.Project.Attributes.EnableWindowsSSH
+	}
+	if md.Instance.Attributes.EnableWindowsSSH != nil {
+		enable = *md.Instance.Attributes.EnableWindowsSSH
+	}
+	return enable
+}
+
 type winAccountsMgr struct{}
 
 func (a *winAccountsMgr) diff() bool {
-	return !reflect.DeepEqual(newMetadata.Instance.Attributes.WindowsKeys, oldMetadata.Instance.Attributes.WindowsKeys)
+	oldSSHEnable := getWinSSHEnabled(oldMetadata)
+
+	sshEnable := getWinSSHEnabled(newMetadata)
+	if sshEnable != oldSSHEnable {
+		return true
+	}
+	if !reflect.DeepEqual(newMetadata.Instance.Attributes.WindowsKeys, oldMetadata.Instance.Attributes.WindowsKeys) {
+		return true
+	}
+	if !compareStringSlice(newMetadata.Instance.Attributes.SSHKeys, oldMetadata.Instance.Attributes.SSHKeys) {
+		return true
+	}
+	if !compareStringSlice(newMetadata.Project.Attributes.SSHKeys, oldMetadata.Project.Attributes.SSHKeys) {
+		return true
+	}
+	if newMetadata.Instance.Attributes.BlockProjectKeys != oldMetadata.Instance.Attributes.BlockProjectKeys {
+		return true
+	}
+
+	return false
 }
 
 func (a *winAccountsMgr) timeout() bool {
@@ -228,7 +281,102 @@ func (a *winAccountsMgr) disabled(os string) (disabled bool) {
 
 var badKeys []string
 
+type versionInfo struct {
+	major int
+	minor int
+}
+
+func (v versionInfo) String() string {
+	return fmt.Sprintf("%d.%d", v.major, v.minor)
+}
+
+func parseVersionInfo(psOutput []byte) (versionInfo, error) {
+	verInfo := versionInfo{0, 0}
+	verStr := strings.TrimSpace(string(psOutput))
+	splitVer := strings.Split(verStr, ".")
+
+	if len(splitVer) < 2 {
+		return verInfo, fmt.Errorf("Cannot parse OpenSSH version string: %v", verStr)
+	}
+
+	majorVer, err := strconv.Atoi(splitVer[0])
+	if err != nil {
+		return verInfo, err
+	}
+	verInfo.major = majorVer
+
+	minorVer, err := strconv.Atoi(splitVer[1])
+	if err != nil {
+		return verInfo, err
+	}
+	verInfo.minor = minorVer
+
+	return verInfo, nil
+}
+
+func versionOk(checkVersion versionInfo, minVersion versionInfo) error {
+	versionError := fmt.Errorf("Detected OpenSSH version may be incompatible with enable_windows_ssh. Found version %s, Need Version: %s", checkVersion, minVersion)
+
+	if checkVersion.major < minVersion.major {
+		return versionError
+	}
+
+	if checkVersion.major == minVersion.major && checkVersion.minor < minVersion.minor {
+		return versionError
+	}
+
+	return nil
+}
+
+func verifyWinSSHVersion() error {
+	sshdPath, err := getWindowsServiceImagePath(sshdRegKey)
+	if err != nil {
+		return fmt.Errorf("Cannot determine sshd path: %v", err)
+	}
+
+	sshdVersion, err := getWindowsExeVersion(sshdPath)
+	if err != nil {
+		return fmt.Errorf("Cannot determine OpenSSH Version: %v", err)
+	}
+
+	return versionOk(sshdVersion, minSSHVersion)
+}
+
 func (a *winAccountsMgr) set() error {
+	oldSSHEnable := getWinSSHEnabled(oldMetadata)
+	sshEnable := getWinSSHEnabled(newMetadata)
+
+	if sshEnable {
+		if sshEnable != oldSSHEnable {
+			err := verifyWinSSHVersion()
+			if err != nil {
+				logger.Warningf(err.Error())
+			}
+
+			if !checkWindowsServiceRunning("sshd") {
+				logger.Warningf("The 'enable-windows-ssh' metadata key is set to 'true' " +
+					"but sshd does not appear to be running.")
+			}
+		}
+
+		if sshKeys == nil {
+			logger.Debugf("initialize sshKeys map")
+			sshKeys = make(map[string][]string)
+		}
+		mdkeys := newMetadata.Instance.Attributes.SSHKeys
+		if !newMetadata.Instance.Attributes.BlockProjectKeys {
+			mdkeys = append(mdkeys, newMetadata.Project.Attributes.SSHKeys...)
+		}
+
+		mdKeyMap := getUserKeys(mdkeys)
+
+		for user := range mdKeyMap {
+			if err := createSSHUser(user); err != nil {
+				logger.Errorf("Error creating user: %s", err)
+			}
+		}
+	}
+
 	newKeys := newMetadata.Instance.Attributes.WindowsKeys
 	regKeys, err := readRegMultiString(regKeyBase, accountRegKey)
 	if err != nil && err != errRegNotExist {
