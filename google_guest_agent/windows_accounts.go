@@ -34,7 +34,7 @@ import (
 
 var (
 	accountRegKey = "PublicKeys"
-	credsWriter   = &serialPort{"COM4"}
+	credsWriter   = &utils.SerialPort{Port: "COM4"}
 	minSSHVersion = versionInfo{8, 6}
 	sshdRegKey    = `SYSTEM\CurrentControlSet\Services\sshd`
 )

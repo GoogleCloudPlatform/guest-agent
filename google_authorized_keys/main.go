@@ -30,7 +30,6 @@ import (
 
 	"github.com/GoogleCloudPlatform/guest-agent/utils"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
-	"github.com/tarm/serial"
 )
 
 var (
@@ -44,21 +43,6 @@ var (
 func logFormat(e logger.LogEntry) string {
 	now := time.Now().Format("2006/01/02 15:04:05")
 	return fmt.Sprintf("%s %s: %s", now, programName, e.Message)
-}
-
-type serialPort struct {
-	port string
-}
-
-func (s *serialPort) Write(b []byte) (int, error) {
-	c := &serial.Config{Name: s.port, Baud: 115200}
-	p, err := serial.OpenPort(c)
-	if err != nil {
-		return 0, err
-	}
-	defer p.Close()
-
-	return p.Write(b)
 }
 
 func logFormatWindows(e logger.LogEntry) string {
@@ -198,7 +182,7 @@ func main() {
 	}
 
 	if runtime.GOOS == "windows" {
-		opts.Writers = []io.Writer{&serialPort{"COM1"}, os.Stderr}
+		opts.Writers = []io.Writer{&utils.SerialPort{Port: "COM1"}, os.Stderr}
 		opts.FormatFunction = logFormatWindows
 	} else {
 		opts.Writers = []io.Writer{os.Stderr}

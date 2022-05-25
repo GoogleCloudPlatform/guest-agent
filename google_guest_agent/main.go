@@ -30,9 +30,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/GoogleCloudPlatform/guest-agent/utils"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 	"github.com/go-ini/ini"
-	"github.com/tarm/serial"
 )
 
 var (
@@ -50,21 +50,6 @@ const (
 	configPath    = `/etc/default/instance_configs.cfg`
 	regKeyBase    = `SOFTWARE\Google\ComputeEngine`
 )
-
-type serialPort struct {
-	port string
-}
-
-func (s *serialPort) Write(b []byte) (int, error) {
-	c := &serial.Config{Name: s.port, Baud: 115200}
-	p, err := serial.OpenPort(c)
-	if err != nil {
-		return 0, err
-	}
-	defer p.Close()
-
-	return p.Write(b)
-}
 
 type manager interface {
 	diff() bool
@@ -134,7 +119,7 @@ func run(ctx context.Context) {
 	opts := logger.LogOpts{LoggerName: programName}
 	if runtime.GOOS == "windows" {
 		opts.FormatFunction = logFormatWindows
-		opts.Writers = []io.Writer{&serialPort{"COM1"}}
+		opts.Writers = []io.Writer{&utils.SerialPort{Port: "COM1"}}
 	} else {
 		opts.FormatFunction = logFormat
 		opts.Writers = []io.Writer{os.Stdout}

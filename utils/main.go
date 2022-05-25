@@ -21,6 +21,8 @@ import (
 	"errors"
 	"strings"
 	"time"
+
+	"github.com/tarm/serial"
 )
 
 //ContainsString checks for the presence of a string in a slice.
@@ -89,4 +91,19 @@ func GetUserKey(rawKey string) (string, string, error) {
 	}
 
 	return user, key[idx+1:], nil
+}
+
+type SerialPort struct {
+	Port string
+}
+
+func (s *SerialPort) Write(b []byte) (int, error) {
+	c := &serial.Config{Name: s.Port, Baud: 115200}
+	p, err := serial.OpenPort(c)
+	if err != nil {
+		return 0, err
+	}
+	defer p.Close()
+
+	return p.Write(b)
 }
