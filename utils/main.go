@@ -93,6 +93,7 @@ func GetUserKey(rawKey string) (string, string, error) {
 	return user, key[idx+1:], nil
 }
 
+//SerialPort is a type for writing to a named serial port.
 type SerialPort struct {
 	Port string
 }
