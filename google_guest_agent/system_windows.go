@@ -15,9 +15,7 @@
 package main
 
 import (
-	"fmt"
 	"os/exec"
-	"strconv"
 	"strings"
 
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
@@ -119,30 +117,6 @@ func getWindowsServiceImagePath(regKey string) (string, error) {
 	}
 	imagePath := strings.Trim(string(regValue), `"`)
 	return imagePath, nil
-}
-
-func parseVersionInfo(psOutput []byte) (versionInfo, error) {
-	verInfo := versionInfo{0, 0}
-	verStr := strings.TrimSpace(string(psOutput))
-	splitVer := strings.Split(verStr, ".")
-
-	if len(splitVer) < 2 {
-		return verInfo, fmt.Errorf("Cannot parse OpenSSH version string: %v", verStr)
-	}
-
-	majorVer, err := strconv.Atoi(splitVer[0])
-	if err != nil {
-		return verInfo, err
-	}
-	verInfo.major = majorVer
-
-	minorVer, err := strconv.Atoi(splitVer[1])
-	if err != nil {
-		return verInfo, err
-	}
-	verInfo.minor = minorVer
-
-	return verInfo, nil
 }
 
 func getWindowsExeVersion(path string) (versionInfo, error) {

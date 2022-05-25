@@ -27,6 +27,8 @@ import (
 	"hash"
 	"math/big"
 	"reflect"
+	"strconv"
+	"strings"
 
 	"github.com/GoogleCloudPlatform/guest-agent/utils"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
@@ -286,6 +288,30 @@ type versionInfo struct {
 
 func (v versionInfo) String() string {
 	return fmt.Sprintf("%d.%d", v.major, v.minor)
+}
+
+func parseVersionInfo(psOutput []byte) (versionInfo, error) {
+	verInfo := versionInfo{0, 0}
+	verStr := strings.TrimSpace(string(psOutput))
+	splitVer := strings.Split(verStr, ".")
+
+	if len(splitVer) < 2 {
+		return verInfo, fmt.Errorf("Cannot parse OpenSSH version string: %v", verStr)
+	}
+
+	majorVer, err := strconv.Atoi(splitVer[0])
+	if err != nil {
+		return verInfo, err
+	}
+	verInfo.major = majorVer
+
+	minorVer, err := strconv.Atoi(splitVer[1])
+	if err != nil {
+		return verInfo, err
+	}
+	verInfo.minor = minorVer
+
+	return verInfo, nil
 }
 
 func versionOk(checkVersion versionInfo, minVersion versionInfo) error {

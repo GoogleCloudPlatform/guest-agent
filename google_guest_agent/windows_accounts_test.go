@@ -301,3 +301,51 @@ func TestVersionOk(t *testing.T) {
 		}
 	}
 }
+
+func TestParseVersionInfo(t *testing.T) {
+	tests := []struct {
+		psOutput    []byte
+		expectedVer versionInfo
+		expectErr   bool
+	}{
+		{
+			psOutput:    []byte("8.6.0.0\r\n"),
+			expectedVer: versionInfo{8, 6},
+			expectErr:   false,
+		},
+		{
+			psOutput:    []byte("8.6.0.0"),
+			expectedVer: versionInfo{8, 6},
+			expectErr:   false,
+		},
+		{
+			psOutput:    []byte("8.6\r\n"),
+			expectedVer: versionInfo{8, 6},
+			expectErr:   false,
+		},
+		{
+			psOutput:    []byte("12345.34567.34566.3463456\r\n"),
+			expectedVer: versionInfo{12345, 34567},
+			expectErr:   false,
+		},
+		{
+			psOutput:    []byte("8\r\n"),
+			expectedVer: versionInfo{0, 0},
+			expectErr:   true,
+		},
+		{
+			psOutput:    []byte("\r\n"),
+			expectedVer: versionInfo{0, 0},
+			expectErr:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		verInfo, err := parseVersionInfo(tt.psOutput)
+		hasErr := err != nil
+		if verInfo != tt.expectedVer || hasErr != tt.expectErr {
+			t.Errorf("parseVersionInfo(%v) not correct: Got: %v, Error: %v, Want: %v, Error: %v",
+				tt.psOutput, verInfo, hasErr, tt.expectedVer, tt.expectErr)
+		}
+	}
+}
