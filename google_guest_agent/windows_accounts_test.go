@@ -263,3 +263,41 @@ func TestGetUserKeys(t *testing.T) {
 		}
 	}
 }
+
+func TestVersionOk(t *testing.T) {
+	tests := []struct {
+		version    versionInfo
+		minVersion versionInfo
+		hasErr     bool
+	}{
+		{
+			version:    versionInfo{8, 6},
+			minVersion: versionInfo{8, 6},
+			hasErr:     false,
+		},
+		{
+			version:    versionInfo{9, 3},
+			minVersion: versionInfo{8, 6},
+			hasErr:     false,
+		},
+		{
+			version:    versionInfo{8, 3},
+			minVersion: versionInfo{8, 6},
+			hasErr:     true,
+		},
+		{
+			version:    versionInfo{7, 9},
+			minVersion: versionInfo{8, 6},
+			hasErr:     true,
+		},
+	}
+
+	for _, tt := range tests {
+		err := versionOk(tt.version, tt.minVersion)
+		hasErr := err != nil
+		if hasErr != tt.hasErr {
+			t.Errorf("versionOk error not correct: Got: %v, Want: %v for Version %d.%d with Min Version of %d.%d",
+				hasErr, tt.hasErr, tt.version.major, tt.version.minor, tt.minVersion.major, tt.minVersion.minor)
+		}
+	}
+}

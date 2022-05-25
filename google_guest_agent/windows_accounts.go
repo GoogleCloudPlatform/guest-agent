@@ -288,6 +288,20 @@ func (v versionInfo) String() string {
 	return fmt.Sprintf("%d.%d", v.major, v.minor)
 }
 
+func versionOk(checkVersion versionInfo, minVersion versionInfo) error {
+	versionError := fmt.Errorf("Detected OpenSSH version may be incompatible with enable_windows_ssh. Found version %s, Need Version: %s", checkVersion, minVersion)
+
+	if checkVersion.major < minVersion.major {
+		return versionError
+	}
+
+	if checkVersion.major == minVersion.major && checkVersion.minor < minVersion.minor {
+		return versionError
+	}
+
+	return nil
+}
+
 func verifyWinSSHVersion() error {
 	sshdPath, err := getWindowsServiceImagePath(sshdRegKey)
 	if err != nil {
@@ -299,16 +313,7 @@ func verifyWinSSHVersion() error {
 		return fmt.Errorf("Cannot determine OpenSSH Version: %v", err)
 	}
 
-	versionError := fmt.Errorf("Detected OpenSSH version may be incompatible with enable_windows_ssh. Found Version: %s, Need Version: %s", sshdVersion, minSSHVersion)
-	if sshdVersion.major < minSSHVersion.major {
-		return versionError
-	}
-
-	if sshdVersion.major == minSSHVersion.major && sshdVersion.minor < minSSHVersion.minor {
-		return versionError
-	}
-
-	return nil
+	return versionOk(sshdVersion, minSSHVersion)
 }
 
 func (a *winAccountsMgr) set() error {
