@@ -7,5 +7,4 @@
 version=$1
 
 GOOS=windows /tmp/go/bin/go build -ldflags "-X main.version=$version" -mod=readonly -o GCEWindowsAgent.exe ./google_guest_agent
-GOOS=windows /tmp/go/bin/go build -mod=readonly -o GCEAuthorizedKeysCommand.exe ./google_authorized_keys
-
+GOOS=windows /tmp/go/bin/go build -ldflags "-X main.version=$version" -mod=readonly -o GCEAuthorizedKeysCommand.exe ./google_authorized_keys
