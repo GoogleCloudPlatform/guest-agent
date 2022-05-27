@@ -8,6 +8,7 @@
   "source": "https://github.com/GoogleCloudPlatform/guest-agent/",
   "files": {
     "GCEWindowsAgent.exe": "<ProgramFiles>/Google/Compute Engine/agent/GCEWindowsAgent.exe",
+    "GCEAuthorizedKeysCommand.exe": "<ProgramFiles>/Google/Compute Engine/agent/GCEAuthorizedKeysCommand.exe",
     "THIRD_PARTY_LICENSES": "<ProgramFiles>/Google/Compute Engine/THIRD_PARTY_LICENSES/",
     "LICENSE": "<ProgramFiles>/Google/Compute Engine/agent/LICENSE.txt"
   },
@@ -35,6 +36,7 @@
   "sources": [{
       "include": [
         "GCEWindowsAgent.exe",
+	"GCEAuthorizedKeysCommand.exe",
         "packaging/googet/agent_install.ps1",
         "packaging/googet/agent_uninstall.ps1",
         "THIRD_PARTY_LICENSES/**",
@@ -43,6 +45,6 @@
   }],
  "build": {
     "linux": "/bin/bash",
-    "linuxArgs": ["-c", "GOOS=windows /tmp/go/bin/go build -ldflags='-X main.version={{.version}}' -mod=readonly -o GCEWindowsAgent.exe ./google_guest_agent"]
+    "linuxArgs": ["-c", "./packaging/googet/windows_agent_build.sh {{.version}}"]
   }
 }

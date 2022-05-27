@@ -34,7 +34,7 @@ import (
 
 var (
 	programName       = "GoogleAuthorizedKeysCommand"
-	version           = "1.0.0"
+	version           string
 	metadataURL       = "http://169.254.169.254/computeMetadata/v1/"
 	metadataRecursive = "/?recursive=true&alt=json"
 	defaultTimeout    = 2 * time.Second
