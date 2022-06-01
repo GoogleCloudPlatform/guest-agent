@@ -24,6 +24,7 @@ override_dh_golang:
 
 override_dh_auto_build:
 	dh_auto_build -O--buildsystem=golang -- -ldflags="-s -w -X main.version=$(VERSION)" -mod=readonly
+	rm obj-x86_64-linux-gnu/bin/google_authorized_keys
 
 override_dh_installinit:
 	# We don't ship sysvinit files or need script changes for them.
