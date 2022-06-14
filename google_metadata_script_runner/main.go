@@ -300,7 +300,6 @@ func setupAndRunScript(ctx context.Context, metadataKey string, value string) er
 	}
 	writeScriptToFile(ctx, value, tmpFile, gcsScriptURL)
 
-	logger.Infof("Found %s in %s. Running now.", value, metadataKey)
 	return runScript(tmpFile, metadataKey)
 }
 
