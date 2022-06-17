@@ -8,7 +8,9 @@ export DH_GOPKG := github.com/GoogleCloudPlatform/guest-agent
 export CGO_ENABLED := 0
 export GOCACHE := /tmp/.cache
 export GOPROXY := https://proxy.golang.org
-export GO111MODULE := on
+export GOPATH := /usr/share/gocode
+export DH_GOLANG_BUILDPKG := github.com/GoogleCloudPlatform/guest-agent/google_guest_agent github.com/GoogleCloudPlatform/guest-agent/google_metadata_script_runner
+
 
 %:
 	dh $@  --buildsystem=golang --with=golang,systemd
@@ -24,8 +26,6 @@ override_dh_golang:
 
 override_dh_auto_build:
 	dh_auto_build -O--buildsystem=golang -- -ldflags="-s -w -X main.version=$(VERSION)" -mod=readonly
-	rm obj-x86_64-linux-gnu/bin/google_authorized_keys || :
-	rm obj-aarch64-linux-gnu/bin/google_authorized_keys || :
 
 override_dh_installinit:
 	# We don't ship sysvinit files or need script changes for them.
