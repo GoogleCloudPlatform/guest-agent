@@ -3,9 +3,8 @@ module github.com/GoogleCloudPlatform/guest-agent
 go 1.16
 
 require (
-	cloud.google.com/go/logging v1.4.2 // indirect
 	cloud.google.com/go/storage v1.22.1
-	github.com/GoogleCloudPlatform/guest-logging-go/logger v0.0.0-20190520155548-67c9af6d7705
+	github.com/GoogleCloudPlatform/guest-logging-go v0.0.0-20210621170517-facc9c0d81b9
 	github.com/go-ini/ini v1.66.6
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da
 	github.com/golang/protobuf v1.5.2
