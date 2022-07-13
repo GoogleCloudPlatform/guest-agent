@@ -25,6 +25,7 @@ Url: https://cloud.google.com/compute/docs/images/guest-environment
 Source0: %{name}_%{version}.orig.tar.gz
 
 BuildArch: %{_arch}
+Requires(post): /usr/bin/cp
 %if ! 0%{?el6}
 BuildRequires: systemd
 %endif
