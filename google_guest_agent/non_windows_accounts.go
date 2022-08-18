@@ -72,7 +72,7 @@ func (a *accountsMgr) diff() bool {
 
 	// If any on-disk keys have expired.
 	for _, keys := range sshKeys {
-		if len(keys) != len(getUserKeys(keys)) {
+		if len(keys) != len(removeExpiredKeys(keys)) {
 			return true
 		}
 	}
@@ -193,14 +193,26 @@ func getUserKeys(mdkeys []string) map[string][]string {
 	for i := 0; i < len(mdkeys); i++ {
 		trimmedKey := strings.Trim(mdkeys[i], " ")
 		if trimmedKey != "" {
-			user, keyVal, err := utils.GetUserKey(trimmedKey)
-			if err != nil {
-				if !utils.ContainsString(trimmedKey, badSSHKeys) {
-					logger.Errorf("%s: %s", err.Error(), trimmedKey)
-					badSSHKeys = append(badSSHKeys, trimmedKey)
-				}
-				continue
-			}
+		  	idx := strings.Index(trimmedKey, ":")
+      	if idx == -1 {
+      		logger.Errorf("%s: %s", "Invalid ssh key entry - unrecognized format", trimmedKey)
+      		badSSHKeys = append(badSSHKeys, trimmedKey)
+      		continue
+      	}
+      	user := trimmedKey[:idx]
+      	if user == "" {
+      		logger.Errorf("%s: %s", "Invalid ssh key entry - user missing", trimmedKey)
+      		badSSHKeys = append(badSSHKeys, trimmedKey)
+      		continue
+      	}
+  			keyVal, err := utils.RemoveExpiredKey(trimmedKey)
+  			if err != nil {
+  				if !utils.ContainsString(trimmedKey, badSSHKeys) {
+  					logger.Errorf("%s: %s", err.Error(), trimmedKey)
+  					badSSHKeys = append(badSSHKeys, trimmedKey)
+  				}
+  				continue
+  			}
 
 			// key which is not expired or non-expiring key, add it.
 			userKeys := mdKeyMap[user]
@@ -209,6 +221,28 @@ func getUserKeys(mdkeys []string) map[string][]string {
 		}
 	}
 	return mdKeyMap
+}
+
+// removeExpiredKeys returns the provided list of keys with expired keys removed.
+// valid formats are:
+// ssh-rsa [KEY_VALUE] [USERNAME]
+// ssh-rsa [KEY_VALUE]
+// ssh-rsa [KEY_VALUE] google-ssh {"userName":"[USERNAME]","expireOn":"[EXPIRE_TIME]"}
+func removeExpiredKeys(keys []string) []string {
+	var res []string
+	for i := 0; i < len(keys); i++ {
+		key := strings.Trim(keys[i], " ")
+		if key != "" {
+			_, err := utils.RemoveExpiredKey(key)
+			if err != nil {
+				continue
+			}
+
+			// key which is not expired or non-expiring key, add it.
+			res = append(res, key)
+		}
+	}
+	return res
 }
 
 // passwdEntry is a user.User with omitted passwd fields restored.
