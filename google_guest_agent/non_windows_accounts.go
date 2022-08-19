@@ -72,7 +72,7 @@ func (a *accountsMgr) diff() bool {
 
 	// If any on-disk keys have expired.
 	for _, keys := range sshKeys {
-		if len(keys) != len(removeExpiredKeys(keys)) {
+		if len(keys) != len(utils.RemoveExpiredKeys(keys)) {
 			return true
 		}
 	}
@@ -188,57 +188,34 @@ var badSSHKeys []string
 // user:ssh-rsa [KEY_VALUE] [USERNAME]
 // user:ssh-rsa [KEY_VALUE]
 // user:ssh-rsa [KEY_VALUE] google-ssh {"userName":"[USERNAME]","expireOn":"[EXPIRE_TIME]"}
-// For this method, the user: prefix is mandatory for a key to be a valid user key
 func getUserKeys(mdkeys []string) map[string][]string {
 	mdKeyMap := make(map[string][]string)
 	for i := 0; i < len(mdkeys); i++ {
 		trimmedKey := strings.Trim(mdkeys[i], " ")
 		if trimmedKey != "" {
-  			user, keyVal, err := utils.GetUserKey(trimmedKey)
-  			if err != nil {
-  				if !utils.ContainsString(trimmedKey, badSSHKeys) {
-  					logger.Errorf("%s: %s", err.Error(), trimmedKey)
-  					badSSHKeys = append(badSSHKeys, trimmedKey)
-  				}
-  				continue
-  			}
-  			// invalid format: no user prefix
-  			if user == "" {
-			    logger.Errorf("%s: %s", "Invalid ssh key entry - unrecognized format", trimmedKey)
+			user, keyVal, err := utils.GetUserKey(trimmedKey)
+			if err != nil {
+				if !utils.ContainsString(trimmedKey, badSSHKeys) {
+					logger.Errorf("%s: %s", err.Error(), trimmedKey)
 					badSSHKeys = append(badSSHKeys, trimmedKey)
-					continue
-			  }
+				}
+				continue
+			}
 
-			// key which is not expired or non-expiring key, add it.
+			// key which has the user prefix, add it.
 			userKeys := mdKeyMap[user]
 			userKeys = append(userKeys, keyVal)
 			mdKeyMap[user] = userKeys
 		}
 	}
-	return mdKeyMap
-}
-
-// removeExpiredKeys returns the provided list of keys with expired keys removed.
-// valid formats are:
-// ssh-rsa [KEY_VALUE] [USERNAME]
-// ssh-rsa [KEY_VALUE]
-// ssh-rsa [KEY_VALUE] google-ssh {"userName":"[USERNAME]","expireOn":"[EXPIRE_TIME]"}
-// The user: prefix does not affect whether or not the key is expired
-func removeExpiredKeys(keys []string) []string {
-	var res []string
-	for i := 0; i < len(keys); i++ {
-		key := strings.Trim(keys[i], " ")
-		if key != "" {
-			_, keyVal, err := utils.GetUserKey(key)
-			if err != nil {
-				continue
-			}
-
-			// key which is not expired or non-expiring key, add it.
-			res = append(res, keyVal)
-		}
+	
+	// remove keys which have expired
+	for user, keys := range mdKeyMap {
+	  nonExpiredKeys := utils.RemoveExpiredKeys(keys)
+	  mdKeyMap[user] = nonExpiredKeys
 	}
-	return res
+	
+	return mdKeyMap
 }
 
 // passwdEntry is a user.User with omitted passwd fields restored.

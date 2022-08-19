@@ -1,3 +1,5 @@
+
+
 //  Copyright 2022 Google Inc. All Rights Reserved.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,7 +23,7 @@ import (
 	"errors"
 	"strings"
 	"time"
-
+	
 	"github.com/tarm/serial"
 )
 
@@ -62,31 +64,9 @@ func GetUserKey(rawKey string) (string, string, error) {
 	if key == "" {
 		return "", "", errors.New("Invalid ssh key entry - empty key")
 	}
-
-	fields := strings.SplitN(key, " ", 4)
-	if len(fields) == 3 && fields[2] == "google-ssh" {
-		// expiring key without expiration format.
-		return "", "", errors.New("Invalid ssh key entry - expiration missing")
-	}
-	if len(fields) > 3 {
-		lkey := sshKeyData{}
-		if err := json.Unmarshal([]byte(fields[3]), &lkey); err != nil {
-			// invalid expiration format.
-			return "", "", err
-		}
-		expired, err := CheckExpired(lkey.ExpireOn)
-		if err != nil {
-			return "", "", err
-		}
-		if expired {
-			return "", "", errors.New("Invalid ssh key entry - expired key")
-		}
-	}
-	
 	idx := strings.Index(key, ":")
-	// having no user: prefix is not necessarily an error in every case
 	if idx == -1 {
-		return "", key, nil
+		return "", "", errors.New("Invalid ssh key entry - unrecognized format")
 	}
 	user := key[:idx]
 	if user == "" {
@@ -95,6 +75,49 @@ func GetUserKey(rawKey string) (string, string, error) {
 
 	return user, key[idx+1:], nil
 }
+
+// RemoveExpiredKeys returns the provided list of keys with expired keys removed.
+// valid formats are:
+// ssh-rsa [KEY_VALUE] [USERNAME]
+// ssh-rsa [KEY_VALUE]
+// ssh-rsa [KEY_VALUE] google-ssh {"userName":"[USERNAME]","expireOn":"[EXPIRE_TIME]"}
+//
+// see: https://cloud.google.com/compute/docs/instances/adding-removing-ssh-keys#sshkeyformat
+func RemoveExpiredKeys(keys []string) []string {
+	var res []string
+	for i := 0; i < len(keys); i++ {
+		key := strings.Trim(keys[i], " ")
+		if key == "" {
+			continue
+		}
+  	fields := strings.SplitN(key, " ", 4)
+  	if len(fields) == 3 && fields[2] == "google-ssh" {
+  		// expiring key without expiration format.
+  		continue
+  	}
+  	if len(fields) > 3 {
+  		lkey := sshKeyData{}
+  		if err := json.Unmarshal([]byte(fields[3]), &lkey); err != nil {
+  			// invalid expiration format.
+  			continue
+  		}
+  		expired, err := CheckExpired(lkey.ExpireOn)
+  		if err != nil {
+  			continue
+  		}
+  		// only keep keys which are not expired
+  		if expired {
+  			continue
+  		}
+  		res = append(res, key)
+
+		} else {
+		    res = append(res, key)
+		}
+	}
+	return res
+}
+
 //SerialPort is a type for writing to a named serial port.
 type SerialPort struct {
 	Port string
