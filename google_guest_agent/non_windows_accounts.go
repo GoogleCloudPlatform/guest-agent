@@ -56,6 +56,16 @@ func compareStringSlice(first, second []string) bool {
 	return true
 }
 
+func removeExpiredKeys(keys []string) []string {
+	var validKeys []string
+	for _, key := range keys {
+		if err := utils.CheckExpiredKey(key); err == nil {
+			validKeys = append(validKeys, key)
+		}
+	}
+	return validKeys
+}
+
 type accountsMgr struct{}
 
 func (a *accountsMgr) diff() bool {
@@ -72,7 +82,7 @@ func (a *accountsMgr) diff() bool {
 
 	// If any on-disk keys have expired.
 	for _, keys := range sshKeys {
-		if len(keys) != len(getUserKeys(keys)) {
+		if len(keys) != len(removeExpiredKeys(keys)) {
 			return true
 		}
 	}

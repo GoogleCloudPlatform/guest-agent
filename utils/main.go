@@ -25,7 +25,7 @@ import (
 	"github.com/tarm/serial"
 )
 
-//ContainsString checks for the presence of a string in a slice.
+// ContainsString checks for the presence of a string in a slice.
 func ContainsString(s string, ss []string) bool {
 	for _, a := range ss {
 		if a == s {
@@ -35,12 +35,42 @@ func ContainsString(s string, ss []string) bool {
 	return false
 }
 
-type sshKeyData struct {
+type sshExpiration struct {
 	ExpireOn string
 	UserName string
 }
 
-//CheckExpired takes a time string and determines if it represents a time in the past.
+// CheckExpiredKey validates whether a key has expired. Keys with invalid expiration formats will result in an
+// error.
+func CheckExpiredKey(key string) error {
+	fields := strings.SplitN(key, " ", 4)
+	if len(fields) < 3 {
+		// Non-expiring key.
+		return nil
+	}
+	if len(fields) == 3 && fields[2] == "google-ssh" {
+		// expiring key without expiration format.
+		return errors.New("Invalid ssh key entry - expiration missing")
+	}
+	if len(fields) > 3 {
+		lkey := sshExpiration{}
+		if err := json.Unmarshal([]byte(fields[3]), &lkey); err != nil {
+			// invalid expiration format.
+			return err
+		}
+		expired, err := CheckExpired(lkey.ExpireOn)
+		if err != nil {
+			return err
+		}
+		if expired {
+			return errors.New("Invalid ssh key entry - expired key")
+		}
+	}
+
+	return nil
+}
+
+// CheckExpired takes a time string and determines if it represents a time in the past.
 func CheckExpired(expireOn string) (bool, error) {
 	t, err := time.Parse(time.RFC3339, expireOn)
 	if err != nil {
@@ -54,10 +84,9 @@ func CheckExpired(expireOn string) (bool, error) {
 
 }
 
-//GetUserKey takes a string and determines if it is a valid SSH key and returns
-//the user and key if valid, nil otherwise.
+// GetUserKey takes a string and determines if it is a valid SSH key and returns
+// the user and key if valid, nil otherwise.
 func GetUserKey(rawKey string) (string, string, error) {
-
 	key := strings.Trim(rawKey, " ")
 	if key == "" {
 		return "", "", errors.New("Invalid ssh key entry - empty key")
@@ -70,30 +99,14 @@ func GetUserKey(rawKey string) (string, string, error) {
 	if user == "" {
 		return "", "", errors.New("Invalid ssh key entry - user missing")
 	}
-	fields := strings.SplitN(key, " ", 4)
-	if len(fields) == 3 && fields[2] == "google-ssh" {
-		// expiring key without expiration format.
-		return "", "", errors.New("Invalid ssh key entry - expiration missing")
-	}
-	if len(fields) > 3 {
-		lkey := sshKeyData{}
-		if err := json.Unmarshal([]byte(fields[3]), &lkey); err != nil {
-			// invalid expiration format.
-			return "", "", err
-		}
-		expired, err := CheckExpired(lkey.ExpireOn)
-		if err != nil {
-			return "", "", err
-		}
-		if expired {
-			return "", "", errors.New("Invalid ssh key entry - expired key")
-		}
+	if err := CheckExpiredKey(key[idx+1:]); err != nil {
+		return "", "", err
 	}
 
 	return user, key[idx+1:], nil
 }
 
-//SerialPort is a type for writing to a named serial port.
+// SerialPort is a type for writing to a named serial port.
 type SerialPort struct {
 	Port string
 }
