@@ -54,37 +54,47 @@ func CheckExpired(expireOn string) (bool, error) {
 
 }
 
-//RemoveExpiredKey takes a string and determines if it is a valid SSH key and returns
-//the key if valid, nil otherwise.
-func RemoveExpiredKey(rawKey string) (string, error) {
+//GetUserKey takes a string and determines if it is a valid SSH key and returns
+//the user and key if valid, nil otherwise.
+func GetUserKey(rawKey string) (string, string, error) {
 
 	key := strings.Trim(rawKey, " ")
 	if key == "" {
-		return "", errors.New("Invalid ssh key entry - empty key")
+		return "", "", errors.New("Invalid ssh key entry - empty key")
 	}
+
 	fields := strings.SplitN(key, " ", 4)
 	if len(fields) == 3 && fields[2] == "google-ssh" {
 		// expiring key without expiration format.
-		return "", errors.New("Invalid ssh key entry - expiration missing")
+		return "", "", errors.New("Invalid ssh key entry - expiration missing")
 	}
 	if len(fields) > 3 {
 		lkey := sshKeyData{}
 		if err := json.Unmarshal([]byte(fields[3]), &lkey); err != nil {
 			// invalid expiration format.
-			return "", err
+			return "", "", err
 		}
 		expired, err := CheckExpired(lkey.ExpireOn)
 		if err != nil {
-			return "", err
+			return "", "", err
 		}
 		if expired {
-			return "", errors.New("Invalid ssh key entry - expired key")
+			return "", "", errors.New("Invalid ssh key entry - expired key")
 		}
 	}
+	
+	idx := strings.Index(key, ":")
+	// having no user: prefix is not necessarily an error in every case
+	if idx == -1 {
+		return "", key, nil
+	}
+	user := key[:idx]
+	if user == "" {
+		return "", "", errors.New("Invalid ssh key entry - user missing")
+	}
 
-	return key, nil
+	return user, key[idx+1:], nil
 }
-
 //SerialPort is a type for writing to a named serial port.
 type SerialPort struct {
 	Port string

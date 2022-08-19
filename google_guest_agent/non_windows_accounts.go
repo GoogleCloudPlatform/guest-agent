@@ -188,24 +188,13 @@ var badSSHKeys []string
 // user:ssh-rsa [KEY_VALUE] [USERNAME]
 // user:ssh-rsa [KEY_VALUE]
 // user:ssh-rsa [KEY_VALUE] google-ssh {"userName":"[USERNAME]","expireOn":"[EXPIRE_TIME]"}
+// For this method, the user: prefix is mandatory for a key to be a valid user key
 func getUserKeys(mdkeys []string) map[string][]string {
 	mdKeyMap := make(map[string][]string)
 	for i := 0; i < len(mdkeys); i++ {
 		trimmedKey := strings.Trim(mdkeys[i], " ")
 		if trimmedKey != "" {
-		  	idx := strings.Index(trimmedKey, ":")
-      	if idx == -1 {
-      		logger.Errorf("%s: %s", "Invalid ssh key entry - unrecognized format", trimmedKey)
-      		badSSHKeys = append(badSSHKeys, trimmedKey)
-      		continue
-      	}
-      	user := trimmedKey[:idx]
-      	if user == "" {
-      		logger.Errorf("%s: %s", "Invalid ssh key entry - user missing", trimmedKey)
-      		badSSHKeys = append(badSSHKeys, trimmedKey)
-      		continue
-      	}
-  			keyVal, err := utils.RemoveExpiredKey(trimmedKey)
+  			user, keyVal, err := utils.GetUserKey(trimmedKey)
   			if err != nil {
   				if !utils.ContainsString(trimmedKey, badSSHKeys) {
   					logger.Errorf("%s: %s", err.Error(), trimmedKey)
@@ -213,6 +202,12 @@ func getUserKeys(mdkeys []string) map[string][]string {
   				}
   				continue
   			}
+  			// invalid format: no user prefix
+  			if user == "" {
+			    logger.Errorf("%s: %s", "Invalid ssh key entry - unrecognized format", trimmedKey)
+					badSSHKeys = append(badSSHKeys, trimmedKey)
+					continue
+			  }
 
 			// key which is not expired or non-expiring key, add it.
 			userKeys := mdKeyMap[user]
@@ -228,18 +223,19 @@ func getUserKeys(mdkeys []string) map[string][]string {
 // ssh-rsa [KEY_VALUE] [USERNAME]
 // ssh-rsa [KEY_VALUE]
 // ssh-rsa [KEY_VALUE] google-ssh {"userName":"[USERNAME]","expireOn":"[EXPIRE_TIME]"}
+// The user: prefix does not affect whether or not the key is expired
 func removeExpiredKeys(keys []string) []string {
 	var res []string
 	for i := 0; i < len(keys); i++ {
 		key := strings.Trim(keys[i], " ")
 		if key != "" {
-			_, err := utils.RemoveExpiredKey(key)
+			_, keyVal, err := utils.GetUserKey(key)
 			if err != nil {
 				continue
 			}
 
 			// key which is not expired or non-expiring key, add it.
-			res = append(res, key)
+			res = append(res, keyVal)
 		}
 	}
 	return res
