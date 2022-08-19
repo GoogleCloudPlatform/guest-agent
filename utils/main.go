@@ -40,6 +40,8 @@ type sshExpiration struct {
 	UserName string
 }
 
+// CheckExpiredKey validates whether a key has expired. Keys with invalid expiration formats will result in an
+// error.
 func CheckExpiredKey(key string) error {
 	fields := strings.SplitN(key, " ", 4)
 	if len(fields) < 3 {
