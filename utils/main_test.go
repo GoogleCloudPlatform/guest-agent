@@ -59,3 +59,27 @@ func TestGetUserKey(t *testing.T) {
 		}
 	}
 }
+
+func TestCheckExpiredKey(t *testing.T) {
+	table := []struct {
+	  key     string
+		expired bool
+	}{
+		{`usera:ssh-rsa AAAA1234 google-ssh {"userName":"usera@example.com","expireOn":"2095-04-23T12:34:56+0000"}`, false},
+		{`usera:ssh-rsa AAAA1234 google-ssh {"userName":"usera@example.com","expireOn":"2021-04-23T12:34:56+0000"}`, true},
+		{`usera:ssh-rsa AAAA1234 google-ssh {"userName":"usera@example.com","expireOn":"Apri 4, 2056"}`, true},
+		{`usera:ssh-rsa AAAA1234 google-ssh`, true},
+		{"    ", true},
+		{"ssh-rsa AAAA1234", false},
+		{":ssh-rsa AAAA1234", false},
+		{"usera:ssh-rsa AAAA1234", false},
+	}
+
+	for _, tt := range table {
+		err := CheckExpiredKey(tt.key)
+		isExpired := err != nil
+		if isExpired != tt.expired {
+			t.Errorf("CheckExpiredKey(%s) incorrect return: expired: %t - want expired: %t", isExpired, tt.expired)
+		}
+	}
+}

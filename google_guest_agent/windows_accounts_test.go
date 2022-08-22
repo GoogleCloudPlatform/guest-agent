@@ -264,6 +264,46 @@ func TestGetUserKeys(t *testing.T) {
 	}
 }
 
+func TestRemoveExpiredKeys(t *testing.T) {
+	var tests = []struct {
+		key   string
+		valid bool
+	}{
+		{`user:ssh-rsa [KEY] google-ssh {"userName":"user@email.com", "expireOn":"2028-11-08T19:30:47+0000"}`, true},
+		{`user:ssh-rsa [KEY] google-ssh {"userName":"user@email.com", "expireOn":"2028-11-08T19:30:47+0700"}`, true},
+		{`user:ssh-rsa [KEY] google-ssh {"userName":"user@email.com", "expireOn":"2028-11-08T19:30:47+0700", "futureField": "UNUSED_FIELDS_IGNORED"}`, true},
+		{`user:ssh-rsa [KEY] google-ssh {"userName":"user@email.com", "expireOn":"2018-11-08T19:30:46+0000"}`, false},
+		{`user:ssh-rsa [KEY] google-ssh {"userName":"user@email.com", "expireOn":"2018-11-08T19:30:46+0700"}`, false},
+		{`user:ssh-rsa [KEY] google-ssh {"userName":"user@email.com", "expireOn":"INVALID_TIMESTAMP"}`, false},
+		{`user:ssh-rsa [KEY] google-ssh`, false},
+		{`user:ssh-rsa [KEY] user`, true},
+		{`user:ssh-rsa [KEY]`, true},
+		// having the user: prefix should not affect whether a key is expired, repeat test cases without user: prefix
+		{`ssh-rsa [KEY] google-ssh {"userName":"user@email.com", "expireOn":"2028-11-08T19:30:47+0000"}`, true},
+		{`ssh-rsa [KEY] google-ssh {"userName":"user@email.com", "expireOn":"2028-11-08T19:30:47+0700"}`, true},
+		{`ssh-rsa [KEY] google-ssh {"userName":"user@email.com", "expireOn":"2028-11-08T19:30:47+0700", "futureField": "UNUSED_FIELDS_IGNORED"}`, true},
+		{`ssh-rsa [KEY] google-ssh {"userName":"user@email.com", "expireOn":"2018-11-08T19:30:46+0000"}`, false},
+		{`ssh-rsa [KEY] google-ssh {"userName":"user@email.com", "expireOn":"2018-11-08T19:30:46+0700"}`, false},
+		{`ssh-rsa [KEY] google-ssh {"userName":"user@email.com", "expireOn":"INVALID_TIMESTAMP"}`, false},
+		{`ssh-rsa [KEY] google-ssh`, false},
+		{`ssh-rsa [KEY] user`, true},
+		{`ssh-rsa [KEY]`, true},
+		{},
+	}
+
+	for _, tt := range tests {
+		ret := removeExpiredKeys([]string{tt.key})
+		if tt.valid {
+			if len(ret) == 0 || ret[0] != tt.key {
+				t.Errorf("valid key was removed: %q", tt.key)
+			}
+		}
+		if !tt.valid && len(ret) == 1 {
+			t.Errorf("invalid key was kept: %q", tt.key)
+		}
+	}
+}
+
 func TestVersionOk(t *testing.T) {
 	tests := []struct {
 		version    versionInfo
