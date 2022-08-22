@@ -79,7 +79,7 @@ func TestCheckExpiredKey(t *testing.T) {
 		err := CheckExpiredKey(tt.key)
 		isExpired := err != nil
 		if isExpired != tt.expired {
-			t.Errorf("CheckExpiredKey(%s) incorrect return: expired: %t - want expired: %t", isExpired, tt.expired)
+			t.Errorf("CheckExpiredKey(%s) incorrect return: expired: %t - want expired: %t", tt.key, isExpired, tt.expired)
 		}
 	}
 }
