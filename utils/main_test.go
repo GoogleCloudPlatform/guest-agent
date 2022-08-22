@@ -62,7 +62,7 @@ func TestGetUserKey(t *testing.T) {
 
 func TestCheckExpiredKey(t *testing.T) {
 	table := []struct {
-	  key     string
+		key     string
 		expired bool
 	}{
 		{`usera:ssh-rsa AAAA1234 google-ssh {"userName":"usera@example.com","expireOn":"2095-04-23T12:34:56+0000"}`, false},
@@ -83,4 +83,3 @@ func TestCheckExpiredKey(t *testing.T) {
 		}
 	}
 }
-
