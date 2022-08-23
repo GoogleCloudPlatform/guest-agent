@@ -59,19 +59,18 @@ func getMetadata(key string) ([]byte, error) {
 	req.Header.Add("Metadata-Flavor", "Google")
 
 	var res *http.Response
-	// Retry forever, increase sleep between retries (up to 5 times) in order
-	// to wait for slow network initialization.
-	var rt time.Duration
-	for i := 1; ; i++ {
+
+	// Retry up to 5 times
+	for i := 1; i < 6; i++ {
 		res, err = client.Do(req)
 		if err == nil {
 			break
 		}
-		if i < 6 {
-			rt = time.Duration(3*i) * time.Second
-		}
-		logger.Errorf("error connecting to metadata server, retrying in %s, error: %v", rt, err)
-		time.Sleep(rt)
+		logger.Errorf("error connecting to metadata server, retrying in 3s, error: %v", err)
+		time.Sleep(time.Duration(3) * time.Second)
+	}
+	if err != nil {
+		return nil, err
 	}
 	defer res.Body.Close()
 
