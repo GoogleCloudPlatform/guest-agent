@@ -98,11 +98,14 @@ metadata key instance/workload-identities
 	 }
 	}
 */
+
+// WorkloadIdentities represents Workload Identities in metadata.
 type WorkloadIdentities struct {
 	Status              string
 	WorkloadCredentials map[string]WorkloadCredential
 }
 
+// UnmarshalJSON is a custom JSON unmarshaller for WorkloadIdentities.
 func (wi *WorkloadIdentities) UnmarshalJSON(b []byte) error {
 	tmp := map[string]json.RawMessage{}
 	err := json.Unmarshal(b, &tmp)
@@ -132,6 +135,7 @@ func (wi *WorkloadIdentities) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// WorkloadCredential represents Workload Credentials in metadata.
 type WorkloadCredential struct {
 	Metadata       Metadata
 	CertificatePem string
@@ -153,11 +157,14 @@ metadata key instance/workload-trusted-root-certs
 	 }
 	}
 */
+
+// WorkloadTrustedRootCerts represents Workload Trusted Root Certs in metadata.
 type WorkloadTrustedRootCerts struct {
 	Status           string
 	RootCertificates map[string]RootCertificate
 }
 
+// UnmarshalJSON is a custom JSON unmarshaller for WorkloadTrustedRootCerts
 func (wtrc *WorkloadTrustedRootCerts) UnmarshalJSON(b []byte) error {
 	tmp := map[string]json.RawMessage{}
 	err := json.Unmarshal(b, &tmp)
@@ -187,11 +194,13 @@ func (wtrc *WorkloadTrustedRootCerts) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// RootCertificate represents a Root Certificate in metadata
 type RootCertificate struct {
 	Metadata            Metadata
 	RootCertificatesPem string
 }
 
+// Metadata represents Metadata in metadata
 type Metadata struct {
 	WorkloadCredsDirPath string
 }
