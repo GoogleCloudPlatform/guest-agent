@@ -28,6 +28,12 @@ import (
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 )
 
+const (
+	contentDirPrefix  = "/run/secrets/workload-spiffe-contents"
+	tempSymlinkPrefix = "/run/secrets/workload-spiffe-symlink"
+	symlink           = "/run/secrets/workload-spiffe-credentials"
+)
+
 var (
 	programName    = "gce_workload_certs_refresh"
 	version        string
@@ -216,6 +222,7 @@ func refreshCreds() error {
 		return fmt.Errorf("Error getting project ID: %v", err)
 	}
 	domain := fmt.Sprintf("%s.svc.id.goog", project)
+	logger.Infof("Rotating workload credentials for domain %s", domain)
 
 	wisMd, err := getMetadata("instance/workload-identities")
 	if err != nil {
@@ -237,12 +244,13 @@ func refreshCreds() error {
 		return fmt.Errorf("Error unmarshaling workload trusted root certs: %v", err)
 	}
 
-	// TODO: extract to constants
 	now := time.Now().Format(time.RFC3339)
-	contentDir := fmt.Sprintf("/run/secrets/workload-spiffe-contents-%s", now)
-	tempSymlink := fmt.Sprintf("/run/secrets/workload-spiffe-symlink-%s", now)
+	contentDir := fmt.Sprintf("%s-%s", contentDirPrefix, now)
+	tempSymlink := fmt.Sprintf("%s-%s", tempSymlinkPrefix, now)
 
-	// TODO: dir and file permissions
+	logger.Infof("Creating timestamp contents dir %s", contentDir)
+
+	// TODO: validate filesystem permissions
 	if err := os.MkdirAll(contentDir, 0750); err != nil {
 		return fmt.Errorf("Error creating contents dir: %v", err)
 	}
@@ -259,13 +267,13 @@ func refreshCreds() error {
 		return fmt.Errorf("Error writing ca_certificates.pem: %v", err)
 	}
 
-	// TODO: validation ? do these certs work together ?
-
 	if err := os.Symlink(contentDir, tempSymlink); err != nil {
 		return fmt.Errorf("Error creating temporary link: %v", err)
 	}
 
-	if err := os.Rename(tempSymlink, "/run/secrets/workload-spiffe-credentials"); err != nil {
+	logger.Infof("Rotating symlink %s", symlink)
+
+	if err := os.Rename(tempSymlink, symlink); err != nil {
 		return fmt.Errorf("Error rotating target link: %v", err)
 	}
 
