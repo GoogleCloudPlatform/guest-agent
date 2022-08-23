@@ -215,14 +215,14 @@ func main() {
 
 	opts.Writers = []io.Writer{os.Stderr}
 	logger.Init(ctx, opts)
+	defer logger.Infof("Done")
 
 	// TODO: prune old dirs
 
 	if err := refreshCreds(); err != nil {
-		logger.Errorf(err.Error())
+		logger.Fatalf(err.Error())
 	}
 
-	logger.Infof("Done")
 }
 
 func refreshCreds() error {
