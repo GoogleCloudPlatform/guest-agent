@@ -258,20 +258,19 @@ func refreshCreds() error {
 
 	logger.Infof("Creating timestamp contents dir %s", contentDir)
 
-	// TODO: validate filesystem permissions
-	if err := os.MkdirAll(contentDir, 0750); err != nil {
+	if err := os.MkdirAll(contentDir, 0755); err != nil {
 		return fmt.Errorf("Error creating contents dir: %v", err)
 	}
 
-	if err := os.WriteFile(fmt.Sprintf("%s/certificates.pem", contentDir), []byte(wis.WorkloadCredentials[domain].CertificatePem), 0666); err != nil {
+	if err := os.WriteFile(fmt.Sprintf("%s/certificates.pem", contentDir), []byte(wis.WorkloadCredentials[domain].CertificatePem), 0644); err != nil {
 		return fmt.Errorf("Error writing certificates.pem: %v", err)
 	}
 
-	if err := os.WriteFile(fmt.Sprintf("%s/private_key.pem", contentDir), []byte(wis.WorkloadCredentials[domain].PrivateKeyPem), 0666); err != nil {
+	if err := os.WriteFile(fmt.Sprintf("%s/private_key.pem", contentDir), []byte(wis.WorkloadCredentials[domain].PrivateKeyPem), 0644); err != nil {
 		return fmt.Errorf("Error writing private_key.pem: %v", err)
 	}
 
-	if err := os.WriteFile(fmt.Sprintf("%s/ca_certificates.pem", contentDir), []byte(wtrcs.RootCertificates[domain].RootCertificatesPem), 0666); err != nil {
+	if err := os.WriteFile(fmt.Sprintf("%s/ca_certificates.pem", contentDir), []byte(wtrcs.RootCertificates[domain].RootCertificatesPem), 0644); err != nil {
 		return fmt.Errorf("Error writing ca_certificates.pem: %v", err)
 	}
 
