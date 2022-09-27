@@ -10,8 +10,7 @@ export GOCACHE := /tmp/.cache
 export GOPROXY := https://proxy.golang.org
 export GO111MODULE := on
 export GOPATH := /usr/share/gocode
-export DH_GOLANG_BUILDPKG := github.com/GoogleCloudPlatform/guest-agent/google_guest_agent github.com/GoogleCloudPlatform/guest-agent/google_metadata_script_runner
-
+export DH_GOLANG_BUILDPKG := github.com/GoogleCloudPlatform/guest-agent/google_guest_agent github.com/GoogleCloudPlatform/guest-agent/google_metadata_script_runner github.com/GoogleCloudPlatform/guest-agent/gce_workload_cert_refresh
 
 %:
 	dh $@  --buildsystem=golang --with=golang,systemd
@@ -21,6 +20,8 @@ override_dh_auto_install:
 	dh_auto_install -- --no-source
 	install -d debian/google-guest-agent/usr/share/google-guest-agent
 	install -p -m 0644 instance_configs.cfg debian/google-guest-agent/usr/share/google-guest-agent
+	install -d debian/google-guest-agent/lib/systemd/system
+	install -p -m 0644 gce-workload-cert-refresh.timer debian/google-guest-agent/lib/systemd/system/
 
 override_dh_golang:
 	# We don't use any packaged dependencies, so skip dh_golang step.
@@ -36,8 +37,9 @@ override_dh_systemd_enable:
 	install -p -m 0644 *.service debian/google-guest-agent/lib/systemd/system/
 	install -d debian/google-guest-agent/lib/systemd/system-preset
 	install -p -m 0644 *.preset debian/google-guest-agent/lib/systemd/system-preset/
-	dh_systemd_enable google-guest-agent.service google-startup-scripts.service google-shutdown-scripts.service
+	dh_systemd_enable google-guest-agent.service google-startup-scripts.service google-shutdown-scripts.service gce-workload-cert-refresh.timer
 
 override_dh_systemd_start:
-	# Only perform start/stop actions for the guest agent.
+	# Only perform start/stop actions for the guest agent and cert refresh timer.
 	dh_systemd_start google-guest-agent.service
+	dh_systemd_start gce-workload-cert-refresh.timer
