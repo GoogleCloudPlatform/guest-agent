@@ -72,8 +72,12 @@ func getMetadata(key string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer res.Body.Close()
 
+	if res.StatusCode == 404 {
+		return nil, fmt.Errorf("HTTP 404")
+	}
+
+	defer res.Body.Close()
 	md, err := ioutil.ReadAll(res.Body)
 	if err != nil {
 		return nil, err
@@ -210,6 +214,8 @@ func main() {
 	opts := logger.LogOpts{
 		LoggerName:     programName,
 		FormatFunction: logFormat,
+		// No need for syslog.
+		DisableLocalLogging: true,
 	}
 
 	opts.Writers = []io.Writer{os.Stderr}
@@ -229,18 +235,20 @@ func refreshCreds() error {
 	if err != nil {
 		return fmt.Errorf("Error getting project ID: %v", err)
 	}
-	domain := fmt.Sprintf("%s.svc.id.goog", project)
-	logger.Infof("Rotating workload credentials for domain %s", domain)
 
 	wisMd, err := getMetadata("instance/workload-identities")
 	if err != nil {
-		return fmt.Errorf("Error getting workload-identities: %v", err)
+		logger.Infof("No workload identities found: %v", err)
+		return nil
 	}
 
 	wtrcsMd, err := getMetadata("instance/workload-trusted-root-certs")
 	if err != nil {
 		return fmt.Errorf("Error getting workload-identities: %v", err)
 	}
+
+	domain := fmt.Sprintf("%s.svc.id.goog", project)
+	logger.Infof("Rotating workload credentials for domain %s", domain)
 
 	wis := WorkloadIdentities{}
 	if err := json.Unmarshal(wisMd, &wis); err != nil {
@@ -258,7 +266,6 @@ func refreshCreds() error {
 
 	logger.Infof("Creating timestamp contents dir %s", contentDir)
 
-	// TODO: validate filesystem permissions
 	if err := os.MkdirAll(contentDir, 0750); err != nil {
 		return fmt.Errorf("Error creating contents dir: %v", err)
 	}
@@ -279,10 +286,23 @@ func refreshCreds() error {
 		return fmt.Errorf("Error creating temporary link: %v", err)
 	}
 
+	oldTarget, err := os.Readlink(symlink)
+	if err != nil {
+		logger.Infof("Error reading existing symlink: %v\n", err)
+		oldTarget = ""
+	}
+
 	logger.Infof("Rotating symlink %s", symlink)
 
 	if err := os.Rename(tempSymlink, symlink); err != nil {
 		return fmt.Errorf("Error rotating target link: %v", err)
+	}
+
+	if oldTarget != "" {
+		logger.Infof("Remove old content dir %s", oldTarget)
+		if err := os.RemoveAll(oldTarget); err != nil {
+			return fmt.Errorf("Failed to remove old symlink target: %v", err)
+		}
 	}
 
 	return nil
