@@ -3,6 +3,6 @@ Description=GCE Workload Certificate refresh
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/gce_workload_cert_refresh
+ExecStart=/usr/bin/gce_workload_certs_refresh
 
 # No [Install] section - this is controlled by google-workload-certs.timer
