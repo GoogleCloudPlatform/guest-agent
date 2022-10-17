@@ -38,7 +38,7 @@ Contains the Google guest agent binary.
 %autosetup
 
 %build
-for bin in google_guest_agent google_metadata_script_runner; do
+for bin in google_guest_agent google_metadata_script_runner gce_workload_cert_refresh; do
   pushd "$bin"
   GOPATH=%{_gopath} CGO_ENABLED=0 %{_go} build -ldflags="-s -w -X main.version=%{_version}" -mod=readonly
   popd
@@ -51,6 +51,7 @@ cp -r THIRD_PARTY_LICENSES "%buildroot/%_docdir/%name/THIRD_PARTY_LICENSES"
 install -d %{buildroot}%{_bindir}
 install -p -m 0755 google_guest_agent/google_guest_agent %{buildroot}%{_bindir}/google_guest_agent
 install -p -m 0755 google_metadata_script_runner/google_metadata_script_runner %{buildroot}%{_bindir}/google_metadata_script_runner
+install -p -m 0755 gce_workload_cert_refresh/gce_workload_cert_refresh %{buildroot}%{_bindir}/gce_workload_cert_refresh
 install -d %{buildroot}/usr/share/google-guest-agent
 install -p -m 0644 instance_configs.cfg %{buildroot}/usr/share/google-guest-agent/instance_configs.cfg
 %if 0%{?el6}
@@ -64,6 +65,8 @@ install -d %{buildroot}%{_presetdir}
 install -p -m 0644 %{name}.service %{buildroot}%{_unitdir}
 install -p -m 0644 google-startup-scripts.service %{buildroot}%{_unitdir}
 install -p -m 0644 google-shutdown-scripts.service %{buildroot}%{_unitdir}
+install -p -m 0644 gce-workload-cert-refresh.service %{buildroot}%{_unitdir}
+install -p -m 0644 gce-workload-cert-refresh.timer %{buildroot}%{_unitdir}
 install -p -m 0644 90-%{name}.preset %{buildroot}%{_presetdir}/90-%{name}.preset
 %endif
 
@@ -73,6 +76,7 @@ install -p -m 0644 90-%{name}.preset %{buildroot}%{_presetdir}/90-%{name}.preset
 /usr/share/google-guest-agent/instance_configs.cfg
 %{_bindir}/google_guest_agent
 %{_bindir}/google_metadata_script_runner
+%{_bindir}/gce_workload_cert_refresh
 %if 0%{?el6}
 /etc/init/%{name}.conf
 /etc/init/google-startup-scripts.conf
@@ -81,6 +85,8 @@ install -p -m 0644 90-%{name}.preset %{buildroot}%{_presetdir}/90-%{name}.preset
 %{_unitdir}/%{name}.service
 %{_unitdir}/google-startup-scripts.service
 %{_unitdir}/google-shutdown-scripts.service
+%{_unitdir}/gce-workload-cert-refresh.service
+%{_unitdir}/gce-workload-cert-refresh.timer
 %{_presetdir}/90-%{name}.preset
 %endif
 
@@ -99,10 +105,12 @@ if [ $1 -eq 1 ]; then
   systemctl enable google-guest-agent.service >/dev/null 2>&1 || :
   systemctl enable google-startup-scripts.service >/dev/null 2>&1 || :
   systemctl enable google-shutdown-scripts.service >/dev/null 2>&1 || :
+  systemctl enable gce-workload-cert-refresh.timer >/dev/null 2>&1 || :
 
   if [ -d /run/systemd/system ]; then
     systemctl daemon-reload >/dev/null 2>&1 || :
     systemctl start google-guest-agent.service >/dev/null 2>&1 || :
+    systemctl start gce-workload-cert-refresh.timer >/dev/null 2>&1 || :
   fi
 else
   # Package upgrade
@@ -117,6 +125,7 @@ if [ $1 -eq 0 ]; then
   systemctl --no-reload disable google-guest-agent.service >/dev/null 2>&1 || :
   systemctl --no-reload disable google-startup-scripts.service >/dev/null 2>&1 || :
   systemctl --no-reload disable google-shutdown-scripts.service >/dev/null 2>&1 || :
+  systemctl --no-reload disable gce-workload-cert-refresh.timer >/dev/null 2>&1 || :
   if [ -d /run/systemd/system ]; then
     systemctl stop google-guest-agent.service >/dev/null 2>&1 || :
   fi
