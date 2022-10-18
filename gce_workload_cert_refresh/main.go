@@ -12,7 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-// GoogleAuthorizedKeys obtains SSH keys from metadata.
+// gce_workload_cert_refresh downloads and rotates workload certificates for GCE VMs.
 package main
 
 import (
@@ -91,7 +91,7 @@ metadata key instance/workload-identities
 	{
 	 "status": "OK",
 	 "workloadCredentials": {
-	  "PROJECT.svc.id.goog": {
+	  "PROJECT_ID.svc.id.goog": {
 	   "metadata": {
 	    "workload_creds_dir_path": "/var/run/secrets/workload-spiffe-credentials"
 	   },
@@ -245,7 +245,7 @@ func refreshCreds() error {
 	}
 
 	domain := fmt.Sprintf("%s.svc.id.goog", project)
-	logger.Infof("Rotating workload credentials for domain %s", domain)
+	logger.Infof("Rotating workload credentials for trust domain %s", domain)
 
 	now := time.Now().Format(time.RFC3339)
 	contentDir := fmt.Sprintf("%s-%s", contentDirPrefix, now)
