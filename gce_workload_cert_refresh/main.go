@@ -12,7 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-// GoogleAuthorizedKeys obtains SSH keys from metadata.
+// gce_workload_cert_refresh downloads and rotates workload certificates for GCE VMs.
 package main
 
 import (
@@ -91,7 +91,7 @@ metadata key instance/workload-identities
 	{
 	 "status": "OK",
 	 "workloadCredentials": {
-	  "PROJECT.svc.id.goog": {
+	  "PROJECT_ID.svc.id.goog": {
 	   "metadata": {
 	    "workload_creds_dir_path": "/var/run/secrets/workload-spiffe-credentials"
 	   },
@@ -236,29 +236,16 @@ func refreshCreds() error {
 		return fmt.Errorf("Error getting project ID: %v", err)
 	}
 
-	wisMd, err := getMetadata("instance/workload-identities")
+	// Get status first so it can be written even when other endpoints are empty.
+	certConfigStatus, err := getMetadata("instance/workload-certificates-config-status")
 	if err != nil {
-		logger.Infof("No workload identities found: %v", err)
+		// Return success when certs are not configured to avoid unnecessary systemd failed units.
+		logger.Infof("Error getting config status, workload certificates may not be configured: %v", err)
 		return nil
 	}
 
-	wtrcsMd, err := getMetadata("instance/workload-trusted-root-certs")
-	if err != nil {
-		return fmt.Errorf("Error getting workload-identities: %v", err)
-	}
-
 	domain := fmt.Sprintf("%s.svc.id.goog", project)
-	logger.Infof("Rotating workload credentials for domain %s", domain)
-
-	wis := WorkloadIdentities{}
-	if err := json.Unmarshal(wisMd, &wis); err != nil {
-		return fmt.Errorf("Error unmarshaling workload trusted root certs: %v", err)
-	}
-
-	wtrcs := WorkloadTrustedRootCerts{}
-	if err := json.Unmarshal(wtrcsMd, &wtrcs); err != nil {
-		return fmt.Errorf("Error unmarshaling workload trusted root certs: %v", err)
-	}
+	logger.Infof("Rotating workload credentials for trust domain %s", domain)
 
 	now := time.Now().Format(time.RFC3339)
 	contentDir := fmt.Sprintf("%s-%s", contentDirPrefix, now)
@@ -268,6 +255,32 @@ func refreshCreds() error {
 
 	if err := os.MkdirAll(contentDir, 0755); err != nil {
 		return fmt.Errorf("Error creating contents dir: %v", err)
+	}
+
+	// Write config_status first even if remaining endpoints are empty.
+	if err := os.WriteFile(fmt.Sprintf("%s/config_status", contentDir), certConfigStatus, 0644); err != nil {
+		return fmt.Errorf("Error writing config_status: %v", err)
+	}
+
+	// Now get the rest of the content.
+	wisMd, err := getMetadata("instance/workload-identities")
+	if err != nil {
+		return fmt.Errorf("Error getting workload-identities: %v", err)
+	}
+
+	wtrcsMd, err := getMetadata("instance/workload-trusted-root-certs")
+	if err != nil {
+		return fmt.Errorf("Error getting workload-trusted-root-certs: %v", err)
+	}
+
+	wis := WorkloadIdentities{}
+	if err := json.Unmarshal(wisMd, &wis); err != nil {
+		return fmt.Errorf("Error unmarshaling workload trusted root certs: %v", err)
+	}
+
+	wtrcs := WorkloadTrustedRootCerts{}
+	if err := json.Unmarshal(wtrcsMd, &wtrcs); err != nil {
+		return fmt.Errorf("Error unmarshaling workload trusted root certs: %v", err)
 	}
 
 	if err := os.WriteFile(fmt.Sprintf("%s/certificates.pem", contentDir), []byte(wis.WorkloadCredentials[domain].CertificatePem), 0644); err != nil {
@@ -292,6 +305,7 @@ func refreshCreds() error {
 		oldTarget = ""
 	}
 
+	// Only rotate on success of all steps above.
 	logger.Infof("Rotating symlink %s", symlink)
 
 	if err := os.Rename(tempSymlink, symlink); err != nil {
