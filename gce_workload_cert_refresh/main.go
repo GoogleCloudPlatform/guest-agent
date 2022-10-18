@@ -247,6 +247,11 @@ func refreshCreds() error {
 		return fmt.Errorf("Error getting workload-identities: %v", err)
 	}
 
+	certConfigStatus, err := getMetadata("instance/workload-certificates-config-status")
+	if err != nil {
+		return fmt.Errorf("Error getting config status: %v", err)
+	}
+
 	domain := fmt.Sprintf("%s.svc.id.goog", project)
 	logger.Infof("Rotating workload credentials for domain %s", domain)
 
@@ -268,6 +273,10 @@ func refreshCreds() error {
 
 	if err := os.MkdirAll(contentDir, 0755); err != nil {
 		return fmt.Errorf("Error creating contents dir: %v", err)
+	}
+
+	if err := os.WriteFile(fmt.Sprintf("%s/config_status", contentDir), certConfigStatus, 0644); err != nil {
+		return fmt.Errorf("Error writing config_status: %v", err)
 	}
 
 	if err := os.WriteFile(fmt.Sprintf("%s/certificates.pem", contentDir), []byte(wis.WorkloadCredentials[domain].CertificatePem), 0644); err != nil {
