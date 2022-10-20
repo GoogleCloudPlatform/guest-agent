@@ -77,6 +77,10 @@ func getMetadata(key string) ([]byte, error) {
 		return nil, fmt.Errorf("HTTP 404")
 	}
 
+	if res.StatusCode == 412 {
+		return nil, fmt.Errorf("HTTP 412")
+	}
+
 	defer res.Body.Close()
 	md, err := ioutil.ReadAll(res.Body)
 	if err != nil {
@@ -266,7 +270,7 @@ func refreshCreds() error {
 	// that the symlink directory exists and contains the config_status to surface config errors to the VM.
 	defer func() error {
 		if _, err := os.Stat(symlink); os.IsNotExist(err) {
-			logger.Infof("Creating symlink %s", symlink)
+			logger.Infof("Creating new symlink %s", symlink)
 
 			if err := os.Symlink(contentDir, symlink); err != nil {
 				return fmt.Errorf("Error creating symlink link: %v", err)
@@ -288,7 +292,7 @@ func refreshCreds() error {
 
 	wis := WorkloadIdentities{}
 	if err := json.Unmarshal(wisMd, &wis); err != nil {
-		return fmt.Errorf("Error unmarshaling workload trusted root certs: %v", err)
+		return fmt.Errorf("Error unmarshaling workload identities response: %v", err)
 	}
 
 	wtrcs := WorkloadTrustedRootCerts{}
