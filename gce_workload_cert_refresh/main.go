@@ -262,6 +262,20 @@ func refreshCreds() error {
 		return fmt.Errorf("Error writing config_status: %v", err)
 	}
 
+	// Handles the edge case where the config values provided at VM creation may be invalid. This ensures
+	// that the symlink directory exists and contains the config_status to surface config errors to the VM.
+	defer func() error {
+		if _, err := os.Stat(symlink); os.IsNotExist(err) {
+			logger.Infof("Creating symlink %s", symlink)
+
+			if err := os.Symlink(contentDir, symlink); err != nil {
+				return fmt.Errorf("Error creating symlink link: %v", err)
+			}
+		}
+		return nil
+	}()
+
+
 	// Now get the rest of the content.
 	wisMd, err := getMetadata("instance/workload-identities")
 	if err != nil {
