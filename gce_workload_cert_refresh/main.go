@@ -275,7 +275,6 @@ func refreshCreds() error {
 		return nil
 	}()
 
-
 	// Now get the rest of the content.
 	wisMd, err := getMetadata("instance/workload-identities")
 	if err != nil {
