@@ -229,7 +229,7 @@ func main() {
 	// TODO: prune old dirs
 
 	if err := refreshCreds(); err != nil {
-		logger.Fatalf(err.Error())
+		logger.Fatalf("Error refreshCreds: %v", err.Error())
 	}
 
 }
