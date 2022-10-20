@@ -3,7 +3,7 @@ Description=GCE Workload Certificate refresh timer
 
 [Timer]
 OnBootSec=5
-OnUnitActiveSec=30m
+OnUnitActiveSec=10m
 
 [Install]
 WantedBy=timers.target
