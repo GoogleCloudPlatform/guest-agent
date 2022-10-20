@@ -276,6 +276,12 @@ func refreshCreds() error {
 				return fmt.Errorf("Error creating symlink link: %v", err)
 			}
 		}
+		// Write config status to the current symlink dir in case we don't change the symlink to the new contentDir
+		// because of more config errors. E.g., a user can provide wrong config values multiple times. This requires
+		// we update the config_status without rotating the symlink because it may contain valid credentials.
+		if err := os.WriteFile(fmt.Sprintf("%s/config_status", symlink), certConfigStatus, 0644); err != nil {
+			return fmt.Errorf("Error writing config_status to existing symlink: %v", err)
+		}
 		return nil
 	}()
 
