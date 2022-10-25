@@ -1,3 +1,4 @@
 enable google-guest-agent.service
 enable google-shutdown-scripts.service
 enable google-startup-scripts.service
+enable gce-workload-cert-refresh.timer
