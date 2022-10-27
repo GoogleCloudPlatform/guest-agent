@@ -17,6 +17,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/user"
@@ -34,6 +35,9 @@ func getUID(path string) string {
 
 func createUser(username, uid string) error {
 	useradd := config.Section("Accounts").Key("useradd_cmd").MustString("useradd -m -s /bin/bash -p * {user}")
+	if /\s/.test(username) {
+		return errors.New("Username cannot contain spaces")
+	}
 	if uid != "" {
 		useradd = fmt.Sprintf("%s -u %s", useradd, uid)
 	}
@@ -42,6 +46,12 @@ func createUser(username, uid string) error {
 
 func addUserToGroup(user, group string) error {
 	gpasswdadd := config.Section("Accounts").Key("gpasswd_add_cmd").MustString("gpasswd -a {user} {group}")
+	if /\s/.test(user) {
+		return errors.New("Username cannot contain spaces")
+	}
+	if /\s/.test(group) {
+		return errors.New("Group name cannot contain spaces")
+	}
 	return runCmd(createUserGroupCmd(gpasswdadd, user, group))
 }
 
