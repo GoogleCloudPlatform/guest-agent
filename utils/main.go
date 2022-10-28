@@ -19,6 +19,7 @@ package utils
 import (
 	"encoding/json"
 	"errors"
+	"regexp"
 	"strings"
 	"time"
 
@@ -88,6 +89,20 @@ func CheckExpired(expireOn string) (bool, error) {
 
 }
 
+// ValidateUserKey checks for the presence of a characters which should not be
+// allowed in a username string, returns an error if any such characters are
+// detected, nil otherwise.
+// Currently, the only banned characters are whitespace characters.
+func ValidateUserKey(user string) (error) {
+	whiteSpaceRegexp, _ := regexp.Compile("\\s")
+	
+	hasWhiteSpace := whiteSpaceRegexp.MatchString(user)
+	if hasWhiteSpace {
+		return errors.New("Invalid username - whitespace detected")
+	}
+	return nil
+}
+
 // GetUserKey takes a string and determines if it is a valid SSH key and returns
 // the user and key if valid, nil otherwise.
 func GetUserKey(rawKey string) (string, string, error) {
@@ -102,6 +117,9 @@ func GetUserKey(rawKey string) (string, string, error) {
 	user := key[:idx]
 	if user == "" {
 		return "", "", errors.New("Invalid ssh key entry - user missing")
+	}
+	if err := ValidateUserKey(user); err != nil {
+		return "", "", err
 	}
 	if err := CheckExpiredKey(key[idx+1:]); err != nil {
 		return "", "", err

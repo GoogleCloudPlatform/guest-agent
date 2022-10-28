@@ -83,3 +83,25 @@ func TestCheckExpiredKey(t *testing.T) {
 		}
 	}
 }
+
+func TestValidateUserKey(t *testing.T) {
+	table := []struct {
+		user 	string
+		valid 	bool
+	}{
+		{"username", true},
+		{"username:key", true},
+		{"user -g", false},
+		{"user -g 27", false},
+		{"user\t-g", false},
+		{"user\n-g", false},
+		{"username\t-g\n27", false},
+	}
+	for _, tt := range table {
+		err := ValidateUserKey(tt.user)
+		isValid = err != nil
+		if isValid != tt.valid {
+			t.Errorf("ValidateUserKey(%s) incorrect return: valid: %t - want valid: %t", tt.user, isValid, tt.valid)
+		}
+	}
+}
