@@ -29,7 +29,7 @@ import (
 )
 
 const (
-	contentDirPrefix  = "/run/secrets/workload-spiffe-contents"
+	contentDirPrefix  = "/run/secrets/.workload-spiffe-contents"
 	tempSymlinkPrefix = "/run/secrets/workload-spiffe-symlink"
 	symlink           = "/run/secrets/workload-spiffe-credentials"
 )
@@ -227,9 +227,8 @@ func main() {
 	defer logger.Infof("Done")
 
 	// TODO: prune old dirs
-
 	if err := refreshCreds(); err != nil {
-		logger.Fatalf("Error refreshCreds: %v", err.Error())
+		logger.Errorf("Error refreshCreds: %v", err.Error())
 	}
 
 }
@@ -246,6 +245,16 @@ func refreshCreds() error {
 		// Return success when certs are not configured to avoid unnecessary systemd failed units.
 		logger.Infof("Error getting config status, workload certificates may not be configured: %v", err)
 		return nil
+	}
+
+	// Write the config status immediately to the current symlink if it exists. This allows for communicating 
+	// new config errors. E.g., a user can provide wrong config values multiple times. This requires update to 
+	// the config_status without rotating the symlink because it may contain valid credentials.
+	if _, err := os.Stat(symlink); err == nil {
+		logger.Infof("Writing config_status to existing symlink")
+		if err := os.WriteFile(fmt.Sprintf("%s/config_status", symlink), certConfigStatus, 0644); err != nil {
+			return fmt.Errorf("Error writing config_status to existing symlink: %v", err)
+		}	
 	}
 
 	domain := fmt.Sprintf("%s.svc.id.goog", project)
@@ -267,23 +276,18 @@ func refreshCreds() error {
 	}
 
 	// Handles the edge case where the config values provided at VM creation may be invalid. This ensures
-	// that the symlink directory exists and contains the config_status to surface config errors to the VM.
-	defer func() error {
-		if _, err := os.Stat(symlink); os.IsNotExist(err) {
-			logger.Infof("Creating new symlink %s", symlink)
+	// that the symlink directory exists and contains the config_status to surface config errors to the VM.	
+	if _, err := os.Stat(symlink); os.IsNotExist(err) {
+		logger.Infof("Creating new symlink %s", symlink)
 
-			if err := os.Symlink(contentDir, symlink); err != nil {
-				return fmt.Errorf("Error creating symlink link: %v", err)
-			}
+		if err := os.Symlink(contentDir, symlink); err != nil {
+			return fmt.Errorf("Error creating symlink link: %v", err)
 		}
-		// Write config status to the current symlink dir in case we don't change the symlink to the new contentDir
-		// because of more config errors. E.g., a user can provide wrong config values multiple times. This requires
-		// we update the config_status without rotating the symlink because it may contain valid credentials.
+		// Write config_status to the new the newly created symlink immediately.
 		if err := os.WriteFile(fmt.Sprintf("%s/config_status", symlink), certConfigStatus, 0644); err != nil {
 			return fmt.Errorf("Error writing config_status to existing symlink: %v", err)
-		}
-		return nil
-	}()
+		}	
+	}
 
 	// Now get the rest of the content.
 	wisMd, err := getMetadata("instance/workload-identities")
@@ -335,11 +339,16 @@ func refreshCreds() error {
 		return fmt.Errorf("Error rotating target link: %v", err)
 	}
 
-	if oldTarget != "" {
-		logger.Infof("Remove old content dir %s", oldTarget)
-		if err := os.RemoveAll(oldTarget); err != nil {
-			return fmt.Errorf("Failed to remove old symlink target: %v", err)
+	newTarget, err := os.Readlink(symlink)
+	if err == nil {
+		if oldTarget != "" && oldTarget != newTarget {
+			logger.Infof("Remove old content dir %s", oldTarget)
+			if err := os.RemoveAll(oldTarget); err != nil {
+				return fmt.Errorf("Failed to remove old symlink target: %v", err)
+			}
 		}
+	} else {
+		logger.Infof("Error reading new symlink: %v. Unable to remove old symlink target\n", err)
 	}
 
 	return nil
