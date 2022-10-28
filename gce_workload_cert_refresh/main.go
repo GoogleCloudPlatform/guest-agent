@@ -283,7 +283,7 @@ func refreshCreds() error {
 		if err := os.Symlink(contentDir, symlink); err != nil {
 			return fmt.Errorf("Error creating symlink link: %v", err)
 		}
-		// Write config_status to the new the newly created symlink immediately.
+		// Write config_status to the newly created symlink immediately.
 		if err := os.WriteFile(fmt.Sprintf("%s/config_status", symlink), certConfigStatus, 0644); err != nil {
 			return fmt.Errorf("Error writing config_status to existing symlink: %v", err)
 		}	
