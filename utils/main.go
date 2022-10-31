@@ -93,9 +93,9 @@ func CheckExpired(expireOn string) (bool, error) {
 // allowed in a username string, returns an error if any such characters are
 // detected, nil otherwise.
 // Currently, the only banned characters are whitespace characters.
-func ValidateUserKey(user string) (error) {
+func ValidateUserKey(user string) error {
 	whiteSpaceRegexp, _ := regexp.Compile("\\s")
-	
+
 	hasWhiteSpace := whiteSpaceRegexp.MatchString(user)
 	if hasWhiteSpace {
 		return errors.New("Invalid username - whitespace detected")

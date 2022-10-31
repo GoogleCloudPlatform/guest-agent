@@ -86,8 +86,8 @@ func TestCheckExpiredKey(t *testing.T) {
 
 func TestValidateUserKey(t *testing.T) {
 	table := []struct {
-		user 	string
-		valid 	bool
+		user  string
+		valid bool
 	}{
 		{"username", true},
 		{"username:key", true},
