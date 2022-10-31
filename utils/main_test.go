@@ -99,7 +99,7 @@ func TestValidateUserKey(t *testing.T) {
 	}
 	for _, tt := range table {
 		err := ValidateUserKey(tt.user)
-		isValid = err != nil
+		isValid := err != nil
 		if isValid != tt.valid {
 			t.Errorf("ValidateUserKey(%s) incorrect return: valid: %t - want valid: %t", tt.user, isValid, tt.valid)
 		}
