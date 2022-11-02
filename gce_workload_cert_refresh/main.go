@@ -77,6 +77,9 @@ func getMetadata(key string) ([]byte, error) {
 		return nil, fmt.Errorf("HTTP 404")
 	}
 
+	// GCE Workload Certificate endpoints return 412 Precondition failed if the VM was
+	// never configured with valid config values at least once. Without valid config
+	// values GCE cannot provision the workload certificates.
 	if res.StatusCode == 412 {
 		return nil, fmt.Errorf("HTTP 412")
 	}
@@ -228,7 +231,7 @@ func main() {
 
 	// TODO: prune old dirs
 	if err := refreshCreds(); err != nil {
-		logger.Errorf("Error refreshCreds: %v", err.Error())
+		logger.Fatalf("Error refreshCreds: %v", err.Error())
 	}
 
 }
@@ -245,16 +248,6 @@ func refreshCreds() error {
 		// Return success when certs are not configured to avoid unnecessary systemd failed units.
 		logger.Infof("Error getting config status, workload certificates may not be configured: %v", err)
 		return nil
-	}
-
-	// Write the config status immediately to the current symlink if it exists. This allows for communicating 
-	// new config errors. E.g., a user can provide wrong config values multiple times. This requires update to 
-	// the config_status without rotating the symlink because it may contain valid credentials.
-	if _, err := os.Stat(symlink); err == nil {
-		logger.Infof("Writing config_status to existing symlink")
-		if err := os.WriteFile(fmt.Sprintf("%s/config_status", symlink), certConfigStatus, 0644); err != nil {
-			return fmt.Errorf("Error writing config_status to existing symlink: %v", err)
-		}	
 	}
 
 	domain := fmt.Sprintf("%s.svc.id.goog", project)
@@ -275,17 +268,17 @@ func refreshCreds() error {
 		return fmt.Errorf("Error writing config_status: %v", err)
 	}
 
-	// Handles the edge case where the config values provided at VM creation may be invalid. This ensures
-	// that the symlink directory exists and contains the config_status to surface config errors to the VM.	
+	// Handles the edge case where the config values provided for the first time may be invalid. This ensures
+	// that the symlink directory alwasys exists and contains the config_status to surface config errors to the VM.
 	if _, err := os.Stat(symlink); os.IsNotExist(err) {
 		logger.Infof("Creating new symlink %s", symlink)
 
 		if err := os.Symlink(contentDir, symlink); err != nil {
-			return fmt.Errorf("Error creating symlink link: %v", err)
+			return fmt.Errorf("Error creating symlink: %v", err)
 		}
 		// Write config_status to the newly created symlink immediately.
-		if err := os.WriteFile(fmt.Sprintf("%s/config_status", symlink), certConfigStatus, 0644); err != nil {
-			return fmt.Errorf("Error writing config_status to existing symlink: %v", err)
+		if err := os.WriteFile(fmt.Sprintf("%s/config_status", contentDir), certConfigStatus, 0644); err != nil {
+			return fmt.Errorf("Error writing config_status to contents dir: %v", err)
 		}	
 	}
 
