@@ -77,6 +77,13 @@ func getMetadata(key string) ([]byte, error) {
 		return nil, fmt.Errorf("HTTP 404")
 	}
 
+	// GCE Workload Certificate endpoints return 412 Precondition failed if the VM was
+	// never configured with valid config values at least once. Without valid config
+	// values GCE cannot provision the workload certificates.
+	if res.StatusCode == 412 {
+		return nil, fmt.Errorf("HTTP 412")
+	}
+
 	defer res.Body.Close()
 	md, err := ioutil.ReadAll(res.Body)
 	if err != nil {
@@ -223,9 +230,8 @@ func main() {
 	defer logger.Infof("Done")
 
 	// TODO: prune old dirs
-
 	if err := refreshCreds(); err != nil {
-		logger.Fatalf(err.Error())
+		logger.Fatalf("Error refreshCreds: %v", err.Error())
 	}
 
 }
@@ -262,6 +268,16 @@ func refreshCreds() error {
 		return fmt.Errorf("Error writing config_status: %v", err)
 	}
 
+	// Handles the edge case where the config values provided for the first time may be invalid. This ensures
+	// that the symlink directory alwasys exists and contains the config_status to surface config errors to the VM.
+	if _, err := os.Stat(symlink); os.IsNotExist(err) {
+		logger.Infof("Creating new symlink %s", symlink)
+
+		if err := os.Symlink(contentDir, symlink); err != nil {
+			return fmt.Errorf("Error creating symlink: %v", err)
+		}
+	}
+
 	// Now get the rest of the content.
 	wisMd, err := getMetadata("instance/workload-identities")
 	if err != nil {
@@ -275,7 +291,7 @@ func refreshCreds() error {
 
 	wis := WorkloadIdentities{}
 	if err := json.Unmarshal(wisMd, &wis); err != nil {
-		return fmt.Errorf("Error unmarshaling workload trusted root certs: %v", err)
+		return fmt.Errorf("Error unmarshaling workload identities response: %v", err)
 	}
 
 	wtrcs := WorkloadTrustedRootCerts{}
@@ -312,8 +328,13 @@ func refreshCreds() error {
 		return fmt.Errorf("Error rotating target link: %v", err)
 	}
 
-	if oldTarget != "" {
-		logger.Infof("Remove old content dir %s", oldTarget)
+	// Clean up previous contents dir.
+	newTarget, err := os.Readlink(symlink)
+	if err != nil {
+		return fmt.Errorf("Error reading new symlink: %v, unable to remove old symlink target", err)
+	}
+	if oldTarget != newTarget {
+		logger.Infof("Removing old content dir %s", oldTarget)
 		if err := os.RemoveAll(oldTarget); err != nil {
 			return fmt.Errorf("Failed to remove old symlink target: %v", err)
 		}
