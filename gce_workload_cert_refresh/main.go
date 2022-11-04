@@ -29,7 +29,7 @@ import (
 )
 
 const (
-	contentDirPrefix  = "/run/secrets/.workload-spiffe-contents"
+	contentDirPrefix  = "/run/secrets/workload-spiffe-contents"
 	tempSymlinkPrefix = "/run/secrets/workload-spiffe-symlink"
 	symlink           = "/run/secrets/workload-spiffe-credentials"
 )
@@ -276,10 +276,6 @@ func refreshCreds() error {
 		if err := os.Symlink(contentDir, symlink); err != nil {
 			return fmt.Errorf("Error creating symlink: %v", err)
 		}
-		// Write config_status to the newly created symlink immediately.
-		if err := os.WriteFile(fmt.Sprintf("%s/config_status", contentDir), certConfigStatus, 0644); err != nil {
-			return fmt.Errorf("Error writing config_status to contents dir: %v", err)
-		}	
 	}
 
 	// Now get the rest of the content.
