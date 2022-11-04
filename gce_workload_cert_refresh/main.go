@@ -331,7 +331,7 @@ func refreshCreds() error {
 	// Clean up previous contents dir.
 	newTarget, err := os.Readlink(symlink)
 	if err != nil {
-		return fmt.Errorf("Error reading new symlink: %v. Unable to remove old symlink target\n", err)
+		return fmt.Errorf("Error reading new symlink: %v, unable to remove old symlink target", err)
 	}
 	if oldTarget != newTarget {
 		logger.Infof("Removing old content dir %s", oldTarget)
