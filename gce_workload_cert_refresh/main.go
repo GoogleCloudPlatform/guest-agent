@@ -328,16 +328,15 @@ func refreshCreds() error {
 		return fmt.Errorf("Error rotating target link: %v", err)
 	}
 
+	// Clean up previous contents dir.
 	newTarget, err := os.Readlink(symlink)
-	if err == nil {
-		if oldTarget != "" && oldTarget != newTarget {
-			logger.Infof("Remove old content dir %s", oldTarget)
-			if err := os.RemoveAll(oldTarget); err != nil {
-				return fmt.Errorf("Failed to remove old symlink target: %v", err)
-			}
-		}
-	} else {
+	if err != nil {
 		logger.Infof("Error reading new symlink: %v. Unable to remove old symlink target\n", err)
+	} else if oldTarget != "" && oldTarget != newTarget {
+		logger.Infof("Remove old content dir %s", oldTarget)
+		if err := os.RemoveAll(oldTarget); err != nil {
+			return fmt.Errorf("Failed to remove old symlink target: %v", err)
+		}
 	}
 
 	return nil
