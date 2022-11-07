@@ -101,7 +101,7 @@ func TestValidateUserKey(t *testing.T) {
 		err := ValidateUserKey(tt.user)
 		isValid := err == nil
 		if isValid != tt.valid {
-			t.Errorf("ValidateUserKey(%s) incorrect return: valid: %t - want valid: %t", tt.user, isValid, tt.valid)
+			t.Errorf("Invalid ValidateUserKey(%s) return: expected: %t - got: %t", tt.user, isValid, tt.valid)
 		}
 	}
 }

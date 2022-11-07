@@ -96,8 +96,7 @@ func CheckExpired(expireOn string) (bool, error) {
 func ValidateUserKey(user string) error {
 	whiteSpaceRegexp, _ := regexp.Compile("\\s")
 
-	hasWhiteSpace := whiteSpaceRegexp.MatchString(user)
-	if hasWhiteSpace {
+	if hasWhiteSpace := whiteSpaceRegexp.MatchString(user); hasWhiteSpace == true {
 		return errors.New("Invalid username - whitespace detected")
 	}
 	return nil
