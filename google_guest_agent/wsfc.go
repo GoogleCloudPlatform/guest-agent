@@ -185,7 +185,7 @@ func (a *wsfcAgent) run() error {
 		}
 	}()
 
-	logger.Infof("wsfc agent stared. Listening on port: %s", a.port)
+	logger.Infof("wsfc agent started. Listening on port: %s", a.port)
 	a.listener = listener
 
 	return nil
