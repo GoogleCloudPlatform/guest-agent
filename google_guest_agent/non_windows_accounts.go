@@ -158,11 +158,7 @@ func (a *accountsMgr) set() error {
 			}
 		}
 		if !compareStringSlice(userKeys, sshKeys[user]) {
-			// logger.Infof("Updating keys for user %s.", user)
-			// if err := updateAuthorizedKeysFile(user, userKeys); err != nil {
-			//	logger.Errorf("Error updating SSH keys for %s: %v.", user, err)
-			//	continue
-			// }
+			logger.Infof("Updating keys for user %s.", user)
 			sshKeys[user] = userKeys
 		}
 	}
@@ -344,6 +340,7 @@ func writeSSHDConfigFile() error {
 	return nil
 }
 
+// Helper function to set AuthorizedKeysCommand, should only run once in entire program execution
 func filterAuthorizedKeyLines(contents string) string {
 	var filtered []string
 	

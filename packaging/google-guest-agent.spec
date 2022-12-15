@@ -38,7 +38,7 @@ Contains the Google guest agent binary.
 %autosetup
 
 %build
-for bin in google_guest_agent google_metadata_script_runner gce_workload_cert_refresh; do
+for bin in google_authorized_keys_guest google_guest_agent google_metadata_script_runner gce_workload_cert_refresh; do
   pushd "$bin"
   GOPATH=%{_gopath} CGO_ENABLED=0 %{_go} build -ldflags="-s -w -X main.version=%{_version}" -mod=readonly
   popd
@@ -49,6 +49,7 @@ install -d "%{buildroot}/%{_docdir}/%{name}"
 cp -r THIRD_PARTY_LICENSES "%buildroot/%_docdir/%name/THIRD_PARTY_LICENSES"
 
 install -d %{buildroot}%{_bindir}
+install -p -m 0755 google_authorized_keys_guest/google_authorized_keys_guest %{buildroot}%{_bindir}/google_authorized_keys_guest
 install -p -m 0755 google_guest_agent/google_guest_agent %{buildroot}%{_bindir}/google_guest_agent
 install -p -m 0755 google_metadata_script_runner/google_metadata_script_runner %{buildroot}%{_bindir}/google_metadata_script_runner
 install -p -m 0755 gce_workload_cert_refresh/gce_workload_cert_refresh %{buildroot}%{_bindir}/gce_workload_cert_refresh
@@ -74,6 +75,7 @@ install -p -m 0644 90-%{name}.preset %{buildroot}%{_presetdir}/90-%{name}.preset
 %{_docdir}/%{name}
 %defattr(-,root,root,-)
 /usr/share/google-guest-agent/instance_configs.cfg
+%{_bindir}/google_authorized_keys_guest
 %{_bindir}/google_guest_agent
 %{_bindir}/google_metadata_script_runner
 %{_bindir}/gce_workload_cert_refresh
