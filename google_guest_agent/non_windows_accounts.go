@@ -342,17 +342,13 @@ func writeSSHDConfigFile() error {
 
 // Helper function to set AuthorizedKeysCommand, should only run once in entire program execution
 func filterAuthorizedKeyLines(contents string) string {
-	var filtered []string
-	
-	const KeyCommandLine = "AuthorizedKeysCommand /usr/bin/google_authorized_keys_guest"
-	const KeyCommandUserLine = "AuthorizedKeysCommandUser root"
+	const KeyCommandLine = "#AuthorizedKeysCommand /usr/bin/google_authorized_keys_guest"
+	const KeyCommandUserLine = "#AuthorizedKeysCommandUser root"
+	filtered := []string{KeyCommandLine, KeyCommandUserLine}
 	for _, line := range strings.Split(contents, "\n") {
-		switch {
-		case strings.Contains(line, "AuthorizedKeysCommand"):
-			filtered = append(filtered, KeyCommandLine)
-		case strings.Contains(line, "AuthorizedKeysCommandUser"):
-			filtered = append(filtered, KeyCommandUserLine)
-		default:
+		// remove both AuthorizedKeysCommand and 
+		// AuthorizedKeysCommandUser lines
+		if !strings.Contains(line, "AuthorizedKeysCommand") {
 			filtered = append(filtered, line)
 		}
 	}
