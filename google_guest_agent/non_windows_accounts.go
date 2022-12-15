@@ -111,6 +111,11 @@ func (a *accountsMgr) set() error {
 	if sshKeys == nil {
 		logger.Debugf("initialize sshKeys map")
 		sshKeys = make(map[string][]string)
+		// only need to write to SSHD once in program execution
+		if err := writeSSHDConfigFile(); err != nil {
+			logger.Errorf("Error updating SSH config: %v.", err)
+		}
+		systemctlStart("sshd")
 	}
 
 	logger.Debugf("create sudoers file if needed")
@@ -153,11 +158,11 @@ func (a *accountsMgr) set() error {
 			}
 		}
 		if !compareStringSlice(userKeys, sshKeys[user]) {
-			logger.Infof("Updating keys for user %s.", user)
-			if err := updateAuthorizedKeysFile(user, userKeys); err != nil {
-				logger.Errorf("Error updating SSH keys for %s: %v.", user, err)
-				continue
-			}
+			// logger.Infof("Updating keys for user %s.", user)
+			// if err := updateAuthorizedKeysFile(user, userKeys); err != nil {
+			//	logger.Errorf("Error updating SSH keys for %s: %v.", user, err)
+			//	continue
+			// }
 			sshKeys[user] = userKeys
 		}
 	}
@@ -318,6 +323,43 @@ func readGoogleUsersFile() (map[string]string, error) {
 		}
 	}
 	return res, nil
+}
+
+// Enables AuthorizedKeysCommand to be used instead of an AuthorizedKeysFile
+func writeSSHDConfigFile() error {
+	sshConfig, err := ioutil.ReadFile("/etc/ssh/sshd_config")
+	if err != nil {
+		return err
+	}
+	proposed := filterAuthorizedKeyLines(string(sshConfig))
+	if proposed == string(sshConfig) {
+		return nil
+	}
+	file, err := os.OpenFile("/etc/ssh/sshd_config", os.O_WRONLY|os.O_TRUNC, 0777)
+	if err != nil {
+		return err
+	}
+	defer closeFile(file)
+	file.WriteString(proposed)
+	return nil
+}
+
+func filterAuthorizedKeyLines(contents string) string {
+	var filtered []string
+	
+	const KeyCommandLine = "AuthorizedKeysCommand /usr/bin/google_authorized_keys_guest"
+	const KeyCommandUserLine = "AuthorizedKeysCommandUser root"
+	for _, line := range strings.Split(contents, "\n") {
+		switch {
+		case strings.Contains(line, "AuthorizedKeysCommand"):
+			filtered = append(filtered, KeyCommandLine)
+		case strings.Contains(line, "AuthorizedKeysCommandUser"):
+			filtered = append(filtered, KeyCommandUserLine)
+		default:
+			filtered = append(filtered, line)
+		}
+	}
+	return strings.Join(filtered, "\n")
 }
 
 // Replaces {user} or {group} in command string. Supports legacy python-era
