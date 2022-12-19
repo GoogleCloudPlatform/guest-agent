@@ -115,7 +115,9 @@ func (a *accountsMgr) set() error {
 		if err := writeSSHDConfigFile(); err != nil {
 			logger.Errorf("Error updating SSH config: %v.", err)
 		}
-		systemctlStart("sshd")
+		if err := systemctlStart("sshd"); err != nil {
+			logger.Errorf("Error starting sshd daemon: %v.", err)
+		}
 	}
 
 	logger.Debugf("create sudoers file if needed")
@@ -323,7 +325,7 @@ func readGoogleUsersFile() (map[string]string, error) {
 
 // Enables AuthorizedKeysCommand to be used instead of an AuthorizedKeysFile
 func writeSSHDConfigFile() error {
-	sshConfig, err := ioutil.ReadFile("/etc/ssh/sshd_config")
+	sshConfig, err := os.ReadFile("/etc/ssh/sshd_config")
 	if err != nil {
 		return err
 	}
@@ -336,7 +338,10 @@ func writeSSHDConfigFile() error {
 		return err
 	}
 	defer closeFile(file)
-	file.WriteString(proposed)
+	_, err = file.WriteString(proposed)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
