@@ -112,7 +112,9 @@ func (a *accountsMgr) set() error {
 		logger.Debugf("initialize sshKeys map")
 		sshKeys = make(map[string][]string)
 		// only need to write to SSHD once in program execution
-		if err := writeSSHDConfigFile(); err != nil {
+		enablementMode := "metadata"
+		osLoginEnabled, twofactor, skey := false, false, false
+		if err := writeSSHConfig(enablementMode, osLoginEnabled, twofactor, skey); err != nil {
 			logger.Errorf("Error updating SSH config: %v.", err)
 		}
 		if err := systemctlStart("sshd"); err != nil {
@@ -321,28 +323,6 @@ func readGoogleUsersFile() (map[string]string, error) {
 		}
 	}
 	return res, nil
-}
-
-// Enables AuthorizedKeysCommand to be used instead of an AuthorizedKeysFile
-func writeSSHDConfigFile() error {
-	sshConfig, err := os.ReadFile("/etc/ssh/sshd_config")
-	if err != nil {
-		return err
-	}
-	proposed := filterAuthorizedKeyLines(string(sshConfig))
-	if proposed == string(sshConfig) {
-		return nil
-	}
-	file, err := os.OpenFile("/etc/ssh/sshd_config", os.O_WRONLY|os.O_TRUNC, 0777)
-	if err != nil {
-		return err
-	}
-	defer closeFile(file)
-	_, err = file.WriteString(proposed)
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
 // Helper function to set AuthorizedKeysCommand, should only run once in entire program execution

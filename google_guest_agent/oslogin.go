@@ -15,6 +15,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -96,7 +97,8 @@ func (o *osloginMgr) set() error {
 		logger.Infof("Disabling OS Login")
 	}
 
-	if err := writeSSHConfig(enable, twofactor, skey); err != nil {
+	enablementMode := "oslogin"
+	if err := writeSSHConfig(enablementMode, enable, twofactor, skey); err != nil {
 		logger.Errorf("Error updating SSH config: %v.", err)
 	}
 
@@ -223,12 +225,21 @@ func updateSSHConfig(sshConfig string, enable, twofactor, skey bool) string {
 	return strings.Join(filtered, "\n")
 }
 
-func writeSSHConfig(enable, twofactor, skey bool) error {
+func writeSSHConfig(enablementMode string, enable, twofactor, skey bool) error {
 	sshConfig, err := ioutil.ReadFile("/etc/ssh/sshd_config")
 	if err != nil {
 		return err
 	}
-	proposed := updateSSHConfig(string(sshConfig), enable, twofactor, skey)
+	fmt.Printf("mode is %s", enablementMode)
+	var proposed string
+	switch enablementMode {
+	case "metadata":
+		proposed = filterAuthorizedKeyLines(string(sshConfig))
+	case "oslogin":
+		proposed = updateSSHConfig(string(sshConfig), enable, twofactor, skey)
+	default:
+		return errors.New("invalid enablement mode for writing to SSHConfig")
+	}
 	if proposed == string(sshConfig) {
 		return nil
 	}
