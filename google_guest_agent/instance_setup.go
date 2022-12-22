@@ -49,31 +49,30 @@ func agentInit(ctx context.Context) {
 	// TODO incorporate these scripts into the agent. liamh@12-11-19
 
 	if runtime.GOOS == "windows" {
-		msg := "Could not set default route to metadata"
-		fes, err := getIPForwardEntries()
-		if err != nil {
-			logger.Errorf("%s, error listing IPForwardEntries: %v", msg, err)
-			return
-		}
-
-		// Choose the first adapter index that has the default route setup.
-		// This is equivalent to how route.exe works when interface is not provided.
 		var index int32
-		var found bool
 		var metric int32
-		sort.Slice(fes, func(i, j int) bool { return fes[i].ipForwardIfIndex < fes[j].ipForwardIfIndex })
-		for _, fe := range fes {
-			if fe.ipForwardDest.Equal(net.ParseIP("0.0.0.0")) {
-				index = fe.ipForwardIfIndex
-				metric = fe.ipForwardMetric1
-				found = true
-				break
+		var fes []ipForwardEntry
+		msg := "Could not set default route to metadata"
+	WaitLoop:
+		for {
+			fes, err := getIPForwardEntries()
+			if err != nil {
+				logger.Errorf("%s, error listing IPForwardEntries: %v", msg, err)
 			}
-		}
 
-		if found == false {
+			// Choose the first adapter index that has the default route setup.
+			// This is equivalent to how route.exe works when interface is not provided.
+			sort.Slice(fes, func(i, j int) bool { return fes[i].ipForwardIfIndex < fes[j].ipForwardIfIndex })
+			for _, fe := range fes {
+				if fe.ipForwardDest.Equal(net.ParseIP("0.0.0.0")) {
+					index = fe.ipForwardIfIndex
+					metric = fe.ipForwardMetric1
+					break WaitLoop
+				}
+			}
+
 			logger.Errorf("%s, could not find the default route in IPForwardEntries: %+v", msg, fes)
-			return
+			time.Sleep(1 * time.Second)
 		}
 
 		iface, err := net.InterfaceByIndex(int(index))
