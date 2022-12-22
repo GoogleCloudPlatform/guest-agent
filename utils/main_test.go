@@ -101,7 +101,6 @@ func TestValidateUserKey(t *testing.T) {
 		{"badusername.23", false},
 		{"badusername/25\\", false},
 		{"baduser../#$@", false},
-		
 	}
 	for _, tt := range table {
 		err := ValidateUserKey(tt.user)

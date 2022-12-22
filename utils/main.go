@@ -99,7 +99,7 @@ func ValidateUserKey(user string) error {
 	}
 	// recommended linux username regex according to the manual
 	userRegexp, _ := regexp.Compile("[a-z_][a-z0-9_-]*[$]?")
-	
+
 	if userRegexp.FindString(user) != user {
 		return errors.New("Invalid username - detected an invalid character")
 	}
