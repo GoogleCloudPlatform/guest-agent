@@ -90,12 +90,18 @@ func TestValidateUserKey(t *testing.T) {
 		valid bool
 	}{
 		{"username", true},
-		{"username:key", true},
-		{"user -g", false},
-		{"user -g 27", false},
+		{"usernamekey", true},
+		{"user-g", true},
+		{"user g 27", false},
+		{"_underscore_user", true},
+		{"user_ending_in_dollar$", true},
 		{"user\t-g", false},
 		{"user\n-g", false},
 		{"username\t-g\n27", false},
+		{"badusername.23", false},
+		{"badusername/25\\", false},
+		{"baduser../#$@", false},
+		
 	}
 	for _, tt := range table {
 		err := ValidateUserKey(tt.user)

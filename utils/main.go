@@ -94,10 +94,14 @@ func CheckExpired(expireOn string) (bool, error) {
 // detected, nil otherwise.
 // Currently, the only banned characters are whitespace characters.
 func ValidateUserKey(user string) error {
-	whiteSpaceRegexp, _ := regexp.Compile("\\s")
-
-	if whiteSpaceRegexp.MatchString(user) {
-		return errors.New("Invalid username - whitespace detected")
+	if len(user) > 32 {
+		return errors.New("Invalid username - exceeds maximum length")
+	}
+	// recommended linux username regex according to the manual
+	userRegexp, _ := regexp.Compile("[a-z_][a-z0-9_-]*[$]?")
+	
+	if userRegexp.FindString(user) != user {
+		return errors.New("Invalid username - detected an invalid character")
 	}
 	return nil
 }
