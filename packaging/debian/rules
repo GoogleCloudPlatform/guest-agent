@@ -10,7 +10,7 @@ export GOCACHE := /tmp/.cache
 export GOPROXY := https://proxy.golang.org
 export GO111MODULE := on
 export GOPATH := /usr/share/gocode
-export DH_GOLANG_BUILDPKG := github.com/GoogleCloudPlatform/guest-agent/google_guest_agent github.com/GoogleCloudPlatform/guest-agent/google_metadata_script_runner github.com/GoogleCloudPlatform/guest-agent/gce_workload_cert_refresh
+export DH_GOLANG_BUILDPKG := github.com/GoogleCloudPlatform/guest-agent/google_guest_agent github.com/GoogleCloudPlatform/guest-agent/google_metadata_script_runner github.com/GoogleCloudPlatform/guest-agent/gce_workload_cert_refresh github.com/GoogleCloudPlatform/guest-agent/google_authorized_keys
 
 %:
 	dh $@  --buildsystem=golang --with=golang,systemd
