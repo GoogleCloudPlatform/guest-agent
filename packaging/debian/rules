@@ -22,7 +22,7 @@ override_dh_auto_install:
 	install -p -m 0644 instance_configs.cfg debian/google-guest-agent/usr/share/google-guest-agent
 	install -d debian/google-guest-agent/lib/systemd/system
 	install -p -m 0644 gce-workload-cert-refresh.timer debian/google-guest-agent/lib/systemd/system/
-
+	mv debian/google-guest-agent/usr/bin/google_authorized_keys debian/google-guest-agent/usr/bin/google_authorized_keys_guest
 override_dh_golang:
 	# We don't use any packaged dependencies, so skip dh_golang step.
 
