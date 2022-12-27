@@ -117,9 +117,6 @@ func (a *accountsMgr) set() error {
 		if err := writeSSHConfig(enablementMode, osLoginEnabled, twofactor, skey); err != nil {
 			logger.Errorf("Error updating SSH config: %v.", err)
 		}
-		if err := systemctlStart("sshd"); err != nil {
-			logger.Errorf("Error starting sshd daemon: %v.", err)
-		}
 	}
 
 	logger.Debugf("create sudoers file if needed")
@@ -331,7 +328,7 @@ func filterAuthorizedKeyLines(contents string) string {
 	const KeyCommandUserLine = "#AuthorizedKeysCommandUser root"
 	filtered := []string{KeyCommandLine, KeyCommandUserLine}
 	for _, line := range strings.Split(contents, "\n") {
-		// remove both AuthorizedKeysCommand and 
+		// remove both AuthorizedKeysCommand and
 		// AuthorizedKeysCommandUser lines
 		if !strings.Contains(line, "AuthorizedKeysCommand") {
 			filtered = append(filtered, line)
