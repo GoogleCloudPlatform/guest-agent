@@ -324,9 +324,9 @@ func readGoogleUsersFile() (map[string]string, error) {
 
 // Helper function to set AuthorizedKeysCommand, should only run once in entire program execution
 func filterAuthorizedKeyLines(contents string) string {
-	const KeyCommandLine = "#AuthorizedKeysCommand /usr/bin/google_authorized_keys_guest"
-	const KeyCommandUserLine = "#AuthorizedKeysCommandUser root"
-	filtered := []string{KeyCommandLine, KeyCommandUserLine}
+	keyCommandLine := "AuthorizedKeysCommand /usr/bin/google_authorized_keys_guest"
+	keyCommandUserLine := "AuthorizedKeysCommandUser root"
+	filtered := []string{keyCommandLine, keyCommandUserLine}
 	for _, line := range strings.Split(contents, "\n") {
 		// remove both AuthorizedKeysCommand and
 		// AuthorizedKeysCommandUser lines

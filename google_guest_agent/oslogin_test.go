@@ -179,6 +179,76 @@ func TestUpdateNSSwitchConfig(t *testing.T) {
 		}
 	}
 }
+
+func TestFilterAuthorizedKeyLines(t *testing.T) {
+	keyCommandLine := "AuthorizedKeysCommand /usr/bin/google_authorized_keys_guest"
+	keyCommandUserLine := "AuthorizedKeysCommandUser root"
+	authorizedKeysFileLine := "AuthorizedKeysFile ssh.ssh"
+
+	var tests = []struct {
+		contents, want []string
+	}{
+		{
+			contents: []string{
+				keyCommandLine,
+				"",
+				keyCommandUserLine,
+			},
+			want: []string{
+				keyCommandLine,
+				keyCommandUserLine,
+				"",
+			},
+		},
+		{
+			contents: []string{
+				"",
+			},
+			want: []string{
+				keyCommandLine,
+				keyCommandUserLine,
+				"",
+			},
+		},
+		{
+			contents: []string{
+				"line1",
+				"line2",
+				"line3",
+			},
+			want: []string{
+				keyCommandLine,
+				keyCommandUserLine,
+				"line1",
+				"line2",
+				"line3",
+			},
+		},
+		{
+			contents: []string{
+				authorizedKeysFileLine,
+				"AuthorizedKeysCommand cmd.cmd",
+				"unrelated line",
+			},
+			want: []string{
+				keyCommandLine,
+				keyCommandUserLine,
+				authorizedKeysFileLine,
+				"unrelated line",
+			},
+		},
+	}
+
+	for idx, tt := range tests {
+		contents := strings.Join(tt.contents, "\n")
+		want := strings.Join(tt.want, "\n")
+
+		if res := filterAuthorizedKeyLines(contents); res != want {
+			t.Errorf("test %v\nwant:\n%v\ngot:\n%v\n", idx, want, res)
+		}
+	}
+}
+
 func TestUpdateSSHConfig(t *testing.T) {
 	challengeResponseEnable := "ChallengeResponseAuthentication yes"
 	authorizedKeysCommand := "AuthorizedKeysCommand /usr/bin/google_authorized_keys"
