@@ -31,6 +31,48 @@ import (
 	"github.com/go-ini/ini"
 )
 
+func getDefaultAdapter(fes []ipForwardEntry) (*ipForwardEntry, error) {
+	// Choose the first adapter index that has the default route setup.
+	// This is equivalent to how route.exe works when interface is not provided.
+	sort.Slice(fes, func(i, j int) bool { return fes[i].ipForwardIfIndex < fes[j].ipForwardIfIndex })
+	for _, fe := range fes {
+		if fe.ipForwardDest.Equal(net.ParseIP("0.0.0.0")) {
+			return &fe, nil
+		}
+	}
+	return nil, fmt.Errorf("could not find default route")
+}
+
+func addMetadataRoute() error {
+	fes, err := getIPForwardEntries()
+	if err != nil {
+		return err
+	}
+
+	defaultRoute, err := getDefaultAdapter(fes)
+	if err != nil {
+		return err
+	}
+
+	forwardEntry := ipForwardEntry{
+		ipForwardDest:    net.ParseIP("169.254.169.254"),
+		ipForwardMask:    net.IPv4Mask(255, 255, 255, 255),
+		ipForwardNextHop: net.ParseIP("0.0.0.0"),
+		ipForwardMetric1: defaultRoute.ipForwardMetric1, // Must be <= the default route metric.
+		ipForwardIfIndex: defaultRoute.ipForwardIfIndex,
+	}
+
+	for _, fe := range fes {
+		if fe.ipForwardDest.Equal(forwardEntry.ipForwardDest) && fe.ipForwardIfIndex == forwardEntry.ipForwardIfIndex {
+			// No need to add entry, it's already setup.
+			return nil
+		}
+	}
+
+	logger.Infof("Adding route to metadata server on adapter with index %d", defaultRoute.ipForwardIfIndex)
+	return addIPForwardEntry(forwardEntry)
+}
+
 func agentInit(ctx context.Context) {
 	// Actions to take on agent startup.
 	//
@@ -49,58 +91,13 @@ func agentInit(ctx context.Context) {
 	// TODO incorporate these scripts into the agent. liamh@12-11-19
 
 	if runtime.GOOS == "windows" {
-		msg := "Could not set default route to metadata"
-		fes, err := getIPForwardEntries()
-		if err != nil {
-			logger.Errorf("%s, error listing IPForwardEntries: %v", msg, err)
-			return
-		}
-
-		// Choose the first adapter index that has the default route setup.
-		// This is equivalent to how route.exe works when interface is not provided.
-		var index int32
-		var found bool
-		var metric int32
-		sort.Slice(fes, func(i, j int) bool { return fes[i].ipForwardIfIndex < fes[j].ipForwardIfIndex })
-		for _, fe := range fes {
-			if fe.ipForwardDest.Equal(net.ParseIP("0.0.0.0")) {
-				index = fe.ipForwardIfIndex
-				metric = fe.ipForwardMetric1
-				found = true
+		// Indefinitely retry to set up required MDS route.
+		for ; ; time.Sleep(1 * time.Second) {
+			if err := addMetadataRoute(); err != nil {
+				logger.Errorf("Could not set default route to metadata: %v", err)
+			} else {
 				break
 			}
-		}
-
-		if found == false {
-			logger.Errorf("%s, could not find the default route in IPForwardEntries: %+v", msg, fes)
-			return
-		}
-
-		iface, err := net.InterfaceByIndex(int(index))
-		if err != nil {
-			logger.Errorf("%s, error from net.InterfaceByIndex(%d): %v", msg, index, err)
-			return
-		}
-
-		forwardEntry := ipForwardEntry{
-			ipForwardDest:    net.ParseIP("169.254.169.254"),
-			ipForwardMask:    net.IPv4Mask(255, 255, 255, 255),
-			ipForwardNextHop: net.ParseIP("0.0.0.0"),
-			ipForwardMetric1: metric, // This needs to be at least equal to the default route metric.
-			ipForwardIfIndex: int32(iface.Index),
-		}
-
-		for _, fe := range fes {
-			if fe.ipForwardDest.Equal(forwardEntry.ipForwardDest) && fe.ipForwardIfIndex == forwardEntry.ipForwardIfIndex {
-				// No need to add entry, it's already setup.
-				return
-			}
-		}
-
-		logger.Infof("Adding route to metadata server on %q (index: %d)", iface.Name, iface.Index)
-		if err := addIPForwardEntry(forwardEntry); err != nil {
-			logger.Errorf("%s, error adding IPForwardEntry on %q (index: %d): %v", msg, iface.Name, iface.Index, err)
-			return
 		}
 	} else {
 		// Linux instance setup.
