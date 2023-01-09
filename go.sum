@@ -65,6 +65,8 @@ github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03
 github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802/go.mod h1:IVnqGOEym/WlBOVXweHU+Q+/VP0lqqI8lqeDx9IjBqo=
 github.com/GoogleCloudPlatform/guest-logging-go v0.0.0-20210621170517-facc9c0d81b9 h1:Qq6KJSPMb1wCih/rqzQs3Ni2ShuCYc4q51wTx8lpy6Q=
 github.com/GoogleCloudPlatform/guest-logging-go v0.0.0-20210621170517-facc9c0d81b9/go.mod h1:3F/urXs15KEI7RBGoOsK9/jCCJPBKHxyZH/Nzc7uldo=
+github.com/GoogleCloudPlatform/guest-logging-go v0.0.0-20221216194522-f549ad6a1730 h1:l4Hin8i/7I1R0cvWBP+z6JdRxU4yJWFbcXvJ8mKKC70=
+github.com/GoogleCloudPlatform/guest-logging-go v0.0.0-20221216194522-f549ad6a1730/go.mod h1:3F/urXs15KEI7RBGoOsK9/jCCJPBKHxyZH/Nzc7uldo=
 github.com/OneOfOne/xxhash v1.2.2/go.mod h1:HSdplMjZKSmBqAxg5vPj2TmRDmfkzw+cTzAElWljhcU=
 github.com/antihax/optional v1.0.0/go.mod h1:uupD/76wgC+ih3iEmQUL+0Ugr19nfwCT1kdvxnR2qWY=
 github.com/census-instrumentation/opencensus-proto v0.2.1/go.mod h1:f6KPmirojxKA12rnyqOA5BBL4O983OfeGPqjHWSTneU=
