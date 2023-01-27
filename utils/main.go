@@ -41,8 +41,8 @@ type sshExpiration struct {
 	UserName string
 }
 
-// CheckExpiredKey validates whether a key has expired. Keys with invalid expiration formats will result in an
-// error.
+// CheckExpiredKey validates whether a key has expired.
+// Keys with invalid expiration formats will result in an error.
 func CheckExpiredKey(key string) error {
 	trimmedKey := strings.Trim(key, " ")
 	if trimmedKey == "" {
@@ -56,6 +56,10 @@ func CheckExpiredKey(key string) error {
 	if len(fields) == 3 && fields[2] == "google-ssh" {
 		// expiring key without expiration format.
 		return errors.New("Invalid ssh key entry - expiration missing")
+	}
+	if len(fields) >= 3 && fields[2] != "google-ssh" {
+		// Non-expiring key with an arbitrary comment part
+		return nil
 	}
 	if len(fields) > 3 {
 		lkey := sshExpiration{}
@@ -89,11 +93,15 @@ func CheckExpired(expireOn string) (bool, error) {
 
 }
 
-// ValidateUserKey checks for the presence of a characters which should not be
+// ValidateUser checks for the presence of a characters which should not be
 // allowed in a username string, returns an error if any such characters are
 // detected, nil otherwise.
 // Currently, the only banned characters are whitespace characters.
-func ValidateUserKey(user string) error {
+func ValidateUser(user string) error {
+	if user == "" {
+		return errors.New("Invalid username - it is empty")
+	}
+
 	whiteSpaceRegexp, _ := regexp.Compile("\\s")
 
 	if whiteSpaceRegexp.MatchString(user) {
@@ -102,8 +110,8 @@ func ValidateUserKey(user string) error {
 	return nil
 }
 
-// GetUserKey takes a string and determines if it is a valid SSH key and returns
-// the user and key if valid, nil otherwise.
+// GetUserKey returns a user and a SSH key if a rawKey has a correct format, nil otherwise.
+// It doesn't validate entries.
 func GetUserKey(rawKey string) (string, string, error) {
 	key := strings.Trim(rawKey, " ")
 	if key == "" {
@@ -111,20 +119,30 @@ func GetUserKey(rawKey string) (string, string, error) {
 	}
 	idx := strings.Index(key, ":")
 	if idx == -1 {
-		return "", "", errors.New("Invalid ssh key entry - unrecognized format")
+		return "", "", errors.New("Invalid ssh key entry - unrecognized format. Expecting user:ssh-key")
 	}
 	user := key[:idx]
 	if user == "" {
 		return "", "", errors.New("Invalid ssh key entry - user missing")
 	}
-	if err := ValidateUserKey(user); err != nil {
-		return "", "", err
-	}
-	if err := CheckExpiredKey(key[idx+1:]); err != nil {
-		return "", "", err
+	if key[idx+1:] == "" {
+		return "", "", errors.New("Invalid ssh key entry - key missing")
 	}
 
 	return user, key[idx+1:], nil
+}
+
+// ValidateUserKey takes an user and a key received from GetUserKey() and
+// validate the user for special characters and the key for expiration
+func ValidateUserKey(user, key string) error {
+	if err := ValidateUser(user); err != nil {
+		return err
+	}
+	if err := CheckExpiredKey(key); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // SerialPort is a type for writing to a named serial port.
