@@ -99,6 +99,10 @@ func parseSSHKeys(username string, keys []string) []string {
 		}
 
 		user, keyVal, err := utils.GetUserKey(key)
+		if err == nil {
+			err = utils.ValidateUserKey(user, keyVal)
+		}
+
 		if err != nil {
 			continue
 		}

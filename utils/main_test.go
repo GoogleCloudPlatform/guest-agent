@@ -43,19 +43,44 @@ func TestGetUserKey(t *testing.T) {
 	}{
 		{`usera:ssh-rsa AAAA1234 google-ssh {"userName":"usera@example.com","expireOn":"2095-04-23T12:34:56+0000"}`,
 			"usera", `ssh-rsa AAAA1234 google-ssh {"userName":"usera@example.com","expireOn":"2095-04-23T12:34:56+0000"}`, false},
-		{`usera:ssh-rsa AAAA1234 google-ssh {"userName":"usera@example.com","expireOn":"2021-04-23T12:34:56+0000"}`, "", "", true},
-		{`usera:ssh-rsa AAAA1234 google-ssh {"userName":"usera@example.com","expireOn":"Apri 4, 2056"}`, "", "", true},
-		{`usera:ssh-rsa AAAA1234 google-ssh`, "", "", true},
 		{"    ", "", "", true},
 		{"ssh-rsa AAAA1234", "", "", true},
 		{":ssh-rsa AAAA1234", "", "", true},
+		{"userb:", "", "", true},
+		{"userc:ssh-rsa AAAA1234 info text", "userc", "ssh-rsa AAAA1234 info text", false},
 	}
 
 	for _, tt := range table {
 		u, k, err := GetUserKey(tt.key)
 		e := err != nil
 		if u != tt.user || k != tt.keyVal || e != tt.haserr {
-			t.Errorf("GetUserKey(%s) incorrect return: got user: %s, key: %s, error: %v - want user %s, key: %s, error: %v", tt.key, u, k, e, tt.user, tt.keyVal, tt.haserr)
+			t.Errorf("GetUserKey(%s) incorrect return: got user: %s, key: %s, error: %v - want user: %s, key: %s, error: %v", tt.key, u, k, e, tt.user, tt.keyVal, tt.haserr)
+		}
+	}
+}
+
+func TestValidateUserKey(t *testing.T) {
+	table := []struct {
+		user   string
+		key    string
+		haserr bool
+	}{
+		{"usera", `ssh-rsa AAAA1234 google-ssh {"userName":"usera@example.com","expireOn":"2095-04-23T12:34:56+0000"}`, false},
+		{"user a", `ssh-rsa AAAA1234 google-ssh {"userName":"usera@example.com","expireOn":"2095-04-23T12:34:56+0000"}`, true},
+		{"usera", `ssh-rsa AAAA1234 google-ssh {"userName":"usera@example.com","expireOn":"2021-04-23T12:34:56+0000"}`, true},
+		{"usera", `ssh-rsa AAAA1234 google-ssh {"userName":"usera@example.com","expireOn":"Apri 4, 2056"}`, true},
+		{"usera", `ssh-rsa AAAA1234 google-ssh`, true},
+		{"usera", `ssh-rsa AAAA1234 test info`, false},
+		{"    ", "", true},
+		{"", "ssh-rsa AAAA1234", true},
+		{"userb", "", true},
+	}
+
+	for _, tt := range table {
+		err := ValidateUserKey(tt.user, tt.key)
+		e := err != nil
+		if e != tt.haserr {
+			t.Errorf("ValidateUserKey(%s, %s) incorrect return: expected: %t - got: %t", tt.user, tt.key, tt.haserr, e)
 		}
 	}
 }
@@ -84,7 +109,7 @@ func TestCheckExpiredKey(t *testing.T) {
 	}
 }
 
-func TestValidateUserKey(t *testing.T) {
+func TestValidateUser(t *testing.T) {
 	table := []struct {
 		user  string
 		valid bool
@@ -98,10 +123,10 @@ func TestValidateUserKey(t *testing.T) {
 		{"username\t-g\n27", false},
 	}
 	for _, tt := range table {
-		err := ValidateUserKey(tt.user)
+		err := ValidateUser(tt.user)
 		isValid := err == nil
 		if isValid != tt.valid {
-			t.Errorf("Invalid ValidateUserKey(%s) return: expected: %t - got: %t", tt.user, isValid, tt.valid)
+			t.Errorf("ValidateUser(%s) incorrect return: expected: %t - got: %t", tt.user, tt.valid, isValid)
 		}
 	}
 }
