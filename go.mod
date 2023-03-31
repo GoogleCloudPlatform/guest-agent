@@ -10,6 +10,8 @@ require (
 	github.com/golang/protobuf v1.5.2
 	github.com/kardianos/service v1.2.1
 	github.com/tarm/serial v0.0.0-20180830185346-98f6abe2eb07
-	golang.org/x/sys v0.0.0-20220615213510-4f61da869c0c
+	golang.org/x/net v0.7.0 // indirect
+	golang.org/x/sys v0.5.0
+	google.golang.org/api v0.74.0 // indirect
 	google.golang.org/grpc v1.47.0
 )
