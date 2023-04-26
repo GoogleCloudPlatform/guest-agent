@@ -198,6 +198,7 @@ func updateSSHConfig(sshConfig string, enable, twofactor, skey bool) string {
 		}
 	}
 	authorizedKeysUser := "AuthorizedKeysCommandUser root"
+	trustedUserCAKeys := "TrustedUserCAKeys /etc/ssh/trustedca.pub"
 	twoFactorAuthMethods := "AuthenticationMethods publickey,keyboard-interactive"
 	if (osRelease.os == "rhel" || osRelease.os == "centos") && osRelease.version.major == 6 {
 		authorizedKeysUser = "AuthorizedKeysCommandRunAs root"
@@ -209,7 +210,7 @@ func updateSSHConfig(sshConfig string, enable, twofactor, skey bool) string {
 	filtered := filterGoogleLines(string(sshConfig))
 
 	if enable {
-		osLoginBlock := []string{googleBlockStart, authorizedKeysCommand, authorizedKeysUser}
+		osLoginBlock := []string{googleBlockStart, authorizedKeysCommand, authorizedKeysUser, trustedUserCAKeys}
 		if twofactor {
 			osLoginBlock = append(osLoginBlock, twoFactorAuthMethods, challengeResponseEnable)
 		}
