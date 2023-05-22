@@ -2,7 +2,7 @@
 Description=Google Compute Engine Startup Scripts
 Wants=network-online.target rsyslog.service
 After=network-online.target rsyslog.service google-guest-agent.service
-Before=apt-daily.service
+Before=apt-daily.service apt-daily-upgrade.service unattended-upgrades.service dnf-automatic.service dnf-automatic-install.service yum-cron.service google-osconfig-agent.service
 
 [Service]
 Type=oneshot
