@@ -116,7 +116,10 @@ func runUpdate() {
 }
 
 func run(ctx context.Context) {
-	opts := logger.LogOpts{LoggerName: programName}
+	opts := logger.LogOpts{
+		LoggerName:          programName,
+		DisableCloudLogging: true,
+	}
 	if runtime.GOOS == "windows" {
 		opts.FormatFunction = logFormatWindows
 		opts.Writers = []io.Writer{&utils.SerialPort{Port: "COM1"}}
