@@ -82,7 +82,7 @@ type virtualClock struct {
 }
 
 type instance struct {
-	ID                json.Number
+	ID                string // NOTE(ozerovandrei): We have string ID
 	MachineType       string
 	Attributes        attributes
 	NetworkInterfaces []networkInterfaces
@@ -101,7 +101,7 @@ type networkInterfaces struct {
 type project struct {
 	Attributes       attributes
 	ProjectID        string
-	NumericProjectID json.Number
+	NumericProjectID string // NOTE(ozerovandrei): We have "\"\"" value in JSON
 }
 
 type attributes struct {
