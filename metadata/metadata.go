@@ -134,7 +134,7 @@ type virtualClock struct {
 
 // Instance describes the metadata's instance attributes/keys.
 type Instance struct {
-	ID                json.Number
+	ID                string // NOTE(ozerovandrei): We have string ID
 	MachineType       string
 	Attributes        Attributes
 	NetworkInterfaces []NetworkInterfaces
@@ -155,7 +155,7 @@ type NetworkInterfaces struct {
 type Project struct {
 	Attributes       Attributes
 	ProjectID        string
-	NumericProjectID json.Number
+	NumericProjectID string // NOTE(ozerovandrei): We have "\"\"" value in JSON
 }
 
 // Attributes describes the project's attributes keys.

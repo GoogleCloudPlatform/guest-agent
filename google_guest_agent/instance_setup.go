@@ -181,12 +181,12 @@ func agentInit(ctx context.Context) {
 				instanceID = []byte(config.Instance.InstanceID)
 
 				// Write instance ID to file for next time before moving on.
-				towrite := fmt.Sprintf("%s\n", newMetadata.Instance.ID.String())
+				towrite := fmt.Sprintf("%s\n", newMetadata.Instance.ID)
 				if err := os.WriteFile(instanceIDFile, []byte(towrite), 0644); err != nil {
 					logger.Warningf("Failed to write instance ID file: %v", err)
 				}
 			}
-			if newMetadata.Instance.ID.String() != strings.TrimSpace(string(instanceID)) {
+			if newMetadata.Instance.ID != strings.TrimSpace(string(instanceID)) {
 				logger.Infof("Instance ID changed, running first-boot actions")
 				if config.InstanceSetup.SetHostKeys {
 					if err := generateSSHKeys(ctx); err != nil {
@@ -200,7 +200,7 @@ func agentInit(ctx context.Context) {
 				}
 
 				// Write instance ID to file.
-				towrite := fmt.Sprintf("%s\n", newMetadata.Instance.ID.String())
+				towrite := fmt.Sprintf("%s\n", newMetadata.Instance.ID)
 				if err := os.WriteFile(instanceIDFile, []byte(towrite), 0644); err != nil {
 					logger.Warningf("Failed to write instance ID file: %v", err)
 				}
@@ -304,7 +304,7 @@ func generateBotoConfig() error {
 	if err != nil {
 		return err
 	}
-	botoCfg.Section("GSUtil").Key("default_project_id").SetValue(newMetadata.Project.NumericProjectID.String())
+	botoCfg.Section("GSUtil").Key("default_project_id").SetValue(newMetadata.Project.NumericProjectID)
 	botoCfg.Section("GSUtil").Key("default_api_version").SetValue("2")
 	botoCfg.Section("GoogleCompute").Key("service_account").SetValue("default")
 
