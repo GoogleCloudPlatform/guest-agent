@@ -28,6 +28,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/GoogleCloudPlatform/guest-agent/metadata"
 	"github.com/go-ini/ini"
 )
 
@@ -47,8 +48,8 @@ func TestExpired(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		k := windowsKey{ExpireOn: tt.sTime}
-		if tt.e != k.expired() {
+		k := metadata.WindowsKey{ExpireOn: tt.sTime}
+		if tt.e != metadata.Expired(k.ExpireOn) {
 			t.Errorf("windowsKey.expired() with ExpiredOn %q should return %t", k.ExpireOn, tt.e)
 		}
 	}
@@ -58,19 +59,19 @@ func TestAccountsDisabled(t *testing.T) {
 	var tests = []struct {
 		name string
 		data []byte
-		md   *metadata
+		md   *metadata.Descriptor
 		want bool
 	}{
-		{"not explicitly disabled", []byte(""), &metadata{}, false},
-		{"enabled in cfg only", []byte("[accountManager]\ndisable=false"), &metadata{}, false},
-		{"disabled in cfg only", []byte("[accountManager]\ndisable=true"), &metadata{}, true},
-		{"disabled in cfg, enabled in instance metadata", []byte("[accountManager]\ndisable=true"), &metadata{Instance: instance{Attributes: attributes{DisableAccountManager: mkptr(false)}}}, true},
-		{"enabled in cfg, disabled in instance metadata", []byte("[accountManager]\ndisable=false"), &metadata{Instance: instance{Attributes: attributes{DisableAccountManager: mkptr(true)}}}, false},
-		{"enabled in instance metadata only", []byte(""), &metadata{Instance: instance{Attributes: attributes{DisableAccountManager: mkptr(false)}}}, false},
-		{"enabled in project metadata only", []byte(""), &metadata{Project: project{Attributes: attributes{DisableAccountManager: mkptr(false)}}}, false},
-		{"disabled in instance metadata only", []byte(""), &metadata{Instance: instance{Attributes: attributes{DisableAccountManager: mkptr(true)}}}, true},
-		{"enabled in instance metadata, disabled in project metadata", []byte(""), &metadata{Instance: instance{Attributes: attributes{DisableAccountManager: mkptr(false)}}, Project: project{Attributes: attributes{DisableAccountManager: mkptr(true)}}}, false},
-		{"disabled in project metadata only", []byte(""), &metadata{Project: project{Attributes: attributes{DisableAccountManager: mkptr(true)}}}, true},
+		{"not explicitly disabled", []byte(""), &metadata.Descriptor{}, false},
+		{"enabled in cfg only", []byte("[accountManager]\ndisable=false"), &metadata.Descriptor{}, false},
+		{"disabled in cfg only", []byte("[accountManager]\ndisable=true"), &metadata.Descriptor{}, true},
+		{"disabled in cfg, enabled in instance metadata", []byte("[accountManager]\ndisable=true"), &metadata.Descriptor{Instance: metadata.Instance{Attributes: metadata.Attributes{DisableAccountManager: mkptr(false)}}}, true},
+		{"enabled in cfg, disabled in instance metadata", []byte("[accountManager]\ndisable=false"), &metadata.Descriptor{Instance: metadata.Instance{Attributes: metadata.Attributes{DisableAccountManager: mkptr(true)}}}, false},
+		{"enabled in instance metadata only", []byte(""), &metadata.Descriptor{Instance: metadata.Instance{Attributes: metadata.Attributes{DisableAccountManager: mkptr(false)}}}, false},
+		{"enabled in project metadata only", []byte(""), &metadata.Descriptor{Project: metadata.Project{Attributes: metadata.Attributes{DisableAccountManager: mkptr(false)}}}, false},
+		{"disabled in instance metadata only", []byte(""), &metadata.Descriptor{Instance: metadata.Instance{Attributes: metadata.Attributes{DisableAccountManager: mkptr(true)}}}, true},
+		{"enabled in instance metadata, disabled in project metadata", []byte(""), &metadata.Descriptor{Instance: metadata.Instance{Attributes: metadata.Attributes{DisableAccountManager: mkptr(false)}}, Project: metadata.Project{Attributes: metadata.Attributes{DisableAccountManager: mkptr(true)}}}, false},
+		{"disabled in project metadata only", []byte(""), &metadata.Descriptor{Project: metadata.Project{Attributes: metadata.Attributes{DisableAccountManager: mkptr(true)}}}, true},
 	}
 
 	for _, tt := range tests {
@@ -150,7 +151,7 @@ func TestCreatecredsJSON(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error generating key: %v", err)
 	}
-	k := windowsKey{
+	k := metadata.WindowsKey{
 		Email:    "email",
 		ExpireOn: "expire",
 		Exponent: base64.StdEncoding.EncodeToString(new(big.Int).SetInt64(int64(prv.PublicKey.E)).Bytes()),
@@ -192,18 +193,18 @@ func TestCreatecredsJSON(t *testing.T) {
 
 func TestCompareAccounts(t *testing.T) {
 	var tests = []struct {
-		newKeys    windowsKeys
+		newKeys    metadata.WindowsKeys
 		oldStrKeys []string
-		wantAdd    windowsKeys
+		wantAdd    metadata.WindowsKeys
 	}{
 		// These should return toAdd:
 		// In MD, not Reg
-		{windowsKeys{{UserName: "foo"}}, nil, windowsKeys{{UserName: "foo"}}},
-		{windowsKeys{{UserName: "foo"}}, []string{`{"UserName":"bar"}`}, windowsKeys{{UserName: "foo"}}},
+		{metadata.WindowsKeys{{UserName: "foo"}}, nil, metadata.WindowsKeys{{UserName: "foo"}}},
+		{metadata.WindowsKeys{{UserName: "foo"}}, []string{`{"UserName":"bar"}`}, metadata.WindowsKeys{{UserName: "foo"}}},
 
 		// These should return nothing:
 		// In Reg and MD
-		{windowsKeys{{UserName: "foo"}}, []string{`{"UserName":"foo"}`}, nil},
+		{metadata.WindowsKeys{{UserName: "foo"}}, []string{`{"UserName":"foo"}`}, nil},
 		// In Reg, not MD
 		{nil, []string{`{UserName":"foo"}`}, nil},
 	}

@@ -19,6 +19,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/GoogleCloudPlatform/guest-agent/metadata"
 	"github.com/go-ini/ini"
 )
 
@@ -58,19 +59,19 @@ func TestAddressDisabled(t *testing.T) {
 	var tests = []struct {
 		name string
 		data []byte
-		md   *metadata
+		md   *metadata.Descriptor
 		want bool
 	}{
-		{"not explicitly disabled", []byte(""), &metadata{}, false},
-		{"enabled in cfg only", []byte("[addressManager]\ndisable=false"), &metadata{}, false},
-		{"disabled in cfg only", []byte("[addressManager]\ndisable=true"), &metadata{}, true},
-		{"disabled in cfg, enabled in instance metadata", []byte("[addressManager]\ndisable=true"), &metadata{Instance: instance{Attributes: attributes{DisableAddressManager: mkptr(false)}}}, true},
-		{"enabled in cfg, disabled in instance metadata", []byte("[addressManager]\ndisable=false"), &metadata{Instance: instance{Attributes: attributes{DisableAddressManager: mkptr(true)}}}, false},
-		{"enabled in instance metadata only", []byte(""), &metadata{Instance: instance{Attributes: attributes{DisableAddressManager: mkptr(false)}}}, false},
-		{"enabled in project metadata only", []byte(""), &metadata{Project: project{Attributes: attributes{DisableAddressManager: mkptr(false)}}}, false},
-		{"disabled in instance metadata only", []byte(""), &metadata{Instance: instance{Attributes: attributes{DisableAddressManager: mkptr(true)}}}, true},
-		{"enabled in instance metadata, disabled in project metadata", []byte(""), &metadata{Instance: instance{Attributes: attributes{DisableAddressManager: mkptr(false)}}, Project: project{Attributes: attributes{DisableAddressManager: mkptr(true)}}}, false},
-		{"disabled in project metadata only", []byte(""), &metadata{Project: project{Attributes: attributes{DisableAddressManager: mkptr(true)}}}, true},
+		{"not explicitly disabled", []byte(""), &metadata.Descriptor{}, false},
+		{"enabled in cfg only", []byte("[addressManager]\ndisable=false"), &metadata.Descriptor{}, false},
+		{"disabled in cfg only", []byte("[addressManager]\ndisable=true"), &metadata.Descriptor{}, true},
+		{"disabled in cfg, enabled in instance metadata", []byte("[addressManager]\ndisable=true"), &metadata.Descriptor{Instance: metadata.Instance{Attributes: metadata.Attributes{DisableAddressManager: mkptr(false)}}}, true},
+		{"enabled in cfg, disabled in instance metadata", []byte("[addressManager]\ndisable=false"), &metadata.Descriptor{Instance: metadata.Instance{Attributes: metadata.Attributes{DisableAddressManager: mkptr(true)}}}, false},
+		{"enabled in instance metadata only", []byte(""), &metadata.Descriptor{Instance: metadata.Instance{Attributes: metadata.Attributes{DisableAddressManager: mkptr(false)}}}, false},
+		{"enabled in project metadata only", []byte(""), &metadata.Descriptor{Project: metadata.Project{Attributes: metadata.Attributes{DisableAddressManager: mkptr(false)}}}, false},
+		{"disabled in instance metadata only", []byte(""), &metadata.Descriptor{Instance: metadata.Instance{Attributes: metadata.Attributes{DisableAddressManager: mkptr(true)}}}, true},
+		{"enabled in instance metadata, disabled in project metadata", []byte(""), &metadata.Descriptor{Instance: metadata.Instance{Attributes: metadata.Attributes{DisableAddressManager: mkptr(false)}}, Project: metadata.Project{Attributes: metadata.Attributes{DisableAddressManager: mkptr(true)}}}, false},
+		{"disabled in project metadata only", []byte(""), &metadata.Descriptor{Project: metadata.Project{Attributes: metadata.Attributes{DisableAddressManager: mkptr(true)}}}, true},
 	}
 
 	for _, tt := range tests {
@@ -95,19 +96,19 @@ func TestAddressDiff(t *testing.T) {
 	var tests = []struct {
 		name string
 		data []byte
-		md   *metadata
+		md   *metadata.Descriptor
 		want bool
 	}{
-		{"not set", []byte(""), &metadata{}, false},
-		{"enabled in cfg only", []byte("[wsfc]\nenable=true"), &metadata{}, true},
-		{"disabled in cfg only", []byte("[wsfc]\nenable=false"), &metadata{}, false},
-		{"disabled in cfg, enabled in instance metadata", []byte("[wsfc]\nenable=false"), &metadata{Instance: instance{Attributes: attributes{EnableWSFC: mkptr(true)}}}, false},
-		{"enabled in cfg, disabled in instance metadata", []byte("[wsfc]\nenable=true"), &metadata{Instance: instance{Attributes: attributes{EnableWSFC: mkptr(false)}}}, true},
-		{"enabled in instance metadata only", []byte(""), &metadata{Instance: instance{Attributes: attributes{EnableWSFC: mkptr(true)}}}, true},
-		{"enabled in project metadata only", []byte(""), &metadata{Project: project{Attributes: attributes{EnableWSFC: mkptr(true)}}}, true},
-		{"disabled in instance metadata only", []byte(""), &metadata{Instance: instance{Attributes: attributes{EnableWSFC: mkptr(false)}}}, false},
-		{"enabled in instance metadata, disabled in project metadata", []byte(""), &metadata{Instance: instance{Attributes: attributes{EnableWSFC: mkptr(true)}}, Project: project{Attributes: attributes{EnableWSFC: mkptr(false)}}}, true},
-		{"disabled in project metadata only", []byte(""), &metadata{Project: project{Attributes: attributes{EnableWSFC: mkptr(false)}}}, false},
+		{"not set", []byte(""), &metadata.Descriptor{}, false},
+		{"enabled in cfg only", []byte("[wsfc]\nenable=true"), &metadata.Descriptor{}, true},
+		{"disabled in cfg only", []byte("[wsfc]\nenable=false"), &metadata.Descriptor{}, false},
+		{"disabled in cfg, enabled in instance metadata", []byte("[wsfc]\nenable=false"), &metadata.Descriptor{Instance: metadata.Instance{Attributes: metadata.Attributes{EnableWSFC: mkptr(true)}}}, false},
+		{"enabled in cfg, disabled in instance metadata", []byte("[wsfc]\nenable=true"), &metadata.Descriptor{Instance: metadata.Instance{Attributes: metadata.Attributes{EnableWSFC: mkptr(false)}}}, true},
+		{"enabled in instance metadata only", []byte(""), &metadata.Descriptor{Instance: metadata.Instance{Attributes: metadata.Attributes{EnableWSFC: mkptr(true)}}}, true},
+		{"enabled in project metadata only", []byte(""), &metadata.Descriptor{Project: metadata.Project{Attributes: metadata.Attributes{EnableWSFC: mkptr(true)}}}, true},
+		{"disabled in instance metadata only", []byte(""), &metadata.Descriptor{Instance: metadata.Instance{Attributes: metadata.Attributes{EnableWSFC: mkptr(false)}}}, false},
+		{"enabled in instance metadata, disabled in project metadata", []byte(""), &metadata.Descriptor{Instance: metadata.Instance{Attributes: metadata.Attributes{EnableWSFC: mkptr(true)}}, Project: metadata.Project{Attributes: metadata.Attributes{EnableWSFC: mkptr(false)}}}, true},
+		{"disabled in project metadata only", []byte(""), &metadata.Descriptor{Project: metadata.Project{Attributes: metadata.Attributes{EnableWSFC: mkptr(false)}}}, false},
 	}
 
 	for _, tt := range tests {
@@ -120,7 +121,7 @@ func TestAddressDiff(t *testing.T) {
 			cfg = &ini.File{}
 		}
 		oldWSFCEnable = false
-		oldMetadata = &metadata{}
+		oldMetadata = &metadata.Descriptor{}
 		newMetadata = tt.md
 		config = cfg
 		got := (&addressMgr{}).diff()
@@ -149,7 +150,7 @@ func TestWsfcFilter(t *testing.T) {
 
 	config = ini.Empty()
 	for idx, tt := range tests {
-		var md metadata
+		var md metadata.Descriptor
 		if err := json.Unmarshal(tt.metaDataJSON, &md); err != nil {
 			t.Error("failed to unmarshal test JSON:", tt, err)
 		}
@@ -171,13 +172,13 @@ func TestWsfcFilter(t *testing.T) {
 
 func TestWsfcFlagTriggerAddressDiff(t *testing.T) {
 	var tests = []struct {
-		newMetadata, oldMetadata *metadata
+		newMetadata, oldMetadata *metadata.Descriptor
 	}{
 		// trigger diff on wsfc-addrs
-		{&metadata{Instance: instance{Attributes: attributes{WSFCAddresses: "192.168.0.1"}}}, &metadata{}},
-		{&metadata{Project: project{Attributes: attributes{WSFCAddresses: "192.168.0.1"}}}, &metadata{}},
-		{&metadata{Instance: instance{Attributes: attributes{WSFCAddresses: "192.168.0.1"}}}, &metadata{Instance: instance{Attributes: attributes{WSFCAddresses: "192.168.0.2"}}}},
-		{&metadata{Project: project{Attributes: attributes{WSFCAddresses: "192.168.0.1"}}}, &metadata{Project: project{Attributes: attributes{WSFCAddresses: "192.168.0.2"}}}},
+		{&metadata.Descriptor{Instance: metadata.Instance{Attributes: metadata.Attributes{WSFCAddresses: "192.168.0.1"}}}, &metadata.Descriptor{}},
+		{&metadata.Descriptor{Project: metadata.Project{Attributes: metadata.Attributes{WSFCAddresses: "192.168.0.1"}}}, &metadata.Descriptor{}},
+		{&metadata.Descriptor{Instance: metadata.Instance{Attributes: metadata.Attributes{WSFCAddresses: "192.168.0.1"}}}, &metadata.Descriptor{Instance: metadata.Instance{Attributes: metadata.Attributes{WSFCAddresses: "192.168.0.2"}}}},
+		{&metadata.Descriptor{Project: metadata.Project{Attributes: metadata.Attributes{WSFCAddresses: "192.168.0.1"}}}, &metadata.Descriptor{Project: metadata.Project{Attributes: metadata.Attributes{WSFCAddresses: "192.168.0.2"}}}},
 	}
 
 	config = ini.Empty()

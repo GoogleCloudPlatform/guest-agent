@@ -23,6 +23,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/GoogleCloudPlatform/guest-agent/metadata"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 )
 
@@ -36,7 +37,7 @@ type osloginMgr struct{}
 
 // We also read project keys first, letting instance-level keys take
 // precedence.
-func getOSLoginEnabled(md *metadata) (bool, bool, bool) {
+func getOSLoginEnabled(md *metadata.Descriptor) (bool, bool, bool) {
 	var enable bool
 	if md.Project.Attributes.EnableOSLogin != nil {
 		enable = *md.Project.Attributes.EnableOSLogin
@@ -129,7 +130,7 @@ func (o *osloginMgr) set() error {
 	}
 
 	now := fmt.Sprintf("%d", time.Now().Unix())
-	writeGuestAttributes("guest-agent/sshable", now)
+	metadata.WriteGuestAttributes("guest-agent/sshable", now)
 
 	if enable {
 		logger.Debugf("Create OS Login dirs, if needed")

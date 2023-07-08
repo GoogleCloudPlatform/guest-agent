@@ -18,6 +18,8 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/GoogleCloudPlatform/guest-agent/metadata"
 )
 
 func TestFilterGoogleLines(t *testing.T) {
@@ -524,7 +526,7 @@ func TestGetOSLoginEnabled(t *testing.T) {
 	}
 
 	for idx, tt := range tests {
-		var md metadata
+		var md metadata.Descriptor
 		if err := json.Unmarshal([]byte(tt.md), &md); err != nil {
 			t.Errorf("Failed to unmarshal metadata JSON for test %v: %v", idx, err)
 		}

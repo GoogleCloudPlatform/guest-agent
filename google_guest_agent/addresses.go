@@ -25,6 +25,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/GoogleCloudPlatform/guest-agent/metadata"
 	"github.com/GoogleCloudPlatform/guest-agent/utils"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 )
@@ -445,7 +446,7 @@ func (a *addressMgr) set() error {
 
 // Enables or disables IPv6 on network interfaces.
 func configureIPv6() error {
-	var newNi, oldNi networkInterfaces
+	var newNi, oldNi metadata.NetworkInterfaces
 	if len(newMetadata.Instance.NetworkInterfaces) == 0 {
 		return fmt.Errorf("no interfaces found in metadata")
 	}

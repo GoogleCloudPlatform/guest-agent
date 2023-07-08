@@ -21,6 +21,7 @@ import (
 	"strconv"
 	"sync/atomic"
 
+	"github.com/GoogleCloudPlatform/guest-agent/metadata"
 	"github.com/GoogleCloudPlatform/guest-agent/utils"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 )
@@ -42,15 +43,7 @@ type diagnosticsEntry struct {
 }
 
 func (k diagnosticsEntry) expired() bool {
-	expired, err := utils.CheckExpired(k.ExpireOn)
-	if err != nil {
-		if !utils.ContainsString(k.ExpireOn, badExpire) {
-			logger.Errorf("error parsing time: %s", err)
-			badExpire = append(badExpire, k.ExpireOn)
-		}
-		return true
-	}
-	return expired
+	return metadata.Expired(k.ExpireOn)
 }
 
 type diagnosticsMgr struct{}

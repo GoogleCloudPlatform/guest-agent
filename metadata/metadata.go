@@ -12,7 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-package main
+package metadata
 
 import (
 	"bytes"
@@ -25,7 +25,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/GoogleCloudPlatform/guest-agent/utils"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 )
 
@@ -39,18 +38,21 @@ var (
 	etag              = defaultEtag
 )
 
-type metadata struct {
-	Instance instance
-	Project  project
+// Descriptor wraps/holds all the metadata keys, the structure reflects the json
+// descriptor returned with metadata call with alt=jason.
+type Descriptor struct {
+	Instance Instance
+	Project  Project
 }
 
-func (m *metadata) UnmarshalJSON(b []byte) error {
+// UnmarshalJSON unmarshals b into Descritor.
+func (m *Descriptor) UnmarshalJSON(b []byte) error {
 	// We can't unmarshal into metadata directly as it would create an infinite loop.
-	type temp metadata
+	type temp Descriptor
 	var t temp
 	err := json.Unmarshal(b, &t)
 	if err == nil {
-		*m = metadata(t)
+		*m = Descriptor(t)
 		return nil
 	}
 
@@ -81,15 +83,17 @@ type virtualClock struct {
 	DriftToken int `json:"drift-token"`
 }
 
-type instance struct {
+// Instance describes the metadata's instance attributes/keys.
+type Instance struct {
 	ID                json.Number
 	MachineType       string
-	Attributes        attributes
-	NetworkInterfaces []networkInterfaces
+	Attributes        Attributes
+	NetworkInterfaces []NetworkInterfaces
 	VirtualClock      virtualClock
 }
 
-type networkInterfaces struct {
+// NetworkInterfaces describes the instances network interfaces configurations.
+type NetworkInterfaces struct {
 	ForwardedIps      []string
 	ForwardedIpv6s    []string
 	TargetInstanceIps []string
@@ -98,20 +102,22 @@ type networkInterfaces struct {
 	DHCPv6Refresh     string
 }
 
-type project struct {
-	Attributes       attributes
+// Project describes the projects instance's attributes.
+type Project struct {
+	Attributes       Attributes
 	ProjectID        string
 	NumericProjectID json.Number
 }
 
-type attributes struct {
+// Attributes describes the project's attributes keys.
+type Attributes struct {
 	BlockProjectKeys      bool
 	EnableOSLogin         *bool
 	EnableWindowsSSH      *bool
 	TwoFactor             *bool
 	SecurityKey           *bool
 	SSHKeys               []string
-	WindowsKeys           windowsKeys
+	WindowsKeys           WindowsKeys
 	Diagnostics           string
 	DisableAddressManager *bool
 	DisableAccountManager *bool
@@ -121,41 +127,8 @@ type attributes struct {
 	WSFCAgentPort         string
 }
 
-type windowsKey struct {
-	Email               string
-	ExpireOn            string
-	Exponent            string
-	Modulus             string
-	UserName            string
-	HashFunction        string
-	AddToAdministrators *bool
-	PasswordLength      int
-}
-
-type windowsKeys []windowsKey
-
-func (k *windowsKeys) UnmarshalJSON(b []byte) error {
-	var s string
-	if err := json.Unmarshal(b, &s); err != nil {
-		return err
-	}
-	for _, jskey := range strings.Split(s, "\n") {
-		var wk windowsKey
-		if err := json.Unmarshal([]byte(jskey), &wk); err != nil {
-			if !utils.ContainsString(jskey, badKeys) {
-				logger.Errorf("failed to unmarshal windows key from metadata: %s", err)
-				badKeys = append(badKeys, jskey)
-			}
-			continue
-		}
-		if wk.Exponent != "" && wk.Modulus != "" && wk.UserName != "" && !wk.expired() {
-			*k = append(*k, wk)
-		}
-	}
-	return nil
-}
-
-func (a *attributes) UnmarshalJSON(b []byte) error {
+// UnmarshalJSON unmarshals b into Attribute.
+func (a *Attributes) UnmarshalJSON(b []byte) error {
 	var mkbool = func(value bool) *bool {
 		res := new(bool)
 		*res = value
@@ -175,7 +148,7 @@ func (a *attributes) UnmarshalJSON(b []byte) error {
 		SSHKeys               string      `json:"ssh-keys"`
 		TwoFactor             string      `json:"enable-oslogin-2fa"`
 		SecurityKey           string      `json:"enable-oslogin-sk"`
-		WindowsKeys           windowsKeys `json:"windows-keys"`
+		WindowsKeys           WindowsKeys `json:"windows-keys"`
 		WSFCAddresses         string      `json:"wsfc-addrs"`
 		WSFCAgentPort         string      `json:"wsfc-agent-port"`
 	}
@@ -244,12 +217,18 @@ func updateEtag(resp *http.Response) bool {
 	return etag != oldEtag
 }
 
-func watchMetadata(ctx context.Context) (*metadata, error) {
-	return getMetadata(ctx, true)
+// Watch runs a longpoll on metadata server.
+func Watch(ctx context.Context) (*Descriptor, error) {
+	return get(ctx, true)
 }
 
-func getMetadata(ctx context.Context, hang bool) (*metadata, error) {
-	logger.Debugf("getMetadata, %t", hang)
+// Get does a metadata call, if hang is set to true then it will do a longpoll.
+func Get(ctx context.Context) (*Descriptor, error) {
+	return get(ctx, false)
+}
+
+func get(ctx context.Context, hang bool) (*Descriptor, error) {
+	logger.Debugf("Invoking Get metadata, wait for change: %t", hang)
 	client := &http.Client{
 		Timeout: defaultTimeout,
 	}
@@ -286,6 +265,21 @@ func getMetadata(ctx context.Context, hang bool) (*metadata, error) {
 	if err != nil {
 		return nil, err
 	}
-	var ret metadata
+	var ret Descriptor
 	return &ret, json.Unmarshal(md, &ret)
+}
+
+// WriteGuestAttributes does a put call to mds changing a guest attribute value.
+func WriteGuestAttributes(key, value string) error {
+	logger.Debugf("write guest attribute %q", key)
+	client := &http.Client{Timeout: defaultTimeout}
+	finalURL := metadataURL + "instance/guest-attributes/" + key
+	req, err := http.NewRequest("PUT", finalURL, strings.NewReader(value))
+	if err != nil {
+		return err
+	}
+	req.Header.Add("Metadata-Flavor", "Google")
+
+	_, err = client.Do(req)
+	return err
 }

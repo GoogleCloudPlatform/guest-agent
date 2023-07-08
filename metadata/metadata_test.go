@@ -12,7 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-package main
+package metadata
 
 import (
 	"context"
@@ -46,17 +46,17 @@ func TestWatchMetadata(t *testing.T) {
 
 	truebool := new(bool)
 	*truebool = true
-	want := attributes{
+	want := Attributes{
 		EnableOSLogin: truebool,
 		WSFCAddresses: "foo",
-		WindowsKeys: windowsKeys{
-			windowsKey{Exponent: "exponent", UserName: "username", Modulus: "modulus", ExpireOn: et, AddToAdministrators: nil},
-			windowsKey{Exponent: "exponent", UserName: "username", Modulus: "modulus", ExpireOn: et, AddToAdministrators: func() *bool { ret := true; return &ret }()},
+		WindowsKeys: WindowsKeys{
+			WindowsKey{Exponent: "exponent", UserName: "username", Modulus: "modulus", ExpireOn: et, AddToAdministrators: nil},
+			WindowsKey{Exponent: "exponent", UserName: "username", Modulus: "modulus", ExpireOn: et, AddToAdministrators: func() *bool { ret := true; return &ret }()},
 		},
 		SSHKeys: []string{"name:ssh-rsa [KEY] hostname", "name:ssh-rsa [KEY] hostname"},
 	}
 	for _, e := range []string{etag1, etag2} {
-		got, err := watchMetadata(context.Background())
+		got, err := Watch(context.Background())
 		if err != nil {
 			t.Fatalf("error running watchMetadata: %v", err)
 		}
@@ -91,7 +91,7 @@ func TestBlockProjectKeys(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		var md metadata
+		var md Descriptor
 		if err := json.Unmarshal([]byte(test.json), &md); err != nil {
 			t.Errorf("failed to unmarshal JSON: %v", err)
 		}
