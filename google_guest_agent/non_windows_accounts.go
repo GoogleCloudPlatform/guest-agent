@@ -206,6 +206,10 @@ func getUserKeys(mdkeys []string) map[string][]string {
 		trimmedKey := strings.Trim(mdkeys[i], " ")
 		if trimmedKey != "" {
 			user, keyVal, err := utils.GetUserKey(trimmedKey)
+			if err == nil {
+				err = utils.ValidateUserKey(user, keyVal)
+			}
+
 			if err != nil {
 				if !utils.ContainsString(trimmedKey, badSSHKeys) {
 					logger.Errorf("%s: %s", err.Error(), trimmedKey)

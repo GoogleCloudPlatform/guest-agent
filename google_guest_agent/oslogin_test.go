@@ -254,6 +254,7 @@ func TestUpdateSSHConfig(t *testing.T) {
 	authorizedKeysCommand := "AuthorizedKeysCommand /usr/bin/google_authorized_keys"
 	authorizedKeysCommandSk := "AuthorizedKeysCommand /usr/bin/google_authorized_keys_sk"
 	authorizedKeysUser := "AuthorizedKeysCommandUser root"
+	trustedUserCAKeys := "TrustedUserCAKeys /etc/ssh/trustedca.pub"
 	twoFactorAuthMethods := "AuthenticationMethods publickey,keyboard-interactive"
 	matchblock1 := `Match User sa_*`
 	matchblock2 := `       AuthenticationMethods publickey`
@@ -274,6 +275,7 @@ func TestUpdateSSHConfig(t *testing.T) {
 				googleBlockStart,
 				authorizedKeysCommand,
 				authorizedKeysUser,
+				trustedUserCAKeys,
 				twoFactorAuthMethods,
 				challengeResponseEnable,
 				googleBlockEnd,
@@ -299,6 +301,7 @@ func TestUpdateSSHConfig(t *testing.T) {
 				googleBlockStart,
 				authorizedKeysCommand,
 				authorizedKeysUser,
+				trustedUserCAKeys,
 				twoFactorAuthMethods,
 				challengeResponseEnable,
 				googleBlockEnd,
@@ -323,6 +326,7 @@ func TestUpdateSSHConfig(t *testing.T) {
 				googleBlockStart,
 				authorizedKeysCommand,
 				authorizedKeysUser,
+				trustedUserCAKeys,
 				googleBlockEnd,
 				"line1",
 				"line2",
@@ -361,6 +365,7 @@ func TestUpdateSSHConfig(t *testing.T) {
 				googleBlockStart,
 				authorizedKeysCommandSk,
 				authorizedKeysUser,
+				trustedUserCAKeys,
 				googleBlockEnd,
 				"line1",
 				"line2",

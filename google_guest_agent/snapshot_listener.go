@@ -30,6 +30,7 @@ var (
 	scriptsDir                   = "/etc/google/snapshots/"
 	seenPreSnapshotOperationIds  = lru.New(128)
 	seenPostSnapshotOperationIds = lru.New(128)
+	maxRequestHandleAttempts     = 10 // completely arbitrary max attempt
 )
 
 type snapshotConfig struct {
@@ -167,15 +168,29 @@ func handleSnapshotRequests(address string, requestChan <-chan *sspb.GuestMessag
 			// Listen on channel and respond
 			guestMessage := <-requestChan
 			response := getSnapshotResponse(guestMessage)
-			for {
+
+			// We either got a duplicated pre/post or an invalid request
+			// in both cases we want to ignore it.
+			if response == nil {
+				continue
+			}
+
+			for i := 0; i < maxRequestHandleAttempts; i++ {
+				logger.Infof("Attempt %d/%d of handling snapshot request.", i+1, maxRequestHandleAttempts)
+
 				c := sspb.NewSnapshotServiceClient(conn)
 				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+
 				_, err = c.HandleResponsesFromGuest(ctx, response)
-				if err == nil {
-					cancel()
-					break
+				if err != nil {
+					logger.Errorf("Error sending response: %v.", err)
+					time.Sleep(1 * time.Second) // Avoid idle looping
+					continue
 				}
-				logger.Errorf("Error sending response: %v.", err)
+
+				logger.Debugf("Successfully handled snapshot request.")
+				break
 			}
 		}
 	}
