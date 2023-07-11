@@ -44,6 +44,7 @@ var (
 	config                   *ini.File
 	osRelease                release
 	action                   string
+	mdsClient                *metadata.Client
 )
 
 const (
@@ -131,8 +132,10 @@ func run(ctx context.Context) {
 		opts.Debug = true
 	}
 
+	mdsClient = metadata.New()
+
 	var err error
-	newMetadata, err = metadata.Get(ctx)
+	newMetadata, err = mdsClient.Get(ctx)
 	if err == nil {
 		opts.ProjectName = newMetadata.Project.ProjectID
 	}
@@ -166,7 +169,7 @@ func run(ctx context.Context) {
 		webError := 0
 		for {
 			var err error
-			newMetadata, err = metadata.Watch(ctx)
+			newMetadata, err = mdsClient.Watch(ctx)
 			if err != nil {
 				// Only log the second web error to avoid transient errors and
 				// not to spam the log on network failures.

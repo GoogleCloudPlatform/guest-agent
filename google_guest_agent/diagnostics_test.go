@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/GoogleCloudPlatform/guest-agent/metadata"
+	"github.com/GoogleCloudPlatform/guest-agent/utils"
 	"github.com/go-ini/ini"
 )
 
@@ -34,7 +35,8 @@ func TestDiagnosticsEntryExpired(t *testing.T) {
 
 	for _, tt := range tests {
 		k := diagnosticsEntry{ExpireOn: tt.sTime}
-		if tt.e != k.expired() {
+		expired, _ := utils.CheckExpired(k.ExpireOn)
+		if tt.e != expired {
 			t.Errorf("diagnosticsEntry.expired() with ExpiredOn %q should return %t", k.ExpireOn, tt.e)
 		}
 	}

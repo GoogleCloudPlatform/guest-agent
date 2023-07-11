@@ -28,15 +28,35 @@ import (
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 )
 
-const defaultEtag = "NONE"
+const (
+	defaultMetadataURL = "http://169.254.169.254/computeMetadata/v1/"
+	defaultEtag        = "NONE"
+	metadataRecursive  = "/?recursive=true&alt=json"
+	metadataHang       = "&wait_for_change=true&timeout_sec=60"
+)
 
 var (
-	metadataURL       = "http://169.254.169.254/computeMetadata/v1/"
-	metadataRecursive = "/?recursive=true&alt=json"
-	metadataHang      = "&wait_for_change=true&timeout_sec=60"
-	defaultTimeout    = 70 * time.Second
-	etag              = defaultEtag
+	defaultTimeout = 70 * time.Second
 )
+
+// Client defines the public interface between the core guest agent and
+// the metadata layer.
+type Client struct {
+	metadataURL string
+	etag        string
+	httpClient  *http.Client
+}
+
+// New allocates and configures a new Client instance.
+func New() *Client {
+	return &Client{
+		metadataURL: defaultMetadataURL,
+		etag:        defaultEtag,
+		httpClient: &http.Client{
+			Timeout: defaultTimeout,
+		},
+	}
+}
 
 // Descriptor wraps/holds all the metadata keys, the structure reflects the json
 // descriptor returned with metadata call with alt=jason.
@@ -208,36 +228,32 @@ func (a *Attributes) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-func updateEtag(resp *http.Response) bool {
-	oldEtag := etag
-	etag = resp.Header.Get("etag")
-	if etag == "" {
-		etag = defaultEtag
+func (c *Client) updateEtag(resp *http.Response) bool {
+	oldEtag := c.etag
+	c.etag = resp.Header.Get("etag")
+	if c.etag == "" {
+		c.etag = defaultEtag
 	}
-	return etag != oldEtag
+	return c.etag != oldEtag
 }
 
 // Watch runs a longpoll on metadata server.
-func Watch(ctx context.Context) (*Descriptor, error) {
-	return get(ctx, true)
+func (c *Client) Watch(ctx context.Context) (*Descriptor, error) {
+	return c.get(ctx, true)
 }
 
 // Get does a metadata call, if hang is set to true then it will do a longpoll.
-func Get(ctx context.Context) (*Descriptor, error) {
-	return get(ctx, false)
+func (c *Client) Get(ctx context.Context) (*Descriptor, error) {
+	return c.get(ctx, false)
 }
 
-func get(ctx context.Context, hang bool) (*Descriptor, error) {
+func (c *Client) get(ctx context.Context, hang bool) (*Descriptor, error) {
 	logger.Debugf("Invoking Get metadata, wait for change: %t", hang)
-	client := &http.Client{
-		Timeout: defaultTimeout,
-	}
-
-	finalURL := metadataURL + metadataRecursive
+	finalURL := c.metadataURL + metadataRecursive
 	if hang {
 		finalURL += metadataHang
 	}
-	finalURL += ("&last_etag=" + etag)
+	finalURL += ("&last_etag=" + c.etag)
 
 	req, err := http.NewRequest("GET", finalURL, nil)
 	if err != nil {
@@ -246,7 +262,7 @@ func get(ctx context.Context, hang bool) (*Descriptor, error) {
 	req.Header.Add("Metadata-Flavor", "Google")
 	req = req.WithContext(ctx)
 
-	resp, err := client.Do(req)
+	resp, err := c.httpClient.Do(req)
 	// Don't return error on a canceled context.
 	if err != nil && ctx.Err() != nil {
 		return nil, nil
@@ -257,7 +273,7 @@ func get(ctx context.Context, hang bool) (*Descriptor, error) {
 
 	// We return the response even if the etag has not been updated.
 	if hang {
-		updateEtag(resp)
+		c.updateEtag(resp)
 	}
 
 	md, err := ioutil.ReadAll(resp.Body)
@@ -270,16 +286,17 @@ func get(ctx context.Context, hang bool) (*Descriptor, error) {
 }
 
 // WriteGuestAttributes does a put call to mds changing a guest attribute value.
-func WriteGuestAttributes(key, value string) error {
+func (c *Client) WriteGuestAttributes(ctx context.Context, key, value string) error {
 	logger.Debugf("write guest attribute %q", key)
-	client := &http.Client{Timeout: defaultTimeout}
-	finalURL := metadataURL + "instance/guest-attributes/" + key
+	finalURL := c.metadataURL + "instance/guest-attributes/" + key
 	req, err := http.NewRequest("PUT", finalURL, strings.NewReader(value))
 	if err != nil {
 		return err
 	}
-	req.Header.Add("Metadata-Flavor", "Google")
 
-	_, err = client.Do(req)
+	req.Header.Add("Metadata-Flavor", "Google")
+	req = req.WithContext(ctx)
+
+	_, err = c.httpClient.Do(req)
 	return err
 }

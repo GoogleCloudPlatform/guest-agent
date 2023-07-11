@@ -29,6 +29,7 @@ import (
 	"unicode"
 
 	"github.com/GoogleCloudPlatform/guest-agent/metadata"
+	"github.com/GoogleCloudPlatform/guest-agent/utils"
 	"github.com/go-ini/ini"
 )
 
@@ -49,7 +50,9 @@ func TestExpired(t *testing.T) {
 
 	for _, tt := range tests {
 		k := metadata.WindowsKey{ExpireOn: tt.sTime}
-		if tt.e != metadata.Expired(k.ExpireOn) {
+
+		expired, _ := utils.CheckExpired(k.ExpireOn)
+		if tt.e != expired {
 			t.Errorf("windowsKey.expired() with ExpiredOn %q should return %t", k.ExpireOn, tt.e)
 		}
 	}
