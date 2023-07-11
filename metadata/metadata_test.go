@@ -118,7 +118,7 @@ func TestRecordTelemetry(t *testing.T) {
 	metadataURL = testsrv.URL
 	defer func() { metadataURL = old }()
 
-	tel := telemetry{
+	tel := Telemetry{
 		AgentVersion:  "AgentVersion",
 		AgentArch:     "AgentArch",
 		OS:            "OS",
@@ -129,7 +129,7 @@ func TestRecordTelemetry(t *testing.T) {
 		KernelVersion: "KernelVersion",
 	}
 
-	if err := recordTelemetry(context.Background(), tel); err != nil {
+	if err := RecordTelemetry(context.Background(), tel); err != nil {
 		t.Fatalf("Error running recordTelemetry: %v", err)
 	}
 

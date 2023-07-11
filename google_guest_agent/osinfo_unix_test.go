@@ -40,14 +40,14 @@ func TestParseOSRelease(t *testing.T) {
 		file string
 		want info
 	}{
-		{"ID=\"sles\"\nNAME=\"SLES\"\nVERSION=\"12-SP4\"\nVERSION_ID=12", info{os: "sles", version: ver{12, 0, 0, 1}}},
-		{"ID=sles\nNAME=\"SLES\"\nVERSION=\"12-SP4\"\nVERSION_ID=\"12.4\"", info{os: "sles", version: ver{12, 4, 0, 2}}},
-		{"ID=debian\nNAME=\"Debian GNU/Linux\"\nVERSION=\"9 (stretch)\"\nVERSION_ID=\"9\"", info{os: "debian", version: ver{9, 0, 0, 1}}},
-		{"ID=\"debian\"\nNAME=\"Debian GNU/Linux\"\nVERSION=9\nVERSION_ID=\"9\"", info{os: "debian", version: ver{9, 0, 0, 1}}},
+		{"ID=\"sles\"\nNAME=\"SLES\"\nVERSION=\"12-SP4\"\nVERSION_ID=12", info{os: "sles", versionID: "12", version: ver{12, 0, 0, 1}}},
+		{"ID=sles\nNAME=\"SLES\"\nVERSION=\"12-SP4\"\nVERSION_ID=\"12.4\"", info{os: "sles", versionID: "12.4", version: ver{12, 4, 0, 2}}},
+		{"ID=debian\nNAME=\"Debian GNU/Linux\"\nVERSION=\"9 (stretch)\"\nVERSION_ID=\"9\"", info{os: "debian", versionID: "9", version: ver{9, 0, 0, 1}}},
+		{"ID=\"debian\"\nNAME=\"Debian GNU/Linux\"\nVERSION=9\nVERSION_ID=\"9\"", info{os: "debian", versionID: "9", version: ver{9, 0, 0, 1}}},
 	}
 	for _, tt := range tests {
 		if got := parseOSRelease(tt.file); !reflect.DeepEqual(got, tt.want) {
-			t.Errorf("parseOSRelease(%s) incorrect return: got %v, want %v", tt.file, got, tt.want)
+			t.Errorf("parseOSRelease(%s) incorrect return: got %+v, want %+v", tt.file, got, tt.want)
 		}
 	}
 }
