@@ -17,7 +17,6 @@ package metadata
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -28,9 +27,6 @@ import (
 	"time"
 
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
-	"google.golang.org/protobuf/proto"
-
-	tpb "github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/telemetry_proto"
 )
 
 const (
@@ -245,6 +241,9 @@ func (a *Attributes) UnmarshalJSON(b []byte) error {
 	value, err = strconv.ParseBool(temp.DisableTelemetry)
 	if err == nil {
 		a.DisableTelemetry = value
+	} else {
+		// Telemetry defaults to disabled.
+		a.DisableTelemetry = true
 	}
 	// So SSHKeys will be nil instead of []string{}
 	if temp.SSHKeys != "" {

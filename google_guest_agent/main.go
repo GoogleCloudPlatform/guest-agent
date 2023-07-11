@@ -30,9 +30,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events"
-	mdsEvent "github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events/metadata"
-	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events/sshtrustedca"
 	"github.com/GoogleCloudPlatform/guest-agent/metadata"
 	"github.com/GoogleCloudPlatform/guest-agent/utils"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
@@ -175,8 +172,9 @@ func run(ctx context.Context) {
 			logger.Debugf("Error getting metdata: %v", err)
 		}
 	}
+	// Only record telemetry if we have metdata, and telemetry isnt disabled.
 	if newMetadata != nil && !newMetadata.Instance.Attributes.DisableTelemetry && !newMetadata.Project.Attributes.DisableTelemetry {
-		t := metadata.Telemetry{
+		d := telemetry.Data{
 			AgentName:     programName,
 			AgentVersion:  version,
 			AgentArch:     runtime.GOARCH,
@@ -187,7 +185,7 @@ func run(ctx context.Context) {
 			KernelRelease: osInfo.kernelRelease,
 			KernelVersion: osInfo.kernelVersion,
 		}
-		if err := metadata.RecordTelemetry(ctx, t); err != nil {
+		if err := telemetry.Record(ctx, d); err != nil {
 			logger.Debugf("Error recording telemetry: %v", err)
 		}
 	}

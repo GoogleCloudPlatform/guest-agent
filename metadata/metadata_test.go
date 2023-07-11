@@ -56,7 +56,8 @@ func TestWatchMetadata(t *testing.T) {
 			WindowsKey{Exponent: "exponent", UserName: "username", Modulus: "modulus", ExpireOn: et, AddToAdministrators: nil},
 			WindowsKey{Exponent: "exponent", UserName: "username", Modulus: "modulus", ExpireOn: et, AddToAdministrators: func() *bool { ret := true; return &ret }()},
 		},
-		SSHKeys: []string{"name:ssh-rsa [KEY] hostname", "name:ssh-rsa [KEY] hostname"},
+		SSHKeys:          []string{"name:ssh-rsa [KEY] hostname", "name:ssh-rsa [KEY] hostname"},
+		DisableTelemetry: true,
 	}
 	for _, e := range []string{etag1, etag2} {
 		got, err := client.Watch(context.Background())
@@ -102,47 +103,4 @@ func TestBlockProjectKeys(t *testing.T) {
 			t.Errorf("instance-level sshKeys didn't set block-project-keys (got %t expected %t)", md.Instance.Attributes.BlockProjectKeys, test.res)
 		}
 	}
-}
-
-func TestRecordTelemetry(t *testing.T) {
-	var got http.Header
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		got = r.Header
-		w.WriteHeader(http.StatusOK)
-	})
-
-	testsrv := httptest.NewServer(handler)
-	defer testsrv.Close()
-
-	old := metadataURL
-	metadataURL = testsrv.URL
-	defer func() { metadataURL = old }()
-
-	tel := Telemetry{
-		AgentVersion:  "AgentVersion",
-		AgentArch:     "AgentArch",
-		OS:            "OS",
-		LongName:      "LongName",
-		ShortName:     "ShortName",
-		Version:       "Version",
-		KernelRelease: "KernelRelease",
-		KernelVersion: "KernelVersion",
-	}
-
-	if err := RecordTelemetry(context.Background(), tel); err != nil {
-		t.Fatalf("Error running recordTelemetry: %v", err)
-	}
-
-	want := map[string]string{
-		"Metadata-Flavor":      "Google",
-		"X-Google-Guest-Agent": formatGuestAgent(tel),
-		"X-Google-Guest-OS":    formatGuestOS(tel),
-	}
-
-	for k, v := range want {
-		if got.Get(k) != v {
-			t.Fatalf("received headers does not contain all expected headers, want: %q, got: %q", want, got)
-		}
-	}
-
 }
