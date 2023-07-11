@@ -30,6 +30,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/GoogleCloudPlatform/guest-agent/metadata"
 	"github.com/GoogleCloudPlatform/guest-agent/utils"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 	"github.com/go-ini/ini"
@@ -39,7 +40,7 @@ var (
 	programName              = "GCEGuestAgent"
 	version                  string
 	ticker                   = time.Tick(70 * time.Second)
-	oldMetadata, newMetadata *metadata
+	oldMetadata, newMetadata *metadata.Descriptor
 	config                   *ini.File
 	osRelease                release
 	action                   string
@@ -131,7 +132,7 @@ func run(ctx context.Context) {
 	}
 
 	var err error
-	newMetadata, err = getMetadata(ctx, false)
+	newMetadata, err = metadata.Get(ctx)
 	if err == nil {
 		opts.ProjectName = newMetadata.Project.ProjectID
 	}
@@ -161,11 +162,11 @@ func run(ctx context.Context) {
 	agentInit(ctx)
 
 	go func() {
-		oldMetadata = &metadata{}
+		oldMetadata = &metadata.Descriptor{}
 		webError := 0
 		for {
 			var err error
-			newMetadata, err = watchMetadata(ctx)
+			newMetadata, err = metadata.Watch(ctx)
 			if err != nil {
 				// Only log the second web error to avoid transient errors and
 				// not to spam the log on network failures.

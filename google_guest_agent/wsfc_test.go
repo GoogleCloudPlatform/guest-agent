@@ -22,33 +22,34 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/GoogleCloudPlatform/guest-agent/metadata"
 	"github.com/go-ini/ini"
 )
 
-func setEnableWSFC(md metadata, enabled *bool) *metadata {
+func setEnableWSFC(md metadata.Descriptor, enabled *bool) *metadata.Descriptor {
 	md.Instance.Attributes.EnableWSFC = enabled
 	return &md
 }
 
-func setWSFCAddresses(md metadata, wsfcAddresses string) *metadata {
+func setWSFCAddresses(md metadata.Descriptor, wsfcAddresses string) *metadata.Descriptor {
 	md.Instance.Attributes.WSFCAddresses = wsfcAddresses
 	return &md
 }
 
-func setWSFCAgentPort(md metadata, wsfcPort string) *metadata {
+func setWSFCAgentPort(md metadata.Descriptor, wsfcPort string) *metadata.Descriptor {
 	md.Instance.Attributes.WSFCAgentPort = wsfcPort
 	return &md
 }
 
 var (
 	testAgent    = getWsfcAgentInstance()
-	testMetadata = metadata{}
+	testMetadata = metadata.Descriptor{}
 	testListener = &net.TCPListener{}
 )
 
 func TestNewWsfcManager(t *testing.T) {
 	type args struct {
-		newMetadata *metadata
+		newMetadata *metadata.Descriptor
 	}
 	tests := []struct {
 		name string

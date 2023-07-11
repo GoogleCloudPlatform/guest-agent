@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
-	"net/http"
 	"os"
 	"os/exec"
 	"runtime"
@@ -27,6 +26,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/GoogleCloudPlatform/guest-agent/metadata"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 	"github.com/go-ini/ini"
 )
@@ -142,7 +142,7 @@ func agentInit(ctx context.Context) {
 		// TODO: split agentInit into needs-network and no-network functions.
 		for newMetadata == nil {
 			logger.Debugf("populate first time metadata...")
-			newMetadata, _ = getMetadata(ctx, false)
+			newMetadata, _ = metadata.Get(ctx)
 			time.Sleep(1 * time.Second)
 		}
 
@@ -258,7 +258,7 @@ func generateSSHKeys() error {
 			continue
 		}
 		if vals := strings.Split(string(pubKey), " "); len(vals) >= 2 {
-			if err := writeGuestAttributes("hostkeys/"+vals[0], vals[1]); err != nil {
+			if err := metadata.WriteGuestAttributes("hostkeys/"+vals[0], vals[1]); err != nil {
 				logger.Errorf("Failed to upload %s key to guest attributes: %v", keytype, err)
 			}
 		} else {
@@ -280,20 +280,6 @@ func generateBotoConfig() error {
 	botoCfg.Section("GoogleCompute").Key("service_account").SetValue("default")
 
 	return botoCfg.SaveTo(path)
-}
-
-func writeGuestAttributes(key, value string) error {
-	logger.Debugf("write guest attribute %q", key)
-	client := &http.Client{Timeout: defaultTimeout}
-	finalURL := metadataURL + "instance/guest-attributes/" + key
-	req, err := http.NewRequest("PUT", finalURL, strings.NewReader(value))
-	if err != nil {
-		return err
-	}
-	req.Header.Add("Metadata-Flavor", "Google")
-
-	_, err = client.Do(req)
-	return err
 }
 
 func setIOScheduler() error {

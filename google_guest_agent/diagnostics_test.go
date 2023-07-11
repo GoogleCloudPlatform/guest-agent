@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/GoogleCloudPlatform/guest-agent/metadata"
 	"github.com/go-ini/ini"
 )
 
@@ -43,19 +44,19 @@ func TestDiagnosticsDisabled(t *testing.T) {
 	var tests = []struct {
 		name string
 		data []byte
-		md   *metadata
+		md   *metadata.Descriptor
 		want bool
 	}{
-		{"not explicitly enabled", []byte(""), &metadata{}, false},
-		{"enabled in cfg only", []byte("[diagnostics]\nenable=true"), &metadata{}, false},
-		{"disabled in cfg only", []byte("[diagnostics]\nenable=false"), &metadata{}, true},
-		{"disabled in cfg, enabled in instance metadata", []byte("[diagnostics]\nenable=false"), &metadata{Instance: instance{Attributes: attributes{EnableDiagnostics: mkptr(true)}}}, true},
-		{"enabled in cfg, disabled in instance metadata", []byte("[diagnostics]\nenable=true"), &metadata{Instance: instance{Attributes: attributes{EnableDiagnostics: mkptr(false)}}}, false},
-		{"enabled in instance metadata only", []byte(""), &metadata{Instance: instance{Attributes: attributes{EnableDiagnostics: mkptr(true)}}}, false},
-		{"enabled in project metadata only", []byte(""), &metadata{Project: project{Attributes: attributes{EnableDiagnostics: mkptr(true)}}}, false},
-		{"disabled in instance metadata only", []byte(""), &metadata{Instance: instance{Attributes: attributes{EnableDiagnostics: mkptr(false)}}}, true},
-		{"enabled in instance metadata, disabled in project metadata", []byte(""), &metadata{Instance: instance{Attributes: attributes{EnableDiagnostics: mkptr(true)}}, Project: project{Attributes: attributes{EnableDiagnostics: mkptr(false)}}}, false},
-		{"disabled in project metadata only", []byte(""), &metadata{Project: project{Attributes: attributes{EnableDiagnostics: mkptr(false)}}}, true},
+		{"not explicitly enabled", []byte(""), &metadata.Descriptor{}, false},
+		{"enabled in cfg only", []byte("[diagnostics]\nenable=true"), &metadata.Descriptor{}, false},
+		{"disabled in cfg only", []byte("[diagnostics]\nenable=false"), &metadata.Descriptor{}, true},
+		{"disabled in cfg, enabled in instance metadata", []byte("[diagnostics]\nenable=false"), &metadata.Descriptor{Instance: metadata.Instance{Attributes: metadata.Attributes{EnableDiagnostics: mkptr(true)}}}, true},
+		{"enabled in cfg, disabled in instance metadata", []byte("[diagnostics]\nenable=true"), &metadata.Descriptor{Instance: metadata.Instance{Attributes: metadata.Attributes{EnableDiagnostics: mkptr(false)}}}, false},
+		{"enabled in instance metadata only", []byte(""), &metadata.Descriptor{Instance: metadata.Instance{Attributes: metadata.Attributes{EnableDiagnostics: mkptr(true)}}}, false},
+		{"enabled in project metadata only", []byte(""), &metadata.Descriptor{Project: metadata.Project{Attributes: metadata.Attributes{EnableDiagnostics: mkptr(true)}}}, false},
+		{"disabled in instance metadata only", []byte(""), &metadata.Descriptor{Instance: metadata.Instance{Attributes: metadata.Attributes{EnableDiagnostics: mkptr(false)}}}, true},
+		{"enabled in instance metadata, disabled in project metadata", []byte(""), &metadata.Descriptor{Instance: metadata.Instance{Attributes: metadata.Attributes{EnableDiagnostics: mkptr(true)}}, Project: metadata.Project{Attributes: metadata.Attributes{EnableDiagnostics: mkptr(false)}}}, false},
+		{"disabled in project metadata only", []byte(""), &metadata.Descriptor{Project: metadata.Project{Attributes: metadata.Attributes{EnableDiagnostics: mkptr(false)}}}, true},
 	}
 
 	for _, tt := range tests {

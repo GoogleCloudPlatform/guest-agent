@@ -30,6 +30,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/GoogleCloudPlatform/guest-agent/metadata"
 	"github.com/GoogleCloudPlatform/guest-agent/utils"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 )
@@ -112,21 +113,7 @@ func printCreds(creds *credsJSON) error {
 	return err
 }
 
-var badExpire []string
-
-func (k windowsKey) expired() bool {
-	expired, err := utils.CheckExpired(k.ExpireOn)
-	if err != nil {
-		if !utils.ContainsString(k.ExpireOn, badExpire) {
-			logger.Errorf("error parsing time: %s", err)
-			badExpire = append(badExpire, k.ExpireOn)
-		}
-		return true
-	}
-	return expired
-}
-
-func (k windowsKey) createOrResetPwd() (*credsJSON, error) {
+func createOrResetPwd(k metadata.WindowsKey) (*credsJSON, error) {
 	pwd, err := newPwd(k.PasswordLength)
 	if err != nil {
 		return nil, fmt.Errorf("error creating password: %v", err)
@@ -175,7 +162,7 @@ func createSSHUser(user string) error {
 	return nil
 }
 
-func createcredsJSON(k windowsKey, pwd string) (*credsJSON, error) {
+func createcredsJSON(k metadata.WindowsKey, pwd string) (*credsJSON, error) {
 	mod, err := base64.StdEncoding.DecodeString(k.Modulus)
 	if err != nil {
 		return nil, fmt.Errorf("error decoding modulus: %v", err)
@@ -221,7 +208,7 @@ func createcredsJSON(k windowsKey, pwd string) (*credsJSON, error) {
 	}, nil
 }
 
-func getWinSSHEnabled(md *metadata) bool {
+func getWinSSHEnabled(md *metadata.Descriptor) bool {
 	var enable bool
 	if md.Project.Attributes.EnableWindowsSSH != nil {
 		enable = *md.Project.Attributes.EnableWindowsSSH
@@ -278,8 +265,6 @@ func (a *winAccountsMgr) disabled(os string) (disabled bool) {
 	}
 	return false
 }
-
-var badKeys []string
 
 type versionInfo struct {
 	major int
@@ -386,7 +371,7 @@ func (a *winAccountsMgr) set() error {
 	toAdd := compareAccounts(newKeys, regKeys)
 
 	for _, key := range toAdd {
-		creds, err := key.createOrResetPwd()
+		creds, err := createOrResetPwd(key)
 		if err == nil {
 			printCreds(creds)
 			continue
@@ -417,7 +402,7 @@ func (a *winAccountsMgr) set() error {
 
 var badReg []string
 
-func compareAccounts(newKeys windowsKeys, oldStrKeys []string) windowsKeys {
+func compareAccounts(newKeys metadata.WindowsKeys, oldStrKeys []string) metadata.WindowsKeys {
 	if len(newKeys) == 0 {
 		return nil
 	}
@@ -425,9 +410,9 @@ func compareAccounts(newKeys windowsKeys, oldStrKeys []string) windowsKeys {
 		return newKeys
 	}
 
-	var oldKeys windowsKeys
+	var oldKeys metadata.WindowsKeys
 	for _, s := range oldStrKeys {
-		var key windowsKey
+		var key metadata.WindowsKey
 		if err := json.Unmarshal([]byte(s), &key); err != nil {
 			if !utils.ContainsString(s, badReg) {
 				logger.Errorf("Bad windows key from registry: %s", err)
@@ -438,9 +423,9 @@ func compareAccounts(newKeys windowsKeys, oldStrKeys []string) windowsKeys {
 		oldKeys = append(oldKeys, key)
 	}
 
-	var toAdd windowsKeys
+	var toAdd metadata.WindowsKeys
 	for _, key := range newKeys {
-		if func(key windowsKey, oldKeys windowsKeys) bool {
+		if func(key metadata.WindowsKey, oldKeys metadata.WindowsKeys) bool {
 			for _, oldKey := range oldKeys {
 				if oldKey.UserName == key.UserName &&
 					oldKey.Modulus == key.Modulus &&
