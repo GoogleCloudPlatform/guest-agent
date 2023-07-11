@@ -14,7 +14,7 @@
 
 //go:build unix
 
-package main
+package osinfo
 
 import (
 	"bytes"
@@ -26,8 +26,8 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-func parseOSRelease(osRelease string) info {
-	var ret info
+func parseOSRelease(osRelease string) OSInfo {
+	var ret OSInfo
 	for _, line := range strings.Split(osRelease, "\n") {
 		var id = line
 		if id = strings.TrimPrefix(line, "ID="); id != line {
@@ -37,7 +37,7 @@ func parseOSRelease(osRelease string) info {
 			if len(id) > 0 && id[len(id)-1] == '"' {
 				id = id[:len(id)-1]
 			}
-			ret.os = parseID(id)
+			ret.OS = parseID(id)
 		}
 		if id = strings.TrimPrefix(line, "VERSION_ID="); id != line {
 			if len(id) > 0 && id[0] == '"' {
@@ -46,27 +46,27 @@ func parseOSRelease(osRelease string) info {
 			if len(id) > 0 && id[len(id)-1] == '"' {
 				id = id[:len(id)-1]
 			}
-			ret.versionID = id
+			ret.VersionID = id
 			version, err := parseVersion(id)
 			if err != nil {
 				logger.Warningf("Couldn't parse version id: %v", err)
 				return ret
 			}
-			ret.version = version
+			ret.Version = version
 		}
 	}
 	return ret
 }
 
-func parseSystemRelease(systemRelease string) info {
-	var ret info
+func parseSystemRelease(systemRelease string) OSInfo {
+	var ret OSInfo
 	var key = " release "
 	idx := strings.Index(systemRelease, key)
 	if idx == -1 {
 		logger.Warningf("SystemRelease does not match expected format")
 		return ret
 	}
-	ret.os = parseID(systemRelease[:idx])
+	ret.OS = parseID(systemRelease[:idx])
 
 	versionFromRelease := strings.Split(systemRelease[idx+len(key):], " ")[0]
 	version, err := parseVersion(versionFromRelease)
@@ -74,28 +74,28 @@ func parseSystemRelease(systemRelease string) info {
 		logger.Warningf("Couldn't parse version: %v", err)
 		return ret
 	}
-	ret.version = version
+	ret.Version = version
 	return ret
 }
 
-func parseVersion(version string) (ver, error) {
+func parseVersion(version string) (Ver, error) {
 	versionparts := strings.Split(version, ".")
-	ret := ver{length: len(versionparts)}
+	ret := Ver{Length: len(versionparts)}
 
 	// Must have at least major version.
 	var err error
-	ret.major, err = strconv.Atoi(versionparts[0])
+	ret.Major, err = strconv.Atoi(versionparts[0])
 	if err != nil {
 		return ret, err
 	}
-	if ret.length > 1 {
-		ret.minor, err = strconv.Atoi(versionparts[1])
+	if ret.Length > 1 {
+		ret.Minor, err = strconv.Atoi(versionparts[1])
 		if err != nil {
 			return ret, err
 		}
 	}
-	if ret.length > 2 {
-		ret.patch, err = strconv.Atoi(versionparts[2])
+	if ret.Length > 2 {
+		ret.Patch, err = strconv.Atoi(versionparts[2])
 		if err != nil {
 			return ret, err
 		}
@@ -114,8 +114,9 @@ func parseID(id string) string {
 	}
 }
 
-func getOSInfo() info {
-	var osInfo info
+// Get returns OSInfo on the running system.
+func Get() OSInfo {
+	var osInfo OSInfo
 
 	releaseFile, err := ioutil.ReadFile("/etc/os-release")
 	if err == nil {
@@ -132,8 +133,8 @@ func getOSInfo() info {
 		logger.Warningf("unix.Uname error: %v", err)
 		return osInfo
 	}
-	osInfo.kernelVersion = string(bytes.TrimRight(uts.Version[:], "\x00"))
-	osInfo.kernelRelease = string(bytes.TrimRight(uts.Release[:], "\x00"))
+	osInfo.KernelVersion = string(bytes.TrimRight(uts.Version[:], "\x00"))
+	osInfo.KernelRelease = string(bytes.TrimRight(uts.Release[:], "\x00"))
 
 	return osInfo
 }

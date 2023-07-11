@@ -30,6 +30,11 @@ import (
 	"sync"
 	"time"
 
+<<<<<<< HEAD
+=======
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/osinfo"
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/telemetry"
+>>>>>>> fed916a (seperate osinfo into its own library)
 	"github.com/GoogleCloudPlatform/guest-agent/metadata"
 	"github.com/GoogleCloudPlatform/guest-agent/utils"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
@@ -41,7 +46,7 @@ var (
 	version                  string
 	oldMetadata, newMetadata *metadata.Descriptor
 	config                   *ini.File
-	osInfo                   info
+	osInfo                   osinfo.OSInfo
 	action                   string
 	mdsClient                *metadata.Client
 )
@@ -146,7 +151,7 @@ func run(ctx context.Context) {
 
 	logger.Infof("GCE Agent Started (version %s)", version)
 
-	osInfo = getOSInfo()
+	osInfo = osinfo.Get()
 
 	cfgfile := configPath
 	if runtime.GOOS == "windows" {
@@ -179,11 +184,11 @@ func run(ctx context.Context) {
 			AgentVersion:  version,
 			AgentArch:     runtime.GOARCH,
 			OS:            runtime.GOOS,
-			LongName:      osInfo.prettyName,
-			ShortName:     osInfo.os,
-			Version:       osInfo.versionID,
-			KernelRelease: osInfo.kernelRelease,
-			KernelVersion: osInfo.kernelVersion,
+			LongName:      osInfo.PrettyName,
+			ShortName:     osInfo.OS,
+			Version:       osInfo.VersionID,
+			KernelRelease: osInfo.KernelRelease,
+			KernelVersion: osInfo.KernelVersion,
 		}
 		if err := telemetry.Record(ctx, d); err != nil {
 			logger.Debugf("Error recording telemetry: %v", err)

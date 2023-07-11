@@ -11,17 +11,18 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package main
+package osinfo
 
 import (
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
+	"strings"
 	"syscall"
 	"unsafe"
 
+	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/registry"
 )
@@ -137,22 +138,23 @@ type win32OperatingSystem struct {
 	Caption, Version string
 }
 
-func getOSInfo() info {
-	var osInfo info
-	osInfo.os = "windows"
+// Get returns OSInfo on the running system.
+func Get() OSInfo {
+	var osInfo OSInfo
+	osInfo.OS = "windows"
 
 	kVersion, kRelease, err := getKernelInfo()
 	if err != nil {
 		logger.Warningf("getKernelInfo() error: %v", err)
 		return osInfo
 	}
-	osInfo.kernelVersion = kVersion
-	osInfo.kernelRelease = kRelease
+	osInfo.KernelVersion = kVersion
+	osInfo.KernelRelease = kRelease
 
 	// SOFTWARE\Microsoft\Windows NT\CurrentVersion\CurrentVersion is always 6.3 now, so we get os version from kernel release
 	vs := strings.Split(kRelease, ".")
 	if len(vs) == 4 {
-		osInfo.versionID = strings.Join(vs[:3], ".")
+		osInfo.VersionID = strings.Join(vs[:3], ".")
 	}
 
 	k, err := registry.OpenKey(registry.LOCAL_MACHINE, `SOFTWARE\Microsoft\Windows NT\CurrentVersion`, registry.QUERY_VALUE)
@@ -167,7 +169,7 @@ func getOSInfo() info {
 		logger.Warningf("GetStringValue('ProductName') error: %v", err)
 		return osInfo
 	}
-	osInfo.prettyName = productName
+	osInfo.PrettyName = productName
 
 	return osInfo
 }

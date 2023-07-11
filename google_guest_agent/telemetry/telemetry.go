@@ -30,16 +30,26 @@ var (
 	metadataURL = "http://169.254.169.254/computeMetadata/v1/"
 )
 
+// Data is telemetry data on the current agent and OS.
 type Data struct {
-	AgentName    string
+	// Name of the agent.
+	AgentName string
+	// Version of the Agent.
 	AgentVersion string
-	AgentArch    string
+	// Architecture of the Agent.
+	AgentArch string
 
-	OS            string
-	LongName      string
-	ShortName     string
-	Version       string
+	// OS name.
+	OS string
+	// The name the OS uses to fully describe itself.
+	LongName string
+	// OS name in short form (aka distro name).
+	ShortName string
+	// Version of the OS.
+	Version string
+	// Kernel Release.
 	KernelRelease string
+	// Kernel Version.
 	KernelVersion string
 }
 
@@ -70,6 +80,7 @@ func formatGuestOS(d Data) string {
 	return base64.StdEncoding.EncodeToString(data)
 }
 
+// Record records telemetry data.
 func Record(ctx context.Context, d Data) error {
 	client := &http.Client{
 		Timeout: 10 * time.Second,

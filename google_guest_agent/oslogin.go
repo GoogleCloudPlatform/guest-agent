@@ -206,7 +206,7 @@ func updateSSHConfig(sshConfig string, enable, twofactor, skey bool) string {
 	trustedUserCAKeys := "TrustedUserCAKeys " + sshtrustedca.DefaultPipePath
 
 	twoFactorAuthMethods := "AuthenticationMethods publickey,keyboard-interactive"
-	if (osInfo.os == "rhel" || osInfo.os == "centos") && osInfo.version.major == 6 {
+	if (osInfo.OS == "rhel" || osInfo.OS == "centos") && osInfo.Version.Major == 6 {
 		authorizedKeysUser = "AuthorizedKeysCommandRunAs root"
 		twoFactorAuthMethods = "RequiredAuthentications2 publickey,keyboard-interactive"
 	}

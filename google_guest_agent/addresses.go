@@ -540,9 +540,9 @@ func enableNetworkInterfaces() error {
 	}
 
 	switch {
-	case osInfo.os == "sles":
+	case osInfo.OS == "sles":
 		return enableSLESInterfaces(googleInterfaces)
-	case (osInfo.os == "rhel" || osInfo.os == "centos") && osInfo.version.major >= 7:
+	case (osInfo.OS == "rhel" || osInfo.OS == "centos") && osInfo.Version.Major >= 7:
 		for _, iface := range googleInterfaces {
 			err := disableNM(iface)
 			if err != nil {

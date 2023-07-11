@@ -12,37 +12,44 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-package main
+package osinfo
 
 import (
 	"fmt"
 )
 
-type info struct {
-	os            string
-	versionID     string
-	prettyName    string
-	kernelRelease string
-	kernelVersion string
+// OSInfo contains OS information about the system.
+type OSInfo struct {
+	// OS name in short form.
+	OS string
+	// OS version ID.
+	VersionID string
+	// The name the OS uses to fully describe itself.
+	PrettyName string
+	// The kernel release.
+	KernelRelease string
+	// The kernel version.
+	KernelVersion string
 
 	// This is used by oslogin.go
-	version ver
+	Version Ver
 }
 
-type ver struct {
-	major, minor, patch, length int
+// Ver describes the system version
+type Ver struct {
+	Major, Minor, Patch, Length int
 }
 
-func (v ver) String() string {
-	if v.major == 0 {
+func (v Ver) String() string {
+	if v.Major == 0 {
 		return ""
 	}
-	ret := fmt.Sprintf("%d", v.major)
-	if v.length > 1 {
-		ret = fmt.Sprintf("%s.%d", ret, v.minor)
+	ret := fmt.Sprintf("%d", v.Major)
+	if v.Length > 1 {
+		ret = fmt.Sprintf("%s.%d", ret, v.Minor)
 	}
-	if v.length > 2 {
-		ret = fmt.Sprintf("%s.%d", ret, v.patch)
+	if v.Length > 2 {
+		ret = fmt.Sprintf("%s.%d", ret, v.Patch)
 	}
 	return ret
 }
