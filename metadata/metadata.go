@@ -17,6 +17,7 @@ package metadata
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -27,6 +28,9 @@ import (
 	"time"
 
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
+	"google.golang.org/protobuf/proto"
+
+	tpb "github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/telemetry_proto"
 )
 
 const (
@@ -164,6 +168,7 @@ type Attributes struct {
 	EnableWSFC            *bool
 	WSFCAddresses         string
 	WSFCAgentPort         string
+	DisableTelemetry      bool
 }
 
 // UnmarshalJSON unmarshals b into Attribute.
@@ -190,6 +195,7 @@ func (a *Attributes) UnmarshalJSON(b []byte) error {
 		WindowsKeys           WindowsKeys `json:"windows-keys"`
 		WSFCAddresses         string      `json:"wsfc-addrs"`
 		WSFCAgentPort         string      `json:"wsfc-agent-port"`
+		DisableTelemetry      string      `json:"disable-guest-telemetry"`
 	}
 	var temp inner
 	if err := json.Unmarshal(b, &temp); err != nil {
@@ -235,6 +241,10 @@ func (a *Attributes) UnmarshalJSON(b []byte) error {
 	value, err = strconv.ParseBool(temp.SecurityKey)
 	if err == nil {
 		a.SecurityKey = mkbool(value)
+	}
+	value, err = strconv.ParseBool(temp.DisableTelemetry)
+	if err == nil {
+		a.DisableTelemetry = value
 	}
 	// So SSHKeys will be nil instead of []string{}
 	if temp.SSHKeys != "" {
@@ -400,4 +410,63 @@ func (c *Client) do(ctx context.Context, cfg requestConfig) (string, error) {
 	}
 
 	return string(md), nil
+}
+
+type Telemetry struct {
+	AgentName    string
+	AgentVersion string
+	AgentArch    string
+
+	OS            string
+	LongName      string
+	ShortName     string
+	Version       string
+	KernelRelease string
+	KernelVersion string
+}
+
+func formatGuestAgent(t Telemetry) string {
+	data, err := proto.Marshal(&tpb.AgentInfo{
+		Name:         &t.AgentName,
+		Version:      &t.AgentVersion,
+		Architecture: &t.AgentArch,
+	})
+	if err != nil {
+		logger.Warningf("Error marshalling AgentInfo: %v", err)
+	}
+	return base64.StdEncoding.EncodeToString(data)
+}
+
+func formatGuestOS(t Telemetry) string {
+	data, err := proto.Marshal(&tpb.OSInfo{
+		OsType:        &t.OS,
+		LongName:      &t.LongName,
+		ShortName:     &t.ShortName,
+		Version:       &t.Version,
+		KernelVersion: &t.KernelVersion,
+		KernelRelease: &t.KernelRelease,
+	})
+	if err != nil {
+		logger.Warningf("Error marshalling AgentInfo: %v", err)
+	}
+	return base64.StdEncoding.EncodeToString(data)
+}
+
+func RecordTelemetry(ctx context.Context, t Telemetry) error {
+	logger.Debugf("recordTelemetry")
+	client := &http.Client{
+		Timeout: defaultTimeout,
+	}
+
+	req, err := http.NewRequest("GET", defaultMetadataURL, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Add("Metadata-Flavor", "Google")
+	req.Header.Add("X-Google-Guest-Agent", formatGuestAgent(t))
+	req.Header.Add("X-Google-Guest-OS", formatGuestOS(t))
+	req = req.WithContext(ctx)
+
+	_, err = client.Do(req)
+	return err
 }

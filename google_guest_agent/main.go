@@ -21,6 +21,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
+	"net/url"
 	"os"
 	"os/exec"
 	"runtime"
@@ -40,10 +42,9 @@ import (
 var (
 	programName              = "GCEGuestAgent"
 	version                  string
-	ticker                   = time.Tick(70 * time.Second)
 	oldMetadata, newMetadata *metadata.Descriptor
 	config                   *ini.File
-	osRelease                release
+	osInfo                   info
 	action                   string
 	mdsClient                *metadata.Client
 )
@@ -148,10 +149,7 @@ func run(ctx context.Context) {
 
 	logger.Infof("GCE Agent Started (version %s)", version)
 
-	osRelease, err = getRelease()
-	if err != nil && runtime.GOOS != "windows" {
-		logger.Warningf("Couldn't detect OS release")
-	}
+	osInfo = getOSInfo()
 
 	cfgfile := configPath
 	if runtime.GOOS == "windows" {
@@ -170,6 +168,61 @@ func run(ctx context.Context) {
 			mdsEvent.WatcherID,
 		},
 	}
+	if newMetadata == nil {
+		/// Error here doesn't matter, if we cant get metadata, we cant record telemetry.
+		newMetadata, err = metadata.Get(ctx)
+		if err != nil {
+			logger.Debugf("Error getting metdata: %v", err)
+		}
+	}
+	if newMetadata != nil && !newMetadata.Instance.Attributes.DisableTelemetry && !newMetadata.Project.Attributes.DisableTelemetry {
+		t := metadata.Telemetry{
+			AgentName:     programName,
+			AgentVersion:  version,
+			AgentArch:     runtime.GOARCH,
+			OS:            runtime.GOOS,
+			LongName:      osInfo.prettyName,
+			ShortName:     osInfo.os,
+			Version:       osInfo.versionID,
+			KernelRelease: osInfo.kernelRelease,
+			KernelVersion: osInfo.kernelVersion,
+		}
+		if err := metadata.RecordTelemetry(ctx, t); err != nil {
+			logger.Debugf("Error recording telemetry: %v", err)
+		}
+	}
+
+	go func() {
+		oldMetadata = &metadata.Descriptor{}
+		webError := 0
+		for {
+			var err error
+			newMetadata, err = metadata.Watch(ctx)
+			if err != nil {
+				// Only log the second web error to avoid transient errors and
+				// not to spam the log on network failures.
+				if webError == 1 {
+					if urlErr, ok := err.(*url.Error); ok {
+						if _, ok := urlErr.Err.(*net.OpError); ok {
+							logger.Errorf("Network error when requesting metadata, make sure your instance has an active network and can reach the metadata server.")
+						}
+					}
+					logger.Errorf("Error watching metadata: %s", err)
+				}
+				webError++
+				time.Sleep(5 * time.Second)
+				continue
+			}
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+			runUpdate()
+			oldMetadata = newMetadata
+			webError = 0
+		}
+	}()
 
 	// Only Enable sshtrustedca Watcher if osLogin is enabled.
 	// TODO: ideally we should have a feature flag specifically for this.

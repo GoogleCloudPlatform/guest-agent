@@ -1,4 +1,4 @@
-//  Copyright 2019 Google Inc. All Rights Reserved.
+//  Copyright 2023 Google Inc. All Rights Reserved.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -12,42 +12,22 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+//go:build unix
+
 package main
 
 import (
-	"fmt"
+	"bytes"
 	"io/ioutil"
-	"runtime"
 	"strconv"
 	"strings"
+
+	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
+	"golang.org/x/sys/unix"
 )
 
-type ver struct {
-	major, minor, patch, length int
-}
-
-// release holds Linux distribution release information.
-type release struct {
-	os      string
-	version ver
-}
-
-func (v ver) String() string {
-	if v.major == 0 {
-		return ""
-	}
-	ret := fmt.Sprintf("%d", v.major)
-	if v.length > 1 {
-		ret = fmt.Sprintf("%s.%d", ret, v.minor)
-	}
-	if v.length > 2 {
-		ret = fmt.Sprintf("%s.%d", ret, v.patch)
-	}
-	return ret
-}
-
-func parseOSRelease(osRelease string) (release, error) {
-	var ret release
+func parseOSRelease(osRelease string) info {
+	var ret info
 	for _, line := range strings.Split(osRelease, "\n") {
 		var id = line
 		if id = strings.TrimPrefix(line, "ID="); id != line {
@@ -66,32 +46,36 @@ func parseOSRelease(osRelease string) (release, error) {
 			if len(id) > 0 && id[len(id)-1] == '"' {
 				id = id[:len(id)-1]
 			}
+			ret.versionID = id
 			version, err := parseVersion(id)
 			if err != nil {
-				return ret, err
+				logger.Warningf("Couldn't parse version id: %v", err)
+				return ret
 			}
 			ret.version = version
 		}
 	}
-	return ret, nil
+	return ret
 }
 
-func parseSystemRelease(systemRelease string) (release, error) {
-	var ret release
+func parseSystemRelease(systemRelease string) info {
+	var ret info
 	var key = " release "
 	idx := strings.Index(systemRelease, key)
 	if idx == -1 {
-		return ret, fmt.Errorf("SystemRelease does not match format")
+		logger.Warningf("SystemRelease does not match expected format")
+		return ret
 	}
 	ret.os = parseID(systemRelease[:idx])
 
 	versionFromRelease := strings.Split(systemRelease[idx+len(key):], " ")[0]
 	version, err := parseVersion(versionFromRelease)
 	if err != nil {
-		return ret, err
+		logger.Warningf("Couldn't parse version: %v", err)
+		return ret
 	}
 	ret.version = version
-	return ret, nil
+	return ret
 }
 
 func parseVersion(version string) (ver, error) {
@@ -130,16 +114,26 @@ func parseID(id string) string {
 	}
 }
 
-func getRelease() (release, error) {
-	if runtime.GOOS == "linux" {
-		releaseFile, err := ioutil.ReadFile("/etc/os-release")
-		if err == nil {
-			return parseOSRelease(string(releaseFile))
-		}
+func getOSInfo() info {
+	var osInfo info
+
+	releaseFile, err := ioutil.ReadFile("/etc/os-release")
+	if err == nil {
+		osInfo = parseOSRelease(string(releaseFile))
+	} else {
 		releaseFile, err = ioutil.ReadFile("/etc/system-release")
 		if err == nil {
-			return parseSystemRelease(string(releaseFile))
+			osInfo = parseSystemRelease(string(releaseFile))
 		}
 	}
-	return release{}, fmt.Errorf("%s is a supported platform", runtime.GOOS)
+
+	var uts unix.Utsname
+	if err := unix.Uname(&uts); err != nil {
+		logger.Warningf("unix.Uname error: %v", err)
+		return osInfo
+	}
+	osInfo.kernelVersion = string(bytes.TrimRight(uts.Version[:], "\x00"))
+	osInfo.kernelRelease = string(bytes.TrimRight(uts.Release[:], "\x00"))
+
+	return osInfo
 }
