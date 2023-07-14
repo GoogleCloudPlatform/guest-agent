@@ -40,9 +40,12 @@ func TestWatchMetadata(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	metadataURL = ts.URL
-	// So that the test wont timeout.
-	defaultTimeout = 1 * time.Second
+	client := &Client{
+		metadataURL: ts.URL,
+		httpClient: &http.Client{
+			Timeout: 1 * time.Second,
+		},
+	}
 
 	truebool := new(bool)
 	*truebool = true
@@ -56,7 +59,7 @@ func TestWatchMetadata(t *testing.T) {
 		SSHKeys: []string{"name:ssh-rsa [KEY] hostname", "name:ssh-rsa [KEY] hostname"},
 	}
 	for _, e := range []string{etag1, etag2} {
-		got, err := Watch(context.Background())
+		got, err := client.Watch(context.Background())
 		if err != nil {
 			t.Fatalf("error running watchMetadata: %v", err)
 		}
@@ -66,8 +69,8 @@ func TestWatchMetadata(t *testing.T) {
 			t.Fatalf("Did not parse expected metadata.\ngot:\n'%+v'\nwant:\n'%+v'", gotA, want)
 		}
 
-		if etag != e {
-			t.Fatalf("etag not updated as expected (%q != %q)", etag, e)
+		if client.etag != e {
+			t.Fatalf("etag not updated as expected (%q != %q)", client.etag, e)
 		}
 	}
 }

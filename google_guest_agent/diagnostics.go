@@ -21,7 +21,6 @@ import (
 	"strconv"
 	"sync/atomic"
 
-	"github.com/GoogleCloudPlatform/guest-agent/metadata"
 	"github.com/GoogleCloudPlatform/guest-agent/utils"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 )
@@ -40,10 +39,6 @@ type diagnosticsEntry struct {
 	SignedURL string
 	ExpireOn  string
 	Trace     bool
-}
-
-func (k diagnosticsEntry) expired() bool {
-	return metadata.Expired(k.ExpireOn)
 }
 
 type diagnosticsMgr struct{}
@@ -102,7 +97,9 @@ func (d *diagnosticsMgr) set() error {
 	if err := json.Unmarshal([]byte(strEntry), &entry); err != nil {
 		return err
 	}
-	if entry.SignedURL == "" || entry.expired() {
+
+	expired, _ := utils.CheckExpired(entry.ExpireOn)
+	if entry.SignedURL == "" || expired {
 		return nil
 	}
 

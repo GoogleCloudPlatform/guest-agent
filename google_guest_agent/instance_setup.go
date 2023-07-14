@@ -26,7 +26,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/GoogleCloudPlatform/guest-agent/metadata"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 	"github.com/go-ini/ini"
 )
@@ -142,7 +141,7 @@ func agentInit(ctx context.Context) {
 		// TODO: split agentInit into needs-network and no-network functions.
 		for newMetadata == nil {
 			logger.Debugf("populate first time metadata...")
-			newMetadata, _ = metadata.Get(ctx)
+			newMetadata, _ = mdsClient.Get(ctx)
 			time.Sleep(1 * time.Second)
 		}
 
@@ -258,7 +257,7 @@ func generateSSHKeys() error {
 			continue
 		}
 		if vals := strings.Split(string(pubKey), " "); len(vals) >= 2 {
-			if err := metadata.WriteGuestAttributes("hostkeys/"+vals[0], vals[1]); err != nil {
+			if err := mdsClient.WriteGuestAttributes(context.Background(), "hostkeys/"+vals[0], vals[1]); err != nil {
 				logger.Errorf("Failed to upload %s key to guest attributes: %v", keytype, err)
 			}
 		} else {

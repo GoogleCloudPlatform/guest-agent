@@ -15,6 +15,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -130,7 +131,7 @@ func (o *osloginMgr) set() error {
 	}
 
 	now := fmt.Sprintf("%d", time.Now().Unix())
-	metadata.WriteGuestAttributes("guest-agent/sshable", now)
+	mdsClient.WriteGuestAttributes(context.Background(), "guest-agent/sshable", now)
 
 	if enable {
 		logger.Debugf("Create OS Login dirs, if needed")
