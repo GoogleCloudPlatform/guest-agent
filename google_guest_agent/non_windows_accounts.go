@@ -111,6 +111,12 @@ func (a *accountsMgr) set() error {
 	if sshKeys == nil {
 		logger.Debugf("initialize sshKeys map")
 		sshKeys = make(map[string][]string)
+		// only need to write to SSHD once in program execution
+		enablementMode := "metadata"
+		osLoginEnabled, twofactor, skey := false, false, false
+		if err := writeSSHConfig(enablementMode, osLoginEnabled, twofactor, skey); err != nil {
+			logger.Errorf("Error updating SSH config: %v.", err)
+		}
 	}
 
 	logger.Debugf("create sudoers file if needed")
@@ -154,10 +160,6 @@ func (a *accountsMgr) set() error {
 		}
 		if !compareStringSlice(userKeys, sshKeys[user]) {
 			logger.Infof("Updating keys for user %s.", user)
-			if err := updateAuthorizedKeysFile(user, userKeys); err != nil {
-				logger.Errorf("Error updating SSH keys for %s: %v.", user, err)
-				continue
-			}
 			sshKeys[user] = userKeys
 		}
 	}
@@ -322,6 +324,21 @@ func readGoogleUsersFile() (map[string]string, error) {
 		}
 	}
 	return res, nil
+}
+
+// Helper function to set AuthorizedKeysCommand, should only run once in entire program execution
+func filterAuthorizedKeyLines(contents string) string {
+	keyCommandLine := "AuthorizedKeysCommand /usr/bin/google_authorized_keys_guest"
+	keyCommandUserLine := "AuthorizedKeysCommandUser root"
+	filtered := []string{keyCommandLine, keyCommandUserLine}
+	for _, line := range strings.Split(contents, "\n") {
+		// remove both AuthorizedKeysCommand and
+		// AuthorizedKeysCommandUser lines
+		if !strings.Contains(line, "AuthorizedKeysCommand") {
+			filtered = append(filtered, line)
+		}
+	}
+	return strings.Join(filtered, "\n")
 }
 
 // Replaces {user} or {group} in command string. Supports legacy python-era
