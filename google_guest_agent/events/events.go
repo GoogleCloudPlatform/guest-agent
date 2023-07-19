@@ -21,6 +21,7 @@ import (
 	"sync"
 
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events/metadata"
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events/sshtrustedca"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 )
 
@@ -87,6 +88,7 @@ type eventBusData struct {
 func init() {
 	err := initWatchers([]Watcher{
 		metadata.New(),
+		sshtrustedca.New(sshtrustedca.DefaultPipePath),
 	})
 	if err != nil {
 		logger.Errorf("Failed to initialize watchers: %+v", err)
