@@ -21,8 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
-	"net/url"
 	"os"
 	"os/exec"
 	"runtime"
@@ -30,6 +28,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events"
+	mdsEvent "github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events/metadata"
 	"github.com/GoogleCloudPlatform/guest-agent/metadata"
 	"github.com/GoogleCloudPlatform/guest-agent/utils"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
@@ -164,39 +164,37 @@ func run(ctx context.Context) {
 
 	agentInit(ctx)
 
-	go func() {
-		oldMetadata = &metadata.Descriptor{}
-		webError := 0
-		for {
-			var err error
-			newMetadata, err = mdsClient.Watch(ctx)
-			if err != nil {
-				// Only log the second web error to avoid transient errors and
-				// not to spam the log on network failures.
-				if webError == 1 {
-					if urlErr, ok := err.(*url.Error); ok {
-						if _, ok := urlErr.Err.(*net.OpError); ok {
-							logger.Errorf("Network error when requesting metadata, make sure your instance has an active network and can reach the metadata server.")
-						}
-					}
-					logger.Errorf("Error watching metadata: %s", err)
-				}
-				webError++
-				time.Sleep(5 * time.Second)
-				continue
-			}
-			select {
-			case <-ctx.Done():
-				return
-			default:
-			}
-			runUpdate()
-			oldMetadata = newMetadata
-			webError = 0
-		}
-	}()
+	eventsConfig := &events.Config{
+		Watchers: []string{
+			mdsEvent.WatcherID,
+		},
+	}
 
-	<-ctx.Done()
+	eventManager, err := events.New(eventsConfig)
+	if err != nil {
+		logger.Errorf("Error initializing event manager: %v", err)
+		return
+	}
+
+	oldMetadata = &metadata.Descriptor{}
+	eventManager.Subscribe(mdsEvent.LongpollEvent, nil, func(evType string, data interface{}, evData *events.EventData) bool {
+		logger.Debugf("Handling metadata %q event.", evType)
+
+		// If metadata watcher failed there isn't much we can do, just ignore the event and
+		// allow the water to get it corrected.
+		if evData.Error != nil {
+			logger.Infof("Metadata event watcher failed, ignoring: %+v", evData.Error)
+			return true
+		}
+
+		newMetadata = evData.Data.(*metadata.Descriptor)
+		runUpdate()
+		oldMetadata = newMetadata
+
+		return true
+	})
+
+	eventManager.Run(ctx)
 	logger.Infof("GCE Agent Stopped")
 }
 
