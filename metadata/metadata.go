@@ -300,3 +300,34 @@ func (c *Client) WriteGuestAttributes(ctx context.Context, key, value string) er
 	_, err = c.httpClient.Do(req)
 	return err
 }
+
+// GetKey gets a specific metadata key.
+func (c *Client) GetKey(ctx context.Context, key string) (string, error) {
+	req, err := http.NewRequest("GET", c.metadataURL+key, nil)
+	if err != nil {
+		return "", err
+	}
+
+	req.Header.Add("Metadata-Flavor", "Google")
+	req = req.WithContext(ctx)
+
+	res, err := c.httpClient.Do(req)
+	if err == nil {
+		// TODO: Expand and propagate this error handling to the other metadata operations.
+		errorMsgFmt := "error connecting to metadata server, status code: %d"
+		switch res.StatusCode {
+		case 404, 412:
+			return "", fmt.Errorf(errorMsgFmt, res.StatusCode)
+		}
+	} else if err != nil {
+		return "", fmt.Errorf("error connecting to metadata server: %+v", err)
+	}
+
+	defer res.Body.Close()
+	md, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return "", fmt.Errorf("error reading metadata response data: %+v", err)
+	}
+
+	return string(md), nil
+}

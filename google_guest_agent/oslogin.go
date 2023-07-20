@@ -24,6 +24,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events/sshtrustedca"
 	"github.com/GoogleCloudPlatform/guest-agent/metadata"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 )
@@ -200,7 +201,10 @@ func updateSSHConfig(sshConfig string, enable, twofactor, skey bool) string {
 		}
 	}
 	authorizedKeysUser := "AuthorizedKeysCommandUser root"
-	trustedUserCAKeys := "TrustedUserCAKeys /etc/ssh/trustedca.pub"
+
+	// TODO: only enable this key configuration if certs mechanism is enabled
+	trustedUserCAKeys := "TrustedUserCAKeys " + sshtrustedca.DefaultPipePath
+
 	twoFactorAuthMethods := "AuthenticationMethods publickey,keyboard-interactive"
 	if (osRelease.os == "rhel" || osRelease.os == "centos") && osRelease.version.major == 6 {
 		authorizedKeysUser = "AuthorizedKeysCommandRunAs root"

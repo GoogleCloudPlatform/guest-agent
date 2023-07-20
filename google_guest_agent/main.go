@@ -30,6 +30,7 @@ import (
 
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events"
 	mdsEvent "github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events/metadata"
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events/sshtrustedca"
 	"github.com/GoogleCloudPlatform/guest-agent/metadata"
 	"github.com/GoogleCloudPlatform/guest-agent/utils"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
@@ -170,11 +171,55 @@ func run(ctx context.Context) {
 		},
 	}
 
+	// Only Enable sshtrustedca Watcher if osLogin is enabled.
+	// TODO: ideally we should have a feature flag specifically for this.
+	osLoginEnabled, _, _ := getOSLoginEnabled(newMetadata)
+	if osLoginEnabled {
+		eventsConfig.Watchers = append(eventsConfig.Watchers, sshtrustedca.WatcherID)
+	}
+
 	eventManager, err := events.New(eventsConfig)
 	if err != nil {
 		logger.Errorf("Error initializing event manager: %v", err)
 		return
 	}
+
+	var cachedCertificate string
+	eventManager.Subscribe(sshtrustedca.ReadEvent, nil, func(evType string, data interface{}, evData *events.EventData) bool {
+		// There was some error on the pipe watcher, just ignore it.
+		if evData.Error != nil {
+			logger.Debugf("Not handling ssh trusted ca cert event, we got an error: %+v", evData.Error)
+			return true
+		}
+
+		// Make sure we close the pipe after we've done writing to it.
+		pipeData := evData.Data.(*sshtrustedca.PipeData)
+		defer pipeData.File.Close()
+
+		// The certificates key/endpoint is not cached, we can't rely on the metadata watcher data because of that.
+		certificate, err := mdsClient.GetKey(ctx, "oslogin/certificates")
+		if err != nil && cachedCertificate != "" {
+			certificate = cachedCertificate
+			logger.Warningf("Failed to get certificate, assuming/using previously cached one.")
+		} else if err != nil {
+			logger.Errorf("Failed to get certificate from metadata server: %+v", err)
+			return true
+		}
+
+		// Keep a copy of the returned certificate for error fallback caching.
+		cachedCertificate = certificate
+
+		n, err := pipeData.File.WriteString(certificate)
+		if err != nil {
+			logger.Errorf("Failed to write certificate to the write end of the pipe: %+v", err)
+		}
+
+		if n != len(certificate) {
+			logger.Errorf("Wrote the wrong ammout of data, wrote %d bytes instead of %d bytes", n, len(certificate))
+		}
+
+		return true
+	})
 
 	oldMetadata = &metadata.Descriptor{}
 	eventManager.Subscribe(mdsEvent.LongpollEvent, nil, func(evType string, data interface{}, evData *events.EventData) bool {
