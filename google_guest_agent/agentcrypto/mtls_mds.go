@@ -1,3 +1,17 @@
+//  Copyright 2023 Google Inc. All Rights Reserved.
+//
+//  Licensed under the Apache License, Version 2.0 (the "License");
+//  you may not use this file except in compliance with the License.
+//  You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+//  Unless required by applicable law or agreed to in writing, software
+//  distributed under the License is distributed on an "AS IS" BASIS,
+//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+//  See the License for the specific language governing permissions and
+//  limitations under the License.
+
 // Package agentcrypto provides various cryptography related utility functions for Guest Agent.
 package agentcrypto
 
@@ -11,10 +25,15 @@ import (
 )
 
 const (
-	googleGUID                 = "8be4df61-93ca-11d2-aa0d-00e098032b8c"
+	// UEFI variables are of format {VariableName}-{VendorGUID}
+	// googleGUID is Google's (vendors/variable owners) GUID used to prevent name collision with other vendors.
+	googleGUID = "8be4df61-93ca-11d2-aa0d-00e098032b8c"
+	// googleRootCACertEFIVarName is predefined string part of the UEFI variable name that holds Root CA cert.
 	googleRootCACertEFIVarName = "InstanceRootCACertificate"
-	defaultCredsDir            = "/etc/pki/tls/certs/mds"
-	rootCACertFileName         = "root.crt"
+	// defaultCredsDir is the directory location for MTLS MDS credentials.
+	defaultCredsDir = "/etc/pki/tls/certs/mds"
+	// rootCACertFileName is the root CA cert.
+	rootCACertFileName = "root.crt"
 )
 
 var (

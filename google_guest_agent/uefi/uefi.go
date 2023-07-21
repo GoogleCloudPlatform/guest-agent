@@ -1,3 +1,17 @@
+//  Copyright 2023 Google Inc. All Rights Reserved.
+//
+//  Licensed under the Apache License, Version 2.0 (the "License");
+//  you may not use this file except in compliance with the License.
+//  You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+//  Unless required by applicable law or agreed to in writing, software
+//  distributed under the License is distributed on an "AS IS" BASIS,
+//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+//  See the License for the specific language governing permissions and
+//  limitations under the License.
+
 // Package uefi provides utility functions to read UEFI variables.
 package uefi
 
@@ -14,8 +28,9 @@ const (
 // VariableName represents UEFI variable name and GUID.
 // Format: {VariableName}-{VendorGUID}
 type VariableName struct {
-	Name string
-	GUID string
+	RootDir string
+	Name    string
+	GUID    string
 }
 
 // Variable represents UEFI Variable and its contents.
@@ -25,19 +40,19 @@ type Variable struct {
 	Content    []byte
 }
 
-// VariablePath returns a path for UEFI variable on disk.
-func VariablePath(v VariableName) string {
-	if v.Name == "testname" && v.GUID == "testguid" {
-		return filepath.Join(os.TempDir(), v.Name+"-"+v.GUID)
+// Path returns a path for UEFI variable on disk.
+func (v VariableName) Path() string {
+	root := v.RootDir
+	if root == "" {
+		root = defaultEFIVarsDir
 	}
-
-	return filepath.Join(defaultEFIVarsDir, v.Name+"-"+v.GUID)
+	return filepath.Join(root, v.Name+"-"+v.GUID)
 }
 
 // ReadVariable reads UEFI variable and returns as byte array.
 // Throws an error if variable is invalid or empty.
 func ReadVariable(v VariableName) (*Variable, error) {
-	path := VariablePath(v)
+	path := v.Path()
 	b, err := os.ReadFile(path)
 
 	if err != nil {

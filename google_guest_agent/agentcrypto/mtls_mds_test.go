@@ -1,3 +1,17 @@
+//  Copyright 2023 Google Inc. All Rights Reserved.
+//
+//  Licensed under the Apache License, Version 2.0 (the "License");
+//  you may not use this file except in compliance with the License.
+//  You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+//  Unless required by applicable law or agreed to in writing, software
+//  distributed under the License is distributed on an "AS IS" BASIS,
+//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+//  See the License for the specific language governing permissions and
+//  limitations under the License.
+
 package agentcrypto
 
 import (
@@ -9,17 +23,18 @@ import (
 )
 
 func TestReadAndWriteRootCACert(t *testing.T) {
-	v := uefi.VariableName{Name: "testname", GUID: "testguid"}
+	root := t.TempDir()
+	v := uefi.VariableName{Name: "testname", GUID: "testguid", RootDir: root}
 
 	fakeUefi := []byte("attr" + validCertPEM)
-	path := filepath.Join(os.TempDir(), "testname-testguid")
+	path := filepath.Join(root, "testname-testguid")
 
 	if err := os.WriteFile(path, fakeUefi, 0644); err != nil {
 		t.Fatalf("Failed to write test file: %v", err)
 	}
 	defer os.Remove(path)
 
-	crt := filepath.Join(os.TempDir(), "root.crt")
+	crt := filepath.Join(root, "root.crt")
 	if err := readAndWriteRootCACert(v, crt); err != nil {
 		t.Errorf("readAndWriteRootCACert(%+v, %s) failed unexpectedly with error: %v", v, crt, err)
 	}
@@ -34,9 +49,10 @@ func TestReadAndWriteRootCACert(t *testing.T) {
 }
 
 func TestReadAndWriteRootCACertError(t *testing.T) {
-	v := uefi.VariableName{Name: "not", GUID: "exist"}
+	root := t.TempDir()
+	v := uefi.VariableName{Name: "not", GUID: "exist", RootDir: root}
 
-	crt := filepath.Join(os.TempDir(), "root.crt")
+	crt := filepath.Join(root, "root.crt")
 	// Non-existent UEFI variable.
 	if err := readAndWriteRootCACert(v, crt); err == nil {
 		t.Errorf("readAndWriteRootCACert(%+v, %s) succeeded unexpectedly for non-existent UEFI variable, want error", v, crt)
@@ -44,7 +60,7 @@ func TestReadAndWriteRootCACertError(t *testing.T) {
 
 	// Invalid PEM certificate.
 	fakeUefi := []byte("attr" + invalidCertPEM)
-	path := filepath.Join(os.TempDir(), "testname-testguid")
+	path := filepath.Join(root, "testname-testguid")
 
 	if err := os.WriteFile(path, fakeUefi, 0644); err != nil {
 		t.Fatalf("Failed to write test file: %v", err)
