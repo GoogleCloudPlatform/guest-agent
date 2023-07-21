@@ -19,6 +19,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events/sshtrustedca"
 	"github.com/GoogleCloudPlatform/guest-agent/metadata"
 )
 
@@ -186,7 +187,7 @@ func TestUpdateSSHConfig(t *testing.T) {
 	authorizedKeysCommand := "AuthorizedKeysCommand /usr/bin/google_authorized_keys"
 	authorizedKeysCommandSk := "AuthorizedKeysCommand /usr/bin/google_authorized_keys_sk"
 	authorizedKeysUser := "AuthorizedKeysCommandUser root"
-	trustedUserCAKeys := "TrustedUserCAKeys /etc/ssh/trustedca.pub"
+	trustedUserCAKeys := "TrustedUserCAKeys " + sshtrustedca.DefaultPipePath
 	twoFactorAuthMethods := "AuthenticationMethods publickey,keyboard-interactive"
 	matchblock1 := `Match User sa_*`
 	matchblock2 := `       AuthenticationMethods publickey`
