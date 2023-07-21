@@ -11,7 +11,7 @@ func TestVariablePath(t *testing.T) {
 	want := "/sys/firmware/efi/efivars/name-guid"
 
 	if got := VariablePath(v); got != want {
-		t.Errorf("VariablePath(%v) = %v, want %v", v, got, want)
+		t.Errorf("VariablePath(%+v) = %v, want %v", v, got, want)
 	}
 }
 
