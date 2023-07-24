@@ -18,6 +18,8 @@ package osinfo
 
 import (
 	"bytes"
+	"errors"
+	"fmt"
 	"io/ioutil"
 	"strconv"
 	"strings"
@@ -26,7 +28,12 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-func parseOSRelease(osRelease string) OSInfo {
+var (
+	osRelease     = "/etc/os-release"
+	systemRelease = "/etc/system-release"
+)
+
+func parseOSRelease(osRelease string) (OSInfo, error) {
 	var ret OSInfo
 	for _, line := range strings.Split(osRelease, "\n") {
 		var id = line
@@ -49,33 +56,30 @@ func parseOSRelease(osRelease string) OSInfo {
 			ret.VersionID = id
 			version, err := parseVersion(id)
 			if err != nil {
-				logger.Warningf("Couldn't parse version id: %v", err)
-				return ret
+				return ret, fmt.Errorf("couldn't parse version id: %v", err)
 			}
 			ret.Version = version
 		}
 	}
-	return ret
+	return ret, nil
 }
 
-func parseSystemRelease(systemRelease string) OSInfo {
+func parseSystemRelease(systemRelease string) (OSInfo, error) {
 	var ret OSInfo
 	var key = " release "
 	idx := strings.Index(systemRelease, key)
 	if idx == -1 {
-		logger.Warningf("SystemRelease does not match expected format")
-		return ret
+		return ret, errors.New("SystemRelease does not match expected format")
 	}
 	ret.OS = parseID(systemRelease[:idx])
 
 	versionFromRelease := strings.Split(systemRelease[idx+len(key):], " ")[0]
 	version, err := parseVersion(versionFromRelease)
 	if err != nil {
-		logger.Warningf("Couldn't parse version: %v", err)
-		return ret
+		return ret, fmt.Errorf("couldn't parse version: %v", err)
 	}
 	ret.Version = version
-	return ret
+	return ret, nil
 }
 
 func parseVersion(version string) (Ver, error) {
@@ -114,18 +118,22 @@ func parseID(id string) string {
 	}
 }
 
+func parseRelease() (OSInfo, error) {
+	if releaseFile, err := ioutil.ReadFile(osRelease); err == nil {
+		return parseOSRelease(string(releaseFile))
+	}
+	if releaseFile, err := ioutil.ReadFile(systemRelease); err == nil {
+		return parseSystemRelease(string(releaseFile))
+	}
+	return OSInfo{}, errors.New("no known release file found")
+}
+
 // Get returns OSInfo on the running system.
 func Get() OSInfo {
-	var osInfo OSInfo
-
-	releaseFile, err := ioutil.ReadFile("/etc/os-release")
-	if err == nil {
-		osInfo = parseOSRelease(string(releaseFile))
-	} else {
-		releaseFile, err = ioutil.ReadFile("/etc/system-release")
-		if err == nil {
-			osInfo = parseSystemRelease(string(releaseFile))
-		}
+	osInfo, err := parseRelease()
+	if err != nil {
+		// This is a non critical error, we can still return a partially populated OSInfo.
+		logger.Warningf("Error parsing release info: %v", err)
 	}
 
 	var uts unix.Utsname

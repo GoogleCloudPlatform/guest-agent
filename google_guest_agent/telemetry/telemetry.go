@@ -17,17 +17,12 @@ package telemetry
 import (
 	"context"
 	"encoding/base64"
-	"net/http"
-	"time"
 
+	"github.com/GoogleCloudPlatform/guest-agent/metadata"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 	"google.golang.org/protobuf/proto"
 
 	tpb "github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/telemetry/proto"
-)
-
-var (
-	metadataURL = "http://169.254.169.254/computeMetadata/v1/"
 )
 
 // Data is telemetry data on the current agent and OS.
@@ -81,20 +76,11 @@ func formatGuestOS(d Data) string {
 }
 
 // Record records telemetry data.
-func Record(ctx context.Context, d Data) error {
-	client := &http.Client{
-		Timeout: 10 * time.Second,
+func Record(ctx context.Context, client metadata.MDSClientInterface, d Data) error {
+	headers := map[string]string{
+		"X-Google-Guest-Agent": formatGuestAgent(d),
+		"X-Google-Guest-OS":    formatGuestOS(d),
 	}
-
-	req, err := http.NewRequest("GET", metadataURL, nil)
-	if err != nil {
-		return err
-	}
-	req.Header.Add("Metadata-Flavor", "Google")
-	req.Header.Add("X-Google-Guest-Agent", formatGuestAgent(d))
-	req.Header.Add("X-Google-Guest-OS", formatGuestOS(d))
-	req = req.WithContext(ctx)
-
-	_, err = client.Do(req)
+	_, err := client.GetKey(ctx, "project", headers)
 	return err
 }

@@ -23,33 +23,52 @@ import (
 
 func TestParseSystemRelease(t *testing.T) {
 	tests := []struct {
-		file string
-		want OSInfo
+		desc    string
+		file    string
+		want    OSInfo
+		wantErr bool
 	}{
-		{"Red Hat Enterprise Linux Server release 6.10 (Santiago)", OSInfo{OS: "rhel", Version: Ver{6, 10, 0, 2}}},
-		{"Red Hat Enterprise Linux Server release 6.10.1", OSInfo{OS: "rhel", Version: Ver{6, 10, 1, 3}}},
-		{"CentOS Linux release 7.6.1810 (Core)", OSInfo{OS: "centos", Version: Ver{7, 6, 1810, 3}}},
+		{"rhel 6.10", "Red Hat Enterprise Linux Server release 6.10 (Santiago)", OSInfo{OS: "rhel", Version: Ver{6, 10, 0, 2}}, false},
+		{"rhel 6.10.1", "Red Hat Enterprise Linux Server release 6.10.1", OSInfo{OS: "rhel", Version: Ver{6, 10, 1, 3}}, false},
+		{"centos 7.6.1810", "CentOS Linux release 7.6.1810 (Core)", OSInfo{OS: "centos", Version: Ver{7, 6, 1810, 3}}, false},
+		{"bad format", "CentOS Linux", OSInfo{}, true},
+		{"bad version", "CentOS Linux release Core", OSInfo{OS: "centos"}, true},
 	}
-	for _, tt := range tests {
-		if got := parseSystemRelease(tt.file); !reflect.DeepEqual(got, tt.want) {
-			t.Errorf("parseSystemRelease(%s) incorrect return: got %v, want %v", tt.file, got, tt.want)
-		}
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			got, err := parseSystemRelease(tc.file)
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("parseSystemRelease(%s) incorrect return: got %v, want %v", tc.file, got, tc.want)
+			}
+			if (err != nil && !tc.wantErr) || (err == nil && tc.wantErr) {
+				t.Errorf("want error return: %T, got error: %v", tc.wantErr, err)
+			}
+		})
 	}
 }
 
 func TestParseOSRelease(t *testing.T) {
 	tests := []struct {
-		file string
-		want OSInfo
+		desc    string
+		file    string
+		want    OSInfo
+		wantErr bool
 	}{
-		{"ID=\"sles\"\nNAME=\"SLES\"\nVERSION=\"12-SP4\"\nVERSION_ID=12", OSInfo{OS: "sles", VersionID: "12", Version: Ver{12, 0, 0, 1}}},
-		{"ID=sles\nNAME=\"SLES\"\nVERSION=\"12-SP4\"\nVERSION_ID=\"12.4\"", OSInfo{OS: "sles", VersionID: "12.4", Version: Ver{12, 4, 0, 2}}},
-		{"ID=debian\nNAME=\"Debian GNU/Linux\"\nVERSION=\"9 (stretch)\"\nVERSION_ID=\"9\"", OSInfo{OS: "debian", VersionID: "9", Version: Ver{9, 0, 0, 1}}},
-		{"ID=\"debian\"\nNAME=\"Debian GNU/Linux\"\nVERSION=9\nVERSION_ID=\"9\"", OSInfo{OS: "debian", VersionID: "9", Version: Ver{9, 0, 0, 1}}},
+		{"sles 12", "ID=\"sles\"\nNAME=\"SLES\"\nVERSION=\"12-SP4\"\nVERSION_ID=12", OSInfo{OS: "sles", VersionID: "12", Version: Ver{12, 0, 0, 1}}, false},
+		{"sles 12.4", "ID=sles\nNAME=\"SLES\"\nVERSION=\"12-SP4\"\nVERSION_ID=\"12.4\"", OSInfo{OS: "sles", VersionID: "12.4", Version: Ver{12, 4, 0, 2}}, false},
+		{"debian 9 (stretch)", "ID=debian\nNAME=\"Debian GNU/Linux\"\nVERSION=\"9 (stretch)\"\nVERSION_ID=\"9\"", OSInfo{OS: "debian", VersionID: "9", Version: Ver{9, 0, 0, 1}}, false},
+		{"debian 9", "ID=\"debian\"\nNAME=\"Debian GNU/Linux\"\nVERSION=9\nVERSION_ID=\"9\"", OSInfo{OS: "debian", VersionID: "9", Version: Ver{9, 0, 0, 1}}, false},
+		{"error version parsing", "ID=\"debian\"\nNAME=\"Debian GNU/Linux\"\nVERSION=9\nVERSION_ID=\"something\"", OSInfo{OS: "debian", VersionID: "something"}, true},
 	}
-	for _, tt := range tests {
-		if got := parseOSRelease(tt.file); !reflect.DeepEqual(got, tt.want) {
-			t.Errorf("parseOSRelease(%s) incorrect return: got %+v, want %+v", tt.file, got, tt.want)
-		}
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			got, err := parseOSRelease(tc.file)
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("parseOSRelease(%s) incorrect return: got %+v, want %+v", tc.file, got, tc.want)
+			}
+			if (err != nil && !tc.wantErr) || (err == nil && tc.wantErr) {
+				t.Errorf("want error return: %T, got error: %v", tc.wantErr, err)
+			}
+		})
 	}
 }

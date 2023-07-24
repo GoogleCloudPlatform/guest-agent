@@ -44,7 +44,7 @@ var (
 // MDSClientInterface is the minimum required Metadata Server interface for Guest Agent.
 type MDSClientInterface interface {
 	Get(context.Context) (*Descriptor, error)
-	GetKey(context.Context, string) (string, error)
+	GetKey(context.Context, string, map[string]string) (string, error)
 	Watch(context.Context) (*Descriptor, error)
 	WriteGuestAttributes(context.Context, string, string) error
 }
@@ -56,6 +56,7 @@ type requestConfig struct {
 	recursive  bool
 	jsonOutput bool
 	timeout    int
+	headers    map[string]string
 }
 
 // Client defines the public interface between the core guest agent and
@@ -287,9 +288,19 @@ func (c *Client) retry(ctx context.Context, cfg requestConfig) (string, error) {
 }
 
 // GetKey gets a specific metadata key.
-func (c *Client) GetKey(ctx context.Context, key string) (string, error) {
+func (c *Client) GetKey(ctx context.Context, key string, headers map[string]string) (string, error) {
+	// url.JoinPath first exists in go 1.19
+	key = strings.TrimPrefix(key, "/")
+	var reqUrl string
+	if strings.HasSuffix(c.metadataURL, "/") {
+		reqUrl = c.metadataURL + key
+	} else {
+		reqUrl = c.metadataURL + "/" + key
+	}
+
 	cfg := requestConfig{
-		baseURL: c.metadataURL + key,
+		baseURL: reqUrl,
+		headers: headers,
 	}
 	return c.retry(ctx, cfg)
 }
@@ -380,6 +391,9 @@ func (c *Client) do(ctx context.Context, cfg requestConfig) (string, error) {
 	}
 
 	req.Header.Add("Metadata-Flavor", "Google")
+	for k, v := range cfg.headers {
+		req.Header.Add(k, v)
+	}
 	resp, err := c.httpClient.Do(req)
 
 	// If we are canceling httpClient will also wrap the context's error so
@@ -409,63 +423,4 @@ func (c *Client) do(ctx context.Context, cfg requestConfig) (string, error) {
 	}
 
 	return string(md), nil
-}
-
-type Telemetry struct {
-	AgentName    string
-	AgentVersion string
-	AgentArch    string
-
-	OS            string
-	LongName      string
-	ShortName     string
-	Version       string
-	KernelRelease string
-	KernelVersion string
-}
-
-func formatGuestAgent(t Telemetry) string {
-	data, err := proto.Marshal(&tpb.AgentInfo{
-		Name:         &t.AgentName,
-		Version:      &t.AgentVersion,
-		Architecture: &t.AgentArch,
-	})
-	if err != nil {
-		logger.Warningf("Error marshalling AgentInfo: %v", err)
-	}
-	return base64.StdEncoding.EncodeToString(data)
-}
-
-func formatGuestOS(t Telemetry) string {
-	data, err := proto.Marshal(&tpb.OSInfo{
-		OsType:        &t.OS,
-		LongName:      &t.LongName,
-		ShortName:     &t.ShortName,
-		Version:       &t.Version,
-		KernelVersion: &t.KernelVersion,
-		KernelRelease: &t.KernelRelease,
-	})
-	if err != nil {
-		logger.Warningf("Error marshalling AgentInfo: %v", err)
-	}
-	return base64.StdEncoding.EncodeToString(data)
-}
-
-func RecordTelemetry(ctx context.Context, t Telemetry) error {
-	logger.Debugf("recordTelemetry")
-	client := &http.Client{
-		Timeout: defaultTimeout,
-	}
-
-	req, err := http.NewRequest("GET", defaultMetadataURL, nil)
-	if err != nil {
-		return err
-	}
-	req.Header.Add("Metadata-Flavor", "Google")
-	req.Header.Add("X-Google-Guest-Agent", formatGuestAgent(t))
-	req.Header.Add("X-Google-Guest-OS", formatGuestOS(t))
-	req = req.WithContext(ctx)
-
-	_, err = client.Do(req)
-	return err
 }

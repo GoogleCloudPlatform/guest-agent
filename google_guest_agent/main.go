@@ -21,8 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
-	"net/url"
 	"os"
 	"os/exec"
 	"runtime"
@@ -30,11 +28,11 @@ import (
 	"sync"
 	"time"
 
-<<<<<<< HEAD
-=======
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events"
+	mdsEvent "github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events/metadata"
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events/sshtrustedca"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/osinfo"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/telemetry"
->>>>>>> fed916a (seperate osinfo into its own library)
 	"github.com/GoogleCloudPlatform/guest-agent/metadata"
 	"github.com/GoogleCloudPlatform/guest-agent/utils"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
@@ -165,19 +163,16 @@ func run(ctx context.Context) {
 
 	agentInit(ctx)
 
-	eventsConfig := &events.Config{
-		Watchers: []string{
-			mdsEvent.WatcherID,
-		},
-	}
+	// Previous request to metadata *may* not have worked becasue routes don't get added until agentInit.
 	if newMetadata == nil {
 		/// Error here doesn't matter, if we cant get metadata, we cant record telemetry.
-		newMetadata, err = metadata.Get(ctx)
+		newMetadata, err = mdsClient.Get(ctx)
 		if err != nil {
 			logger.Debugf("Error getting metdata: %v", err)
 		}
 	}
 	// Only record telemetry if we have metdata, and telemetry isnt disabled.
+	// Telemetry should onlyt be recorded once in an agents lifetime and is done on a best effort basis.
 	if newMetadata != nil && !newMetadata.Instance.Attributes.DisableTelemetry && !newMetadata.Project.Attributes.DisableTelemetry {
 		d := telemetry.Data{
 			AgentName:     programName,
@@ -190,42 +185,16 @@ func run(ctx context.Context) {
 			KernelRelease: osInfo.KernelRelease,
 			KernelVersion: osInfo.KernelVersion,
 		}
-		if err := telemetry.Record(ctx, d); err != nil {
+		if err := telemetry.Record(ctx, mdsClient, d); err != nil {
 			logger.Debugf("Error recording telemetry: %v", err)
 		}
 	}
 
-	go func() {
-		oldMetadata = &metadata.Descriptor{}
-		webError := 0
-		for {
-			var err error
-			newMetadata, err = metadata.Watch(ctx)
-			if err != nil {
-				// Only log the second web error to avoid transient errors and
-				// not to spam the log on network failures.
-				if webError == 1 {
-					if urlErr, ok := err.(*url.Error); ok {
-						if _, ok := urlErr.Err.(*net.OpError); ok {
-							logger.Errorf("Network error when requesting metadata, make sure your instance has an active network and can reach the metadata server.")
-						}
-					}
-					logger.Errorf("Error watching metadata: %s", err)
-				}
-				webError++
-				time.Sleep(5 * time.Second)
-				continue
-			}
-			select {
-			case <-ctx.Done():
-				return
-			default:
-			}
-			runUpdate()
-			oldMetadata = newMetadata
-			webError = 0
-		}
-	}()
+	eventsConfig := &events.Config{
+		Watchers: []string{
+			mdsEvent.WatcherID,
+		},
+	}
 
 	// Only Enable sshtrustedca Watcher if osLogin is enabled.
 	// TODO: ideally we should have a feature flag specifically for this.
@@ -253,7 +222,7 @@ func run(ctx context.Context) {
 		defer pipeData.File.Close()
 
 		// The certificates key/endpoint is not cached, we can't rely on the metadata watcher data because of that.
-		certificate, err := mdsClient.GetKey(ctx, "oslogin/certificates")
+		certificate, err := mdsClient.GetKey(ctx, "oslogin/certificates", nil)
 		if err != nil && cachedCertificate != "" {
 			certificate = cachedCertificate
 			logger.Warningf("Failed to get certificate, assuming/using previously cached one.")

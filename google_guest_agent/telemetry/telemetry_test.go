@@ -16,24 +16,24 @@ package telemetry
 
 import (
 	"context"
-	"net/http"
-	"net/http/httptest"
 	"testing"
+
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/fakes"
 )
 
-func TestRecordTelemetry(t *testing.T) {
-	var got http.Header
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		got = r.Header
-		w.WriteHeader(http.StatusOK)
-	})
+type mdsClient struct {
+	getKeyHeaders map[string]string
+	fakes.MDSClient
+}
 
-	testsrv := httptest.NewServer(handler)
-	defer testsrv.Close()
+func (c *mdsClient) GetKey(ctx context.Context, key string, headers map[string]string) (string, error) {
+	c.getKeyHeaders = headers
 
-	old := metadataURL
-	metadataURL = testsrv.URL
-	defer func() { metadataURL = old }()
+	return "", nil
+}
+
+func TestRecord(t *testing.T) {
+	client := &mdsClient{}
 
 	d := Data{
 		AgentVersion:  "AgentVersion",
@@ -46,19 +46,19 @@ func TestRecordTelemetry(t *testing.T) {
 		KernelVersion: "KernelVersion",
 	}
 
-	if err := Record(context.Background(), d); err != nil {
+	if err := Record(context.Background(), client, d); err != nil {
 		t.Fatalf("Error running Record: %v", err)
 	}
 
 	want := map[string]string{
-		"Metadata-Flavor":      "Google",
 		"X-Google-Guest-Agent": formatGuestAgent(d),
 		"X-Google-Guest-OS":    formatGuestOS(d),
 	}
 
+	got := client.getKeyHeaders
 	for k, v := range want {
-		if got.Get(k) != v {
-			t.Fatalf("received headers does not contain all expected headers, want: %q, got: %q", want, got)
+		if got[k] != v {
+			t.Errorf("received headers does not contain all expected headers, want: %q, got: %q", want, got)
 		}
 	}
 

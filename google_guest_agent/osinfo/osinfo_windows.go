@@ -28,13 +28,17 @@ import (
 )
 
 var (
-	version                     = windows.NewLazySystemDLL("version.dll")
-	procGetFileVersionInfoSizeW = version.NewProc("GetFileVersionInfoSizeW")
-	procGetFileVersionInfoW     = version.NewProc("GetFileVersionInfoW")
-	procVerQueryValueW          = version.NewProc("VerQueryValueW")
+	versionDLL = windows.NewLazySystemDLL("version.dll")
+	// https://learn.microsoft.com/en-us/windows/win32/api/winver/nf-winver-getfileversioninfosizew
+	procGetFileVersionInfoSizeW = versionDLL.NewProc("GetFileVersionInfoSizeW")
+	// https://learn.microsoft.com/en-us/windows/win32/api/winver/nf-winver-getfileversioninfow
+	procGetFileVersionInfoW = versionDLL.NewProc("GetFileVersionInfoW")
+	// https://learn.microsoft.com/en-us/windows/win32/api/winver/nf-winver-verqueryvaluew
+	procVerQueryValueW = versionDLL.NewProc("VerQueryValueW")
 )
 
-// https://msdn.microsoft.com/en-us/library/windows/desktop/ms647464(v=vs.85).aspx
+// getTranslation returns the anguage and code page identifier from the provided
+// version-information block.
 func getTranslation(block []byte) (string, error) {
 	var start uint
 	var length uint
@@ -64,7 +68,7 @@ func getTranslation(block []byte) (string, error) {
 	return fmt.Sprintf("%x", t), nil
 }
 
-// https://msdn.microsoft.com/en-us/library/windows/desktop/ms647464(v=vs.85).aspx
+// getStringFileInfo returns the string value file info name specific to the language and code page indicated.
 func getStringFileInfo(block []byte, langCodePage, name string) (string, error) {
 	var start uint
 	var length uint
@@ -132,10 +136,6 @@ func getKernelInfo() (string, string, error) {
 	}
 
 	return getVersion(info, langCodePage)
-}
-
-type win32OperatingSystem struct {
-	Caption, Version string
 }
 
 // Get returns OSInfo on the running system.
