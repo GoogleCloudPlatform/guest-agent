@@ -16,6 +16,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha1"
@@ -327,7 +328,7 @@ func verifyWinSSHVersion() error {
 	return versionOk(sshdVersion, minSSHVersion)
 }
 
-func (a *winAccountsMgr) set() error {
+func (a *winAccountsMgr) set(ctx context.Context) error {
 	oldSSHEnable := getWinSSHEnabled(oldMetadata)
 	sshEnable := getWinSSHEnabled(newMetadata)
 

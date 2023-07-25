@@ -15,6 +15,7 @@
 package main
 
 import (
+	"context"
 	"net"
 	"strings"
 	"sync"
@@ -108,7 +109,7 @@ func (m *wsfcManager) timeout() bool {
 // Diff will always be called before set. So in set, only two cases are possible:
 // - state changed: start or stop the wsfc agent accordingly
 // - port changed: restart the agent if it is running
-func (m *wsfcManager) set() error {
+func (m *wsfcManager) set(ctx context.Context) error {
 	m.agent.setPort(m.agentNewPort)
 
 	// if state changes

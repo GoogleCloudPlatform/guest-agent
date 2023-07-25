@@ -15,6 +15,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -283,7 +284,7 @@ func (a *addressMgr) disabled(os string) (disabled bool) {
 	return !config.Section("Daemons").Key("network_daemon").MustBool(true)
 }
 
-func (a *addressMgr) set() error {
+func (a *addressMgr) set(ctx context.Context) error {
 	if runtime.GOOS == "windows" {
 		a.applyWSFCFilter()
 	}
