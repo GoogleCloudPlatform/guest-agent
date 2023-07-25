@@ -15,6 +15,7 @@
 package main
 
 import (
+	"context"
 	"os/exec"
 	"runtime"
 
@@ -36,7 +37,7 @@ func (a *clockskewMgr) disabled(os string) (disabled bool) {
 	return os == "windows" || !enabled
 }
 
-func (a *clockskewMgr) set() error {
+func (a *clockskewMgr) set(ctx context.Context) error {
 	if runtime.GOOS == "freebsd" {
 		err := runCmd(exec.Command("service", "ntpd", "status"))
 		if err == nil {

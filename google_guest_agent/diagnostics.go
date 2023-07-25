@@ -15,6 +15,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"os/exec"
 	"reflect"
@@ -80,7 +81,7 @@ func (d *diagnosticsMgr) disabled(os string) (disabled bool) {
 	return diagnosticsDisabled
 }
 
-func (d *diagnosticsMgr) set() error {
+func (d *diagnosticsMgr) set(ctx context.Context) error {
 	logger.Infof("Diagnostics: logs export requested.")
 	diagnosticsEntries, err := readRegMultiString(regKeyBase, diagnosticsRegKey)
 	if err != nil && err != errRegNotExist {
