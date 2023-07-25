@@ -174,7 +174,7 @@ func agentInit(ctx context.Context) {
 			if newMetadata.Instance.ID.String() != strings.TrimSpace(string(instanceID)) {
 				logger.Infof("Instance ID changed, running first-boot actions")
 				if config.Section("InstanceSetup").Key("set_host_keys").MustBool(true) {
-					if err := generateSSHKeys(); err != nil {
+					if err := generateSSHKeys(ctx); err != nil {
 						logger.Warningf("Failed to generate SSH keys: %v", err)
 					}
 				}
@@ -195,7 +195,7 @@ func agentInit(ctx context.Context) {
 	}
 }
 
-func generateSSHKeys() error {
+func generateSSHKeys(ctx context.Context) error {
 	hostKeyDir := config.Section("InstanceSetup").Key("host_key_dir").MustString("/etc/ssh")
 	dir, err := os.Open(hostKeyDir)
 	if err != nil {
@@ -257,7 +257,7 @@ func generateSSHKeys() error {
 			continue
 		}
 		if vals := strings.Split(string(pubKey), " "); len(vals) >= 2 {
-			if err := mdsClient.WriteGuestAttributes(context.Background(), "hostkeys/"+vals[0], vals[1]); err != nil {
+			if err := mdsClient.WriteGuestAttributes(ctx, "hostkeys/"+vals[0], vals[1]); err != nil {
 				logger.Errorf("Failed to upload %s key to guest attributes: %v", keytype, err)
 			}
 		} else {

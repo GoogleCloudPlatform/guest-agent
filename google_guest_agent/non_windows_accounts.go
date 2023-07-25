@@ -17,6 +17,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -107,7 +108,7 @@ func (a *accountsMgr) disabled(os string) bool {
 		!config.Section("Daemons").Key("accounts_daemon").MustBool(true)
 }
 
-func (a *accountsMgr) set() error {
+func (a *accountsMgr) set(ctx context.Context) error {
 	if sshKeys == nil {
 		logger.Debugf("initialize sshKeys map")
 		sshKeys = make(map[string][]string)

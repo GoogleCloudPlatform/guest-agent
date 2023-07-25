@@ -57,7 +57,7 @@ const (
 type manager interface {
 	diff() bool
 	disabled(string) bool
-	set() error
+	set(ctx context.Context) error
 	timeout() bool
 }
 
@@ -88,7 +88,7 @@ func closeFile(c io.Closer) {
 	}
 }
 
-func runUpdate() {
+func runUpdate(ctx context.Context) {
 	var wg sync.WaitGroup
 	mgrs := []manager{&addressMgr{}}
 	switch runtime.GOOS {
@@ -110,7 +110,7 @@ func runUpdate() {
 				return
 			}
 			logger.Debugf("running %#v manager", mgr)
-			if err := mgr.set(); err != nil {
+			if err := mgr.set(ctx); err != nil {
 				logger.Errorf("error running %#v manager: %s", mgr, err)
 			}
 		}(mgr)
@@ -233,7 +233,7 @@ func run(ctx context.Context) {
 		}
 
 		newMetadata = evData.Data.(*metadata.Descriptor)
-		runUpdate()
+		runUpdate(ctx)
 		oldMetadata = newMetadata
 
 		return true

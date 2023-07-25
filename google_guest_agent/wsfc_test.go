@@ -16,6 +16,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -150,7 +151,7 @@ func TestWsfcManagerSet(t *testing.T) {
 		{"set do nothing", &wsfcManager{agentNewState: stopped, agentNewPort: "1", agent: &mockAgent{state: stopped, port: "0"}}, false, false, false},
 	}
 	for _, tt := range tests {
-		if err := tt.m.set(); (err != nil) != tt.wantErr {
+		if err := tt.m.set(context.Background()); (err != nil) != tt.wantErr {
 			t.Errorf("wsfcManager.set() error = %v, wantErr %v", err, tt.wantErr)
 		}
 
@@ -184,7 +185,7 @@ func getHealthCheckResponce(request string, agent healthAgent) (string, error) {
 func TestWsfcRunAgentE2E(t *testing.T) {
 
 	wsfcMgr := &wsfcManager{agentNewState: running, agentNewPort: wsfcDefaultAgentPort, agent: getWsfcAgentInstance()}
-	wsfcMgr.set()
+	wsfcMgr.set(context.Background())
 
 	// make sure the agent is cleaned up.
 	defer wsfcMgr.agent.stop()
@@ -222,7 +223,7 @@ func TestWsfcRunAgentE2E(t *testing.T) {
 
 	// test stop agent
 	wsfcMgrStop := &wsfcManager{agentNewState: stopped, agent: getWsfcAgentInstance()}
-	wsfcMgrStop.set()
+	wsfcMgrStop.set(context.Background())
 	if _, err := getHealthCheckResponce(existIP, wsfcMgr.agent); err == nil {
 		t.Errorf("health check still running after calling stop")
 	}
