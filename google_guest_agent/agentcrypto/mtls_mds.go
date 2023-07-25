@@ -16,12 +16,17 @@
 package agentcrypto
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/uefi"
+	"github.com/GoogleCloudPlatform/guest-agent/metadata"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
+	"google.golang.org/protobuf/encoding/protojson"
+
+	pb "github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/agentcrypto/credentials"
 )
 
 const (
@@ -34,6 +39,8 @@ const (
 	defaultCredsDir = "/etc/pki/tls/certs/mds"
 	// rootCACertFileName is the root CA cert.
 	rootCACertFileName = "root.crt"
+	// clientCertsKey is the metadata server key at which client identity certificate is exposed.
+	clientCertsKey = "instance/credentials/certs"
 )
 
 var (
@@ -64,10 +71,25 @@ func readAndWriteRootCACert(name uefi.VariableName, outputFile string) error {
 	return nil
 }
 
+// getClientCredentials fetches encrypted credentials from MDS and unmarshal it into GuestCredentialsResponse.
+func getClientCredentials(ctx context.Context, client metadata.MDSClientInterface) (*pb.GuestCredentialsResponse, error) {
+	creds, err := client.GetKey(ctx, clientCertsKey)
+	if err != nil {
+		return nil, fmt.Errorf("unable to get client credentials from MDS: %w", err)
+	}
+
+	res := &pb.GuestCredentialsResponse{}
+	if err := protojson.Unmarshal([]byte(creds), res); err != nil {
+		return nil, fmt.Errorf("unable to unmarshal MDS response: %w", err)
+	}
+
+	return res, nil
+}
+
 // Bootstrap generates the required credentials for MTLS MDS workflow.
 // 1. Fetches, verifies and writes Root CA cert from UEFI variable to /etc/pki/tls/certs/mds/root.crt
 // 2. Fetches encrypted client credentials from MDS, decrypts it via vTPM and writes it to /etc/pki/tls/certs/mds/client.key (TODO)
-func Bootstrap() error {
+func Bootstrap(ctx context.Context) error {
 	logger.Infof("Fetching Root CA cert...")
 
 	if err := readAndWriteRootCACert(googleRootCACertUEFIVar, filepath.Join(defaultCredsDir, rootCACertFileName)); err != nil {
