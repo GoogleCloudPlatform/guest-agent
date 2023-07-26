@@ -1,6 +1,6 @@
 module github.com/GoogleCloudPlatform/guest-agent
 
-go 1.17
+go 1.20
 
 replace github.com/GoogleCloudPlatform/guest-agent/metadata => ../metadata
 
