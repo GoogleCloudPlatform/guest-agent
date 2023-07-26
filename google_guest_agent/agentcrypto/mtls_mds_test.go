@@ -15,10 +15,12 @@
 package agentcrypto
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/fakes"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/uefi"
 )
 
@@ -69,5 +71,30 @@ func TestReadAndWriteRootCACertError(t *testing.T) {
 
 	if err := readAndWriteRootCACert(v, crt); err == nil {
 		t.Errorf("readAndWriteRootCACert(%+v, %s) succeeded unexpectedly for invalid PEM certificate, want error", v, crt)
+	}
+}
+
+func TestGetClientCredentials(t *testing.T) {
+	ctx := context.WithValue(context.Background(), fakes.MDSOverride, "succeed")
+	client := fakes.NewFakeMDSClient()
+
+	if _, err := getClientCredentials(ctx, client); err != nil {
+		t.Errorf("getClientCredentials(ctx, client) failed unexpectedly with error: %v", err)
+	}
+}
+
+func TestGetClientCredentialsError(t *testing.T) {
+	ctx := context.Background()
+	client := fakes.NewFakeMDSClient()
+
+	tests := []string{"fail_mds_connect", "fail_unmarshal"}
+
+	for _, test := range tests {
+		t.Run(test, func(t *testing.T) {
+			ctx = context.WithValue(ctx, fakes.MDSOverride, test)
+			if _, err := getClientCredentials(ctx, client); err == nil {
+				t.Errorf("getClientCredentials(ctx, client) succeeded for %s, want error", test)
+			}
+		})
 	}
 }

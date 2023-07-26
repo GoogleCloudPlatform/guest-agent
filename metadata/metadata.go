@@ -39,6 +39,14 @@ var (
 	defaultTimeout = 70 * time.Second
 )
 
+// MDSClientInterface is the minimum required Metadata Server interface for Guest Agent.
+type MDSClientInterface interface {
+	Get(context.Context) (*Descriptor, error)
+	GetKey(context.Context, string) (string, error)
+	Watch(context.Context) (*Descriptor, error)
+	WriteGuestAttributes(context.Context, string, string) error
+}
+
 // Client defines the public interface between the core guest agent and
 // the metadata layer.
 type Client struct {
