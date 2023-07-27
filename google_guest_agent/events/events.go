@@ -80,9 +80,8 @@ type eventSubscriber struct {
 }
 
 type eventBusData struct {
-	leaving bool
-	evType  string
-	data    *EventData
+	evType string
+	data   *EventData
 }
 
 func init() {
@@ -168,59 +167,76 @@ func (mngr *Manager) Run(ctx context.Context) {
 	syncBus := make(chan eventBusData)
 	defer close(syncBus)
 
+	cancelContext := make(chan bool)
+	cancelCallback := make(chan bool)
+
+	defer close(cancelContext)
+	defer close(cancelCallback)
+
 	// Manages the context's done signal, pass it down to the other go routines to
 	// finish its job and leave. Additionally, if the remaining go routines are leaving
 	// we get it handled via syncBus channel and drop this go routine as well.
 	wg.Add(1)
-	go func() {
+	go func(done <-chan struct{}, cancelContext <-chan bool, cancelCallback chan<- bool) {
 		defer wg.Done()
 
-		select {
-		case <-ctx.Done():
-			logger.Debugf("Got context's Done() signal, leaving.")
-			leaving = true
-			syncBus <- eventBusData{
-				leaving: true,
-			}
-			return
-		case notif := <-syncBus:
-			if notif.leaving {
-				logger.Debugf("Got syncBus' leaving signal, leaving.")
+		for {
+			select {
+			case <-done:
+				logger.Debugf("Got context's Done() signal, leaving.")
+				leaving = true
+				cancelCallback <- true
+				return
+			case <-cancelContext:
+				leaving = true
 				return
 			}
 		}
-	}()
+	}(ctx.Done(), cancelContext, cancelCallback)
 
 	// Manages the event processing avoiding blocking the watcher's go routines.
 	// This will listen to syncBus and call the events handlers/callbacks.
 	wg.Add(1)
-	go func(bus <-chan eventBusData) {
+	go func(bus <-chan eventBusData, cancelCallback <-chan bool) {
 		defer wg.Done()
 
-		for busData := range bus {
-			// We got a notification that we are leaving so drop it all.
-			if busData.leaving {
+		for {
+			select {
+			case <-cancelCallback:
 				return
-			}
-
-			subscribers, found := mngr.subscribers[busData.evType]
-			if !found || len(subscribers) == 0 {
-				logger.Debugf("No subscriber found for event: %s, returning.", busData.evType)
-				continue
-			}
-
-			keepMe := make([]*eventSubscriber, 0)
-			for _, curr := range mngr.subscribers[busData.evType] {
-				logger.Debugf("Running registered callback for event: %s", busData.evType)
-				renew := curr.cb(busData.evType, curr.data, busData.data)
-				if renew {
-					keepMe = append(keepMe, curr)
+			case busData := <-bus:
+				subscribers, found := mngr.subscribers[busData.evType]
+				if !found || len(subscribers) == 0 {
+					logger.Debugf("No subscriber found for event: %s, returning.", busData.evType)
+					continue
 				}
-				logger.Debugf("Returning from event %q subscribed callback, should renew?: %+v", busData.evType, renew)
+
+				keepMe := make([]*eventSubscriber, 0)
+				for _, curr := range mngr.subscribers[busData.evType] {
+					logger.Debugf("Running registered callback for event: %s", busData.evType)
+					renew := curr.cb(busData.evType, curr.data, busData.data)
+					if renew {
+						keepMe = append(keepMe, curr)
+					}
+					logger.Debugf("Returning from event %q subscribed callback, should renew?: %t", busData.evType, renew)
+				}
+
+				mngr.subscribers[busData.evType] = keepMe
+
+				// No more subscribers for this event type, delete it from the subscribers map.
+				if len(keepMe) == 0 {
+					logger.Debugf("No more subscribers left for evType: %s", busData.evType)
+					delete(mngr.subscribers, busData.evType)
+				}
+
+				// No more subscribers at all, we have nothing more left to do here.
+				if len(mngr.subscribers) == 0 {
+					logger.Debugf("No subscribers left, leaving")
+					break
+				}
 			}
-			mngr.subscribers[busData.evType] = keepMe
 		}
-	}(syncBus)
+	}(syncBus, cancelCallback)
 
 	// This control struct manages the registered watchers, when it gets to len()
 	// down to zero means all watchers are done and we can signal the other 2 control
@@ -235,7 +251,7 @@ func (mngr *Manager) Run(ctx context.Context) {
 		control.add(curr.ID())
 		wg.Add(1)
 
-		go func(bus chan<- eventBusData, watcher Watcher) {
+		go func(bus chan<- eventBusData, watcher Watcher, cancelContext chan<- bool, cancelCallback chan<- bool) {
 			var evType string
 			var evData interface{}
 			var err error
@@ -245,7 +261,7 @@ func (mngr *Manager) Run(ctx context.Context) {
 			for renew := true; renew; {
 				renew, evType, evData, err = watcher.Run(ctx)
 
-				logger.Infof("Watcher(%s) returned event: %s, should renew?: %t", watcher.ID(), evType, renew)
+				logger.Debugf("Watcher(%s) returned event: %q, should renew?: %t", watcher.ID(), evType, renew)
 
 				if leaving {
 					break
@@ -262,11 +278,10 @@ func (mngr *Manager) Run(ctx context.Context) {
 
 			if !leaving && control.del(watcher.ID()) == 0 {
 				logger.Debugf("All watchers are finished, signaling to leave.")
-				bus <- eventBusData{
-					leaving: true,
-				}
+				cancelContext <- true
+				cancelCallback <- true
 			}
-		}(syncBus, curr)
+		}(syncBus, curr, cancelContext, cancelCallback)
 	}
 
 	wg.Wait()
