@@ -233,6 +233,11 @@ func run(ctx context.Context) {
 		}
 
 		newMetadata = evData.Data.(*metadata.Descriptor)
+		if newMetadata == nil {
+			logger.Info("Metadata event watcher didn't pass in the metadata, ignoring.")
+			return true
+		}
+
 		runUpdate(ctx)
 		oldMetadata = newMetadata
 

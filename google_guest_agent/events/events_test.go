@@ -199,3 +199,63 @@ func (tc *testCancel) Run(ctx context.Context) (bool, string, interface{}, error
 	time.Sleep(tc.timeout)
 	return true, tc.watcherID + ",test-event", nil, nil
 }
+
+func TestComplexEventData(t *testing.T) {
+	watcherID := "test-watcher"
+	timeout := (1 * time.Second) / 100
+
+	err := initWatchers([]Watcher{
+		&testComplexEventData{
+			watcherID: watcherID,
+			timeout:   timeout,
+		},
+	})
+
+	if err != nil {
+		t.Fatalf("Failed to init/register watcher: %+v", err)
+	}
+
+	eventManager, err := New(&Config{Watchers: []string{watcherID}})
+	if err != nil {
+		t.Fatalf("Failed to init event manager: %+v", err)
+	}
+
+	eventManager.Subscribe("test-watcher,test-event", nil, func(evType string, data interface{}, evData *EventData) bool {
+		t.Errorf("Expected to have canceled before calling callback")
+		cData := evData.Data.(*complexData)
+		if cData == nil {
+			t.Errorf("Wrong event data, expected a pointer, got nil")
+		}
+
+		if cData.name != "complex-data" {
+			t.Errorf("Wrong complex data, expected: complex-data, got: %s", cData.name)
+		}
+		return true
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		time.Sleep(timeout / 2)
+		cancel()
+	}()
+
+	eventManager.Run(ctx)
+}
+
+type complexData struct {
+	name string
+}
+
+type testComplexEventData struct {
+	watcherID string
+	timeout   time.Duration
+}
+
+func (tc *testComplexEventData) ID() string {
+	return tc.watcherID
+}
+
+func (tc *testComplexEventData) Run(ctx context.Context) (bool, string, interface{}, error) {
+	time.Sleep(tc.timeout)
+	return true, tc.watcherID + ",test-event", &complexData{name: "complex-data"}, nil
+}
