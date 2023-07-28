@@ -61,7 +61,7 @@ func readAndWriteRootCACert(name uefi.VariableName, outputFile string) error {
 		return fmt.Errorf("unable to read root CA cert file contents: %w", err)
 	}
 
-	if err := verifyCertificate(rootCACert.Content); err != nil {
+	if _, err := parseCertificate(rootCACert.Content); err != nil {
 		return fmt.Errorf("unable to verify Root CA cert: %w", err)
 	}
 
@@ -116,8 +116,8 @@ func extractKey(importBlob *tpm.ImportBlob) ([]byte, error) {
 }
 
 // fetchAndWriteClientCredentials fetches encrypted client credentials from MDS,
-// extracts Key Encryption Key (KEK) from vTPM, decrypts the client credentials using KEK
-// and writes it to the output file.
+// extracts Key Encryption Key (KEK) from vTPM, decrypts the client credentials using KEK,
+// verifies these credentials are signed by root CA and writes it to the output file.
 func fetchAndWriteClientCredentials(ctx context.Context, outputFile string) error {
 	resp, err := getClientCredentials(ctx, metadata.New())
 	if err != nil {
@@ -131,6 +131,10 @@ func fetchAndWriteClientCredentials(ctx context.Context, outputFile string) erro
 
 	plaintext, err := decrypt(dek, resp.GetEncryptedCredentials(), nil)
 	if err != nil {
+		return err
+	}
+
+	if err := verifySign(plaintext, filepath.Join(defaultCredsDir, rootCACertFileName)); err != nil {
 		return err
 	}
 
