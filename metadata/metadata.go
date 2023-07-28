@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -260,7 +261,7 @@ func (c *Client) retry(ctx context.Context, cfg requestConfig) (string, error) {
 		resp, err := c.do(ctx, cfg)
 
 		// If the context was canceled just return the error and don't retry.
-		if err != nil && err == context.Canceled {
+		if err != nil && errors.Is(err, context.Canceled) {
 			return "", err
 		}
 
