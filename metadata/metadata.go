@@ -372,6 +372,13 @@ func (c *Client) do(ctx context.Context, cfg requestConfig) (string, error) {
 
 	req.Header.Add("Metadata-Flavor", "Google")
 	resp, err := c.httpClient.Do(req)
+
+	// If we are canceling httpClient will also wrap the context's error so
+	// check first the context.
+	if ctx.Err() != nil {
+		return "", ctx.Err()
+	}
+
 	if err != nil {
 		return "", fmt.Errorf("error connecting to metadata server: %+v", err)
 	}
@@ -380,10 +387,6 @@ func (c *Client) do(ctx context.Context, cfg requestConfig) (string, error) {
 	switch resp.StatusCode {
 	case 404, 412:
 		return "", fmt.Errorf(statusCodeMsg, resp.StatusCode)
-	}
-
-	if ctx.Err() != nil {
-		return "", ctx.Err()
 	}
 
 	if cfg.hang {
