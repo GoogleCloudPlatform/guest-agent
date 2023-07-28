@@ -14,7 +14,10 @@
 
 package agentcrypto
 
-import "testing"
+import (
+	"bytes"
+	"testing"
+)
 
 const validCertPEM = `
 -----BEGIN CERTIFICATE-----
@@ -51,13 +54,33 @@ yE+vPxsiUkvQHdO2fojCkY8jg70jxM+gu59tPDNbw3Uh/2Ij310FgTHsnGQMyA==
 -----END CERTIFICATE-----`
 
 func TestVerifyCertificate(t *testing.T) {
-	if err := VerifyCertificate([]byte(validCertPEM)); err != nil {
-		t.Errorf("VerifyCertificate(%s) failed unexpectedly with error: %v", validCertPEM, err)
+	if err := verifyCertificate([]byte(validCertPEM)); err != nil {
+		t.Errorf("verifyCertificate(%s) failed unexpectedly with error: %v", validCertPEM, err)
 	}
 }
 
 func TestVerifyCertificateError(t *testing.T) {
-	if err := VerifyCertificate([]byte(invalidCertPEM)); err == nil {
-		t.Errorf("VerifyCertificate(%s) succeeded unexpectedly for invalid certificate, want error", invalidCertPEM)
+	if err := verifyCertificate([]byte(invalidCertPEM)); err == nil {
+		t.Errorf("verifyCertificate(%s) succeeded unexpectedly for invalid certificate, want error", invalidCertPEM)
+	}
+}
+
+func TestEncryptDecrypt(t *testing.T) {
+	// 32 byte key.
+	key := []byte("AES256Key-32Characters1234567890")
+	plaintext := []byte("testplaintext")
+
+	ciphertext, err := encrypt(key, plaintext, nil)
+	if err != nil {
+		t.Errorf("encrypt(%s,%s) failed unexpectedly with error: %v", key, plaintext, err)
+	}
+
+	got, err := decrypt(key, ciphertext, nil)
+	if err != nil {
+		t.Errorf("decrypt(%s,%s) failed unexpectedly with error: %v", string(key), string(ciphertext), err)
+	}
+
+	if !bytes.Equal(got, plaintext) {
+		t.Errorf("decrypt(%s,%s) = %s want %s", string(key), string(ciphertext), string(got), string(plaintext))
 	}
 }

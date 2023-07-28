@@ -18,10 +18,12 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
+
+	"github.com/google/tink/go/aead/subtle"
 )
 
-// VerifyCertificate validates certificate is in valid PEM format.
-func VerifyCertificate(cert []byte) error {
+// verifyCertificate validates certificate is in valid PEM format.
+func verifyCertificate(cert []byte) error {
 	block, _ := pem.Decode(cert)
 	if block == nil {
 		return fmt.Errorf("failed to parse PEM certificate")
@@ -32,4 +34,22 @@ func VerifyCertificate(cert []byte) error {
 	}
 
 	return nil
+}
+
+// encrypt encrypts plain text using AES GCM algorithm.
+func encrypt(aesKey []byte, plainText []byte, associatedData []byte) ([]byte, error) {
+	cipher, err := subtle.NewAESGCM(aesKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize cipher: %v", err)
+	}
+	return cipher.Encrypt(plainText, associatedData)
+}
+
+// decrypt decrypts AES GCM encrypted cipher text.
+func decrypt(aesKey []byte, cipherText []byte, associatedData []byte) ([]byte, error) {
+	cipher, err := subtle.NewAESGCM(aesKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize cipher: %v", err)
+	}
+	return cipher.Decrypt(cipherText, associatedData)
 }
