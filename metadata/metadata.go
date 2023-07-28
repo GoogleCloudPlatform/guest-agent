@@ -50,7 +50,6 @@ type MDSClientInterface interface {
 
 // requestConfig is used internally to configure an http request given its context.
 type requestConfig struct {
-	method     string
 	baseURL    string
 	hang       bool
 	recursive  bool
@@ -280,7 +279,6 @@ func (c *Client) retry(ctx context.Context, cfg requestConfig) (string, error) {
 // GetKey gets a specific metadata key.
 func (c *Client) GetKey(ctx context.Context, key string) (string, error) {
 	cfg := requestConfig{
-		method:  "GET",
 		baseURL: c.metadataURL + key,
 	}
 	return c.retry(ctx, cfg)
@@ -298,7 +296,6 @@ func (c *Client) Get(ctx context.Context) (*Descriptor, error) {
 
 func (c *Client) get(ctx context.Context, hang bool) (*Descriptor, error) {
 	cfg := requestConfig{
-		method:  "GET",
 		baseURL: c.metadataURL,
 		timeout: defaultTimeout,
 	}
@@ -367,7 +364,7 @@ func (c *Client) do(ctx context.Context, cfg requestConfig) (string, error) {
 		finalURL = fmt.Sprintf("%s/?%s", finalURL, strings.Join(urlTokens, "&"))
 	}
 
-	req, err := http.NewRequestWithContext(ctx, cfg.method, finalURL, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", finalURL, nil)
 	if err != nil {
 		return "", err
 	}

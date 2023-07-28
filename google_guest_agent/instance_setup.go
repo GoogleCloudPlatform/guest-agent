@@ -142,7 +142,6 @@ func agentInit(ctx context.Context) {
 		for newMetadata == nil {
 			logger.Debugf("populate first time metadata...")
 			newMetadata, _ = mdsClient.Get(ctx)
-			time.Sleep(1 * time.Second)
 		}
 
 		// Disable overcommit accounting; e2 instances only.
