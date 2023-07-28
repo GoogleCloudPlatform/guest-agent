@@ -18,19 +18,48 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
+	"os"
 
 	"github.com/google/tink/go/aead/subtle"
 )
 
-// verifyCertificate validates certificate is in valid PEM format.
-func verifyCertificate(cert []byte) error {
+// parseCertificate validates certificate is in valid PEM format.
+func parseCertificate(cert []byte) (*x509.Certificate, error) {
 	block, _ := pem.Decode(cert)
 	if block == nil {
-		return fmt.Errorf("failed to parse PEM certificate")
+		return nil, fmt.Errorf("failed to parse PEM certificate")
 	}
 
-	if _, err := x509.ParseCertificate(block.Bytes); err != nil {
-		return fmt.Errorf("failed to parse certificate: %w", err)
+	x509Cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse certificate: %w", err)
+	}
+
+	return x509Cert, nil
+}
+
+// verifySign verifies the client certificate is valid and signed by root CA.
+func verifySign(cert []byte, rootCAFile string) error {
+	caCertPEM, err := os.ReadFile(rootCAFile)
+	if err != nil {
+		return fmt.Errorf("failed to read CA PEM file for verifying signature: %w", err)
+	}
+
+	x509Cert, err := parseCertificate(cert)
+	if err != nil {
+		return fmt.Errorf("failed to parse client certificate for verifying signature: %w", err)
+	}
+
+	roots := x509.NewCertPool()
+	roots.AppendCertsFromPEM(caCertPEM)
+
+	opts := x509.VerifyOptions{
+		Roots:     roots,
+		KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+	}
+
+	if _, err := x509Cert.Verify(opts); err != nil {
+		return fmt.Errorf("failed to verify if client certificate against root CA %q: %w", rootCAFile, err)
 	}
 
 	return nil

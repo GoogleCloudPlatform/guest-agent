@@ -16,6 +16,8 @@ package agentcrypto
 
 import (
 	"bytes"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -53,15 +55,15 @@ TZZyzmEOyclm3UGFYe82P/iDFt+CeQ3NpmBg+GoaVCuWAARJN/KfglbLyyYygcQq
 yE+vPxsiUkvQHdO2fojCkY8jg70jxM+gu59tPDNbw3Uh/2Ij310FgTHsnGQMyA==
 -----END CERTIFICATE-----`
 
-func TestVerifyCertificate(t *testing.T) {
-	if err := verifyCertificate([]byte(validCertPEM)); err != nil {
-		t.Errorf("verifyCertificate(%s) failed unexpectedly with error: %v", validCertPEM, err)
+func TestParseCertificate(t *testing.T) {
+	if _, err := parseCertificate([]byte(validCertPEM)); err != nil {
+		t.Errorf("parseCertificate(%s) failed unexpectedly with error: %v", validCertPEM, err)
 	}
 }
 
-func TestVerifyCertificateError(t *testing.T) {
-	if err := verifyCertificate([]byte(invalidCertPEM)); err == nil {
-		t.Errorf("verifyCertificate(%s) succeeded unexpectedly for invalid certificate, want error", invalidCertPEM)
+func TestParseCertificateError(t *testing.T) {
+	if _, err := parseCertificate([]byte(invalidCertPEM)); err == nil {
+		t.Errorf("parseCertificate(%s) succeeded unexpectedly for invalid certificate, want error", invalidCertPEM)
 	}
 }
 
@@ -82,5 +84,115 @@ func TestEncryptDecrypt(t *testing.T) {
 
 	if !bytes.Equal(got, plaintext) {
 		t.Errorf("decrypt(%s,%s) = %s want %s", string(key), string(ciphertext), string(got), string(plaintext))
+	}
+}
+
+const cacert = `
+-----BEGIN CERTIFICATE-----
+MIIDbTCCAlWgAwIBAgIUFTF0rnA2LoffIJEKSh+rQcmehSIwDQYJKoZIhvcNAQEL
+BQAwRTELMAkGA1UEBhMCQVUxEzARBgNVBAgMClNvbWUtU3RhdGUxITAfBgNVBAoM
+GEludGVybmV0IFdpZGdpdHMgUHR5IEx0ZDAgFw0yMzA3MjgyMjI3MTdaGA8zMDIy
+MTEyODIyMjcxN1owRTELMAkGA1UEBhMCQVUxEzARBgNVBAgMClNvbWUtU3RhdGUx
+ITAfBgNVBAoMGEludGVybmV0IFdpZGdpdHMgUHR5IEx0ZDCCASIwDQYJKoZIhvcN
+AQEBBQADggEPADCCAQoCggEBAKiWs/hXZgTtFkpFvdXO/nLpLJSCq5rwqAJauTmj
+Y78Za1QmgaqCcguakKf/hb+MxRL9h9qJVBAQkNZv0nChoTJyD6YF5hh4DDrQCPuh
+1wvVsUhUllIbKsJbjQmdkOb3A5fMoe1ki4BLsr1CtJfJVj1+ifR+7hNkD3fW2sls
+XZlrNZRmbMKq84KRBWTSSxhjYZGd2cCGpecJ2fWuva9QhairdnB4TORAfjiyH+5v
+GEwXWC9gyDIIXWDG/kxwDDnh7kub0UsMf/neLv0hejpW/pfmvt32IoMaTEGFDaj7
+lhTo7UVQw/XCFWqElsi8gHXR+/UdzbON5a8GiyjWJq5SThsCAwEAAaNTMFEwHQYD
+VR0OBBYEFPvD/mUJgRgzLmWCD5zFNglzMb55MB8GA1UdIwQYMBaAFPvD/mUJgRgz
+LmWCD5zFNglzMb55MA8GA1UdEwEB/wQFMAMBAf8wDQYJKoZIhvcNAQELBQADggEB
+ABUr0RNasEZ39wM1CDE/qZDo+gBMGWH8gE/x152KPvzvJZmI96LkYuKzmbIrvogJ
+rfGYkAP2LYc8bX6zs4e2VycF0pml7ARKHyinzDdcwXOKzg9gGanoZw4wXEtxfWSl
+GbmNplmhmMpEnrtTNeDbqGWvmO/1fziNduimNVVu1iltNYEszE/ch8AlMT7flfNm
+JnhzvUUnGeXDiWUIJdneDfXopatOboL/0HimnfNK6//NKUlMCQOfNbNND+372jhK
+B3V0o4sGyoh8/Jlas+SqEtVKv+jfNfAG0urLzJc4Zn2uc2chpZnD8DxkmzA5nJCf
++5xLOukYO2I5KMgyYkYNUXs=
+-----END CERTIFICATE-----
+`
+
+func TestVerifySign(t *testing.T) {
+	// Fake self signed ceritificates for testing.
+	client := `
+-----BEGIN CERTIFICATE-----
+MIIDADCCAegCAQEwDQYJKoZIhvcNAQELBQAwRTELMAkGA1UEBhMCQVUxEzARBgNV
+BAgMClNvbWUtU3RhdGUxITAfBgNVBAoMGEludGVybmV0IFdpZGdpdHMgUHR5IEx0
+ZDAgFw0yMzA3MjgyMjI3NDZaGA8zMDIyMTEyODIyMjc0NlowRTELMAkGA1UEBhMC
+QVUxEzARBgNVBAgMClNvbWUtU3RhdGUxITAfBgNVBAoMGEludGVybmV0IFdpZGdp
+dHMgUHR5IEx0ZDCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBANxAeYva
+w0J52P9e2IXPEyyJncOKOSGxCWqf0yHpuQ95STMMrgVSodN1Jdrpd2DPOqOYIriK
+uHw1L4DCm5/yGP7WznN/JOORoJTZ5qJXBXNNQZxf1d5qJeBWtFnVv2pAPwFM/c8j
+YNFCjTxAHjEMfZN0uXt1ELa6OkYCwxxiVq+Z6QT47xhvQHBzCFhPCaXy8ezvBanU
+m2AJ2O3HYu9JCy37baDsyVlhrt1qRTKG3JFCgqGEs2vkFo25ebv0Nq8crtT8J6wz
+YWbIpB56v+299f7jqStjljapG+nMrSbk8BRvMPAlg8Hg6mJ3RQgW5DgKE/7BSgue
+U2oF7ODsKjF5xesCAwEAATANBgkqhkiG9w0BAQsFAAOCAQEAnbriOFcw2b/1zqfr
+M3FK3TAjcD+InKpY/bNjhdbfCRgO3WYdnWsVU437vKkiJH0tAOAzdR3Yd5xpLkuS
+uUjIiY4VTR10tZxmFuyAq87NZx4zMCJ7XNRQtDU5o+EUyZVV7l2fwbS31unCZQn5
+10nSg5TQE3kZ4u+3x4PZgSbMhIY8P5Q/ZjAKVKk0hnT1ClQ5LQwetcDR7KMq9DpE
+sC6BD/ElCi0RJrZqVVccAhumf9NBk/qWf1E4njlmYLmqNrfZGEfbxiKAOsZFYaCV
+p/45VCE10OS3mYEFwJmQjH5NoqaSGxWU28reovEEmrDFoGYfkMQbxZzay0LURXt7
+aSrX4A==
+-----END CERTIFICATE-----
+	`
+
+	root := filepath.Join(t.TempDir(), "root.ca")
+	if err := os.WriteFile(root, []byte(cacert), 0644); err != nil {
+		t.Fatalf("Failed to setup test CA cert file: %v", err)
+	}
+
+	if err := verifySign([]byte(client), root); err != nil {
+		t.Errorf("verifySign failed unexpectedly with error: %v", err)
+	}
+}
+
+func TestVerifySignError(t *testing.T) {
+	// Fake invalid self signed ceritificates for testing.
+	client := `
+-----BEGIN CERTIFICATE-----
+MIIDADCCAegCAQEwDQYJKoZIhvcNAQELBQAwRTELMAkGA1UEBhMCQVUxEzARBgNV
+BAgMClNvbWUtU3RhdGUxITAfBgNVBAoMGEludGVybmV0IFdpZGdpdHMgUHR5IEx0
+ZDAgFw0yMzA3MjgyMjM4NTBaGA8zMDIyMTEyODIyMzg1MFowRTELMAkGA1UEBhMC
+QVUxEzARBgNVBAgMClNvbWUtU3RhdGUxITAfBgNVBAoMGEludGVybmV0IFdpZGdp
+dHMgUHR5IEx0ZDCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAKW78MTO
+TO6F5/68B/e3qQYHRJ1OYv43+1U503fTnkQIyf1KtZvABmPIXmckDJAlTmtD8WQp
+lKVxCtSJ0aNNwj2epFBo/CoO5gIuFWjjxkiTfneCDxTF4SxqzVzvNuT0JtsG/Ysd
+2b2GCIhHbqM7YLCol6V++SSO+NTR2kUx6RQ+f4vvnKWfv2pRgl8jHhq29U71BKtY
+k1rH6kd13QOl71IMY3E2SRB9rONe0/lgrVyaKKJto5a0WVDgrjZP4e+0lpvtD3jN
+JOFcJYrrDHAdxjQMEqbT4b1+M/HEOwJMDI2nZAI2exDmN8R2Wburp7hKNeygA4AM
+7x91qP9jNfmS/wUCAwEAATANBgkqhkiG9w0BAQsFAAOCAQEAfv4sxcTTu66KU1h2
+ol2DY2JQSywsWY37cfrdL9D1u2sf/MSyAN+i6XcwG/WReoPS8jLFPWJBVHYFQOWt
+OVw93lVfFlFfz1GojCiddGZxZTWLhKSVvnkRVuRlOD7ph6UjowTUe+JrK5bh/pT8
+m+g/HmvC/0V5fgQFvtujjc3DkHzKk7HXj39OFsLVGvNDdI6f7+mdc7ib2qs5/uQt
+T+CR3W1LK08doMc8/SG74Q1i8eU1/AcX1QK1SQqX/TBF8EpCDII8BMTBp/KPp6JV
+GPQpdL4CXXRtVxz5wf/GuMKbgBe9nPh9bFoRrmH6B/LK9dckvZJG9wT7lzuCXZ3d
+zBbQ2g==
+-----END CERTIFICATE-----
+	`
+
+	root := filepath.Join(t.TempDir(), "root.ca")
+	if err := os.WriteFile(root, []byte(cacert), 0644); err != nil {
+		t.Fatalf("Failed to setup test CA cert file: %v", err)
+	}
+
+	tests := []struct {
+		name   string
+		client string
+	}{
+		{
+			name:   "invalid_signed_client",
+			client: client,
+		},
+		{
+			name:   "incorrectly_formatted_client",
+			client: invalidCertPEM,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if err := verifySign([]byte(test.client), root); err == nil {
+				t.Errorf("verifySign succeeded unexpectedly for %s, want error", test.name)
+			}
+		})
 	}
 }
