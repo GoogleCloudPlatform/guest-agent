@@ -32,7 +32,14 @@ import (
 const (
 	defaultMetadataURL = "http://169.254.169.254/computeMetadata/v1/"
 	defaultEtag        = "NONE"
-	defaultTimeout     = 60
+
+	// defaultHangtimeout is the timeout parameter passed to metadata as the hang timeout.
+	defaultHangTimeout = 60
+
+	// defaultClientTimeout sets the http.Client time out, the delta of 10s between the
+	// defaultHangTimeout and client timeout should be enough to avoid canceling the context
+	// before headers and body are read.
+	defaultClientTimeout = 70
 )
 
 var (
@@ -73,7 +80,7 @@ func New() *Client {
 		metadataURL: defaultMetadataURL,
 		etag:        defaultEtag,
 		httpClient: &http.Client{
-			Timeout: defaultTimeout * time.Second,
+			Timeout: defaultClientTimeout * time.Second,
 		},
 	}
 }
@@ -318,7 +325,7 @@ func (c *Client) Get(ctx context.Context) (*Descriptor, error) {
 func (c *Client) get(ctx context.Context, hang bool) (*Descriptor, error) {
 	cfg := requestConfig{
 		baseURL:    c.metadataURL,
-		timeout:    defaultTimeout,
+		timeout:    defaultHangTimeout,
 		recursive:  true,
 		jsonOutput: true,
 	}
