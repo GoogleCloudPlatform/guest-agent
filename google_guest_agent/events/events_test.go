@@ -110,7 +110,7 @@ func TestRun(t *testing.T) {
 
 	eventManager.Run(context.Background())
 
-	if counter != maxCount-1 {
+	if counter != maxCount {
 		t.Errorf("Failed to increment callback counter, expected: %d, got: %d", maxCount, counter)
 	}
 }
@@ -152,7 +152,7 @@ func TestUnsubscribe(t *testing.T) {
 	}
 }
 
-func TestCancel(t *testing.T) {
+func TestCancelBeforeCallbacks(t *testing.T) {
 	watcherID := "test-watcher"
 	timeout := (1 * time.Second) / 100
 
@@ -198,4 +198,105 @@ func (tc *testCancel) ID() string {
 func (tc *testCancel) Run(ctx context.Context) (bool, string, interface{}, error) {
 	time.Sleep(tc.timeout)
 	return true, tc.watcherID + ",test-event", nil, nil
+}
+
+func TestCancelAfterCallbacks(t *testing.T) {
+	watcherID := "test-watcher"
+	timeout := (1 * time.Second) / 100
+
+	err := initWatchers([]Watcher{
+		&testCancel{
+			watcherID: watcherID,
+			timeout:   timeout,
+		},
+	})
+
+	if err != nil {
+		t.Fatalf("Failed to init/register watcher: %+v", err)
+	}
+
+	eventManager, err := New(&Config{Watchers: []string{watcherID}})
+	if err != nil {
+		t.Fatalf("Failed to init event manager: %+v", err)
+	}
+
+	eventManager.Subscribe("test-watcher,test-event", nil, func(evType string, data interface{}, evData *EventData) bool {
+		return true
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		time.Sleep(timeout * 10)
+		cancel()
+	}()
+
+	eventManager.Run(ctx)
+}
+
+type testCancelWatcher struct {
+	watcherID string
+	after     int
+}
+
+func (tc *testCancelWatcher) ID() string {
+	return tc.watcherID
+}
+
+func (tc *testCancelWatcher) Run(ctx context.Context) (bool, string, interface{}, error) {
+	time.Sleep(10 * time.Millisecond)
+	if tc.after == 0 {
+		return false, tc.watcherID + ",test-event", nil, nil
+	}
+	tc.after--
+	return true, tc.watcherID + ",test-event", nil, nil
+}
+
+func TestCancelCallbacksAndWatchers(t *testing.T) {
+	watcherID := "test-watcher"
+
+	tests := []struct {
+		cancelWatcherAfter    int
+		cancelSubscriberAfter int
+	}{
+		{10, 20},
+		{20, 10},
+		{10, 10},
+		{0, 0},
+		{100, 200},
+		{200, 100},
+		{100, 100},
+	}
+
+	for i, curr := range tests {
+		t.Run(fmt.Sprintf("test-%d", i), func(t *testing.T) {
+			cancelSubscriberAfter := curr.cancelSubscriberAfter
+
+			err := initWatchers([]Watcher{
+				&testCancelWatcher{
+					watcherID: watcherID,
+					after:     curr.cancelWatcherAfter,
+				},
+			})
+
+			if err != nil {
+				t.Fatalf("Failed to init/register watcher: %+v", err)
+			}
+
+			eventManager, err := New(&Config{Watchers: []string{watcherID}})
+			if err != nil {
+				t.Fatalf("Failed to init event manager: %+v", err)
+			}
+
+			eventManager.Subscribe("test-watcher,test-event", nil, func(evType string, data interface{}, evData *EventData) bool {
+				time.Sleep(1 * time.Millisecond)
+				if cancelSubscriberAfter == 0 {
+					return false
+				}
+				cancelSubscriberAfter--
+				return true
+			})
+
+			eventManager.Run(context.Background())
+		})
+	}
 }
