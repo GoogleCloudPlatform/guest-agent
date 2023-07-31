@@ -291,15 +291,15 @@ func (c *Client) retry(ctx context.Context, cfg requestConfig) (string, error) {
 func (c *Client) GetKey(ctx context.Context, key string, headers map[string]string) (string, error) {
 	// url.JoinPath first exists in go 1.19
 	key = strings.TrimPrefix(key, "/")
-	var reqUrl string
+	var reqURL string
 	if strings.HasSuffix(c.metadataURL, "/") {
-		reqUrl = c.metadataURL + key
+		reqURL = c.metadataURL + key
 	} else {
-		reqUrl = c.metadataURL + "/" + key
+		reqURL = c.metadataURL + "/" + key
 	}
 
 	cfg := requestConfig{
-		baseURL: reqUrl,
+		baseURL: reqURL,
 		headers: headers,
 	}
 	return c.retry(ctx, cfg)
