@@ -155,6 +155,8 @@ func run(ctx context.Context) {
 		logger.Errorf("Error parsing config %s: %s", cfgfile, err)
 	}
 
+	mdsClient = metadata.New()
+
 	agentInit(ctx)
 
 	// Previous request to metadata *may* not have worked becasue routes don't get added until agentInit.
