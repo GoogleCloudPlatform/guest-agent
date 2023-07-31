@@ -317,14 +317,14 @@ func (c *Client) Get(ctx context.Context) (*Descriptor, error) {
 
 func (c *Client) get(ctx context.Context, hang bool) (*Descriptor, error) {
 	cfg := requestConfig{
-		baseURL: c.metadataURL,
-		timeout: defaultTimeout,
+		baseURL:    c.metadataURL,
+		timeout:    defaultTimeout,
+		recursive:  true,
+		jsonOutput: true,
 	}
 
 	if hang {
 		cfg.hang = true
-		cfg.recursive = true
-		cfg.jsonOutput = true
 	}
 
 	resp, err := c.retry(ctx, cfg)
