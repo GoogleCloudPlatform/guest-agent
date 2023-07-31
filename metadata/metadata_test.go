@@ -56,7 +56,8 @@ func TestWatchMetadata(t *testing.T) {
 			WindowsKey{Exponent: "exponent", UserName: "username", Modulus: "modulus", ExpireOn: et, AddToAdministrators: nil},
 			WindowsKey{Exponent: "exponent", UserName: "username", Modulus: "modulus", ExpireOn: et, AddToAdministrators: func() *bool { ret := true; return &ret }()},
 		},
-		SSHKeys: []string{"name:ssh-rsa [KEY] hostname", "name:ssh-rsa [KEY] hostname"},
+		SSHKeys:          []string{"name:ssh-rsa [KEY] hostname", "name:ssh-rsa [KEY] hostname"},
+		DisableTelemetry: true,
 	}
 	for _, e := range []string{etag1, etag2} {
 		got, err := client.Watch(context.Background())
@@ -101,5 +102,42 @@ func TestBlockProjectKeys(t *testing.T) {
 		if md.Instance.Attributes.BlockProjectKeys != test.res {
 			t.Errorf("instance-level sshKeys didn't set block-project-keys (got %t expected %t)", md.Instance.Attributes.BlockProjectKeys, test.res)
 		}
+	}
+}
+
+func TestGetKey(t *testing.T) {
+	var gotHeaders http.Header
+	var gotReqURI string
+	wantValue := "value"
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotHeaders = r.Header
+		gotReqURI = r.RequestURI
+		fmt.Fprint(w, wantValue)
+	})
+	testsrv := httptest.NewServer(handler)
+	defer testsrv.Close()
+
+	client := New()
+	client.metadataURL = testsrv.URL
+
+	key := "key"
+	wantURI := "/" + key
+	headers := map[string]string{"key": "value"}
+	gotValue, err := client.GetKey(context.Background(), key, headers)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	headers["Metadata-Flavor"] = "Google"
+	for k, v := range headers {
+		if gotHeaders.Get(k) != v {
+			t.Fatalf("received headers does not contain all expected headers, want: %q, got: %q", headers, gotHeaders)
+		}
+	}
+	if wantValue != gotValue {
+		t.Errorf("did not get expected return value, got :%q, want: %q", gotValue, wantValue)
+	}
+	if gotReqURI != wantURI {
+		t.Errorf("did not get expected request uri, got :%q, want: %q", gotReqURI, wantURI)
 	}
 }

@@ -44,7 +44,7 @@ var (
 // MDSClientInterface is the minimum required Metadata Server interface for Guest Agent.
 type MDSClientInterface interface {
 	Get(context.Context) (*Descriptor, error)
-	GetKey(context.Context, string) (string, error)
+	GetKey(context.Context, string, map[string]string) (string, error)
 	Watch(context.Context) (*Descriptor, error)
 	WriteGuestAttributes(context.Context, string, string) error
 }
@@ -56,6 +56,7 @@ type requestConfig struct {
 	recursive  bool
 	jsonOutput bool
 	timeout    int
+	headers    map[string]string
 }
 
 // Client defines the public interface between the core guest agent and
@@ -164,6 +165,7 @@ type Attributes struct {
 	EnableWSFC            *bool
 	WSFCAddresses         string
 	WSFCAgentPort         string
+	DisableTelemetry      bool
 }
 
 // UnmarshalJSON unmarshals b into Attribute.
@@ -190,6 +192,7 @@ func (a *Attributes) UnmarshalJSON(b []byte) error {
 		WindowsKeys           WindowsKeys `json:"windows-keys"`
 		WSFCAddresses         string      `json:"wsfc-addrs"`
 		WSFCAgentPort         string      `json:"wsfc-agent-port"`
+		DisableTelemetry      string      `json:"disable-guest-telemetry"`
 	}
 	var temp inner
 	if err := json.Unmarshal(b, &temp); err != nil {
@@ -236,6 +239,13 @@ func (a *Attributes) UnmarshalJSON(b []byte) error {
 	if err == nil {
 		a.SecurityKey = mkbool(value)
 	}
+	value, err = strconv.ParseBool(temp.DisableTelemetry)
+	if err == nil {
+		a.DisableTelemetry = value
+	} else {
+		// Telemetry defaults to disabled.
+		a.DisableTelemetry = true
+	}
 	// So SSHKeys will be nil instead of []string{}
 	if temp.SSHKeys != "" {
 		a.SSHKeys = strings.Split(temp.SSHKeys, "\n")
@@ -278,9 +288,19 @@ func (c *Client) retry(ctx context.Context, cfg requestConfig) (string, error) {
 }
 
 // GetKey gets a specific metadata key.
-func (c *Client) GetKey(ctx context.Context, key string) (string, error) {
+func (c *Client) GetKey(ctx context.Context, key string, headers map[string]string) (string, error) {
+	// url.JoinPath first exists in go 1.19
+	key = strings.TrimPrefix(key, "/")
+	var reqURL string
+	if strings.HasSuffix(c.metadataURL, "/") {
+		reqURL = c.metadataURL + key
+	} else {
+		reqURL = c.metadataURL + "/" + key
+	}
+
 	cfg := requestConfig{
-		baseURL: c.metadataURL + key,
+		baseURL: reqURL,
+		headers: headers,
 	}
 	return c.retry(ctx, cfg)
 }
@@ -371,6 +391,9 @@ func (c *Client) do(ctx context.Context, cfg requestConfig) (string, error) {
 	}
 
 	req.Header.Add("Metadata-Flavor", "Google")
+	for k, v := range cfg.headers {
+		req.Header.Add(k, v)
+	}
 	resp, err := c.httpClient.Do(req)
 
 	// If we are canceling httpClient will also wrap the context's error so

@@ -79,7 +79,7 @@ func readAndWriteRootCACert(name uefi.VariableName, outputFile string) error {
 
 // getClientCredentials fetches encrypted credentials from MDS and unmarshal it into GuestCredentialsResponse.
 func getClientCredentials(ctx context.Context, client metadata.MDSClientInterface) (*pb.GuestCredentialsResponse, error) {
-	creds, err := client.GetKey(ctx, clientCertsKey)
+	creds, err := client.GetKey(ctx, clientCertsKey, nil)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get client credentials from MDS: %w", err)
 	}

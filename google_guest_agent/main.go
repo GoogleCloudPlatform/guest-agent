@@ -31,6 +31,8 @@ import (
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events"
 	mdsEvent "github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events/metadata"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events/sshtrustedca"
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/osinfo"
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/telemetry"
 	"github.com/GoogleCloudPlatform/guest-agent/metadata"
 	"github.com/GoogleCloudPlatform/guest-agent/utils"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
@@ -40,10 +42,9 @@ import (
 var (
 	programName              = "GCEGuestAgent"
 	version                  string
-	ticker                   = time.Tick(70 * time.Second)
 	oldMetadata, newMetadata *metadata.Descriptor
 	config                   *ini.File
-	osRelease                release
+	osInfo                   osinfo.OSInfo
 	action                   string
 	mdsClient                *metadata.Client
 )
@@ -148,10 +149,7 @@ func run(ctx context.Context) {
 
 	logger.Infof("GCE Agent Started (version %s)", version)
 
-	osRelease, err = getRelease()
-	if err != nil && runtime.GOOS != "windows" {
-		logger.Warningf("Couldn't detect OS release")
-	}
+	osInfo = osinfo.Get()
 
 	cfgfile := configPath
 	if runtime.GOOS == "windows" {
@@ -164,6 +162,33 @@ func run(ctx context.Context) {
 	}
 
 	agentInit(ctx)
+
+	// Previous request to metadata *may* not have worked becasue routes don't get added until agentInit.
+	if newMetadata == nil {
+		/// Error here doesn't matter, if we cant get metadata, we cant record telemetry.
+		newMetadata, err = mdsClient.Get(ctx)
+		if err != nil {
+			logger.Debugf("Error getting metdata: %v", err)
+		}
+	}
+	// Only record telemetry if we have metdata, and telemetry isnt disabled.
+	// Telemetry should onlyt be recorded once in an agents lifetime and is done on a best effort basis.
+	if newMetadata != nil && !newMetadata.Instance.Attributes.DisableTelemetry && !newMetadata.Project.Attributes.DisableTelemetry {
+		d := telemetry.Data{
+			AgentName:     programName,
+			AgentVersion:  version,
+			AgentArch:     runtime.GOARCH,
+			OS:            runtime.GOOS,
+			LongName:      osInfo.PrettyName,
+			ShortName:     osInfo.OS,
+			Version:       osInfo.VersionID,
+			KernelRelease: osInfo.KernelRelease,
+			KernelVersion: osInfo.KernelVersion,
+		}
+		if err := telemetry.Record(ctx, mdsClient, d); err != nil {
+			logger.Debugf("Error recording telemetry: %v", err)
+		}
+	}
 
 	eventsConfig := &events.Config{
 		Watchers: []string{
@@ -197,7 +222,7 @@ func run(ctx context.Context) {
 		defer pipeData.File.Close()
 
 		// The certificates key/endpoint is not cached, we can't rely on the metadata watcher data because of that.
-		certificate, err := mdsClient.GetKey(ctx, "oslogin/certificates")
+		certificate, err := mdsClient.GetKey(ctx, "oslogin/certificates", nil)
 		if err != nil && cachedCertificate != "" {
 			certificate = cachedCertificate
 			logger.Warningf("Failed to get certificate, assuming/using previously cached one.")
