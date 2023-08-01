@@ -87,6 +87,7 @@ func TestPipe(t *testing.T) {
 		if err := pipeData.File.Close(); err != nil {
 			t.Fatalf("Failed to close pipe(write end) file: %+v", err)
 		}
+		pipeData.Finished()
 	}()
 
 	pipeData.File.WriteString(testData)

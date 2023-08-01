@@ -225,7 +225,12 @@ func run(ctx context.Context) {
 
 		// Make sure we close the pipe after we've done writing to it.
 		pipeData := evData.Data.(*sshtrustedca.PipeData)
-		defer pipeData.File.Close()
+		defer func() {
+			if err := pipeData.File.Close(); err != nil {
+				logger.Errorf("Failed to close pipe: %+v", err)
+			}
+			pipeData.Finished()
+		}()
 
 		// The certificates key/endpoint is not cached, we can't rely on the metadata watcher data because of that.
 		certificate, err := mdsClient.GetKey(ctx, "oslogin/certificates", nil)

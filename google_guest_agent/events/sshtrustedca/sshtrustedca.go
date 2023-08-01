@@ -17,6 +17,7 @@ package sshtrustedca
 
 import (
 	"os"
+	"sync"
 )
 
 const (
@@ -30,7 +31,15 @@ const (
 
 // Watcher is the sshtrustedca event watcher implementation.
 type Watcher struct {
+	// pipePath points to the named pipe it's writing to.
 	pipePath string
+
+	// waitingWrite is a flag to inform the Watcher that the Handler has or
+	// hasn't finished writing.
+	waitingWrite bool
+
+	// mutex protects waitingWrite on concurrent accesses.
+	mutex sync.Mutex
 }
 
 // PipeData wraps the pipe event data.
@@ -38,6 +47,10 @@ type PipeData struct {
 	// File is the writeonly pipe's file descriptor. The user/handler must
 	// make sure to close it after processing the event.
 	File *os.File
+
+	// Finished is a callback used by the event handler to inform the write to
+	// the pipe is finished.
+	Finished func()
 }
 
 // New allocates and initializes a new Watcher.

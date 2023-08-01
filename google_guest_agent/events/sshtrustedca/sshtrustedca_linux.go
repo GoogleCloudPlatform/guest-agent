@@ -20,6 +20,7 @@ import (
 	"os"
 	"path/filepath"
 	"syscall"
+	"time"
 
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 )
@@ -48,13 +49,42 @@ func createNamedPipe(pipePath string) error {
 	return nil
 }
 
+// finishedCb is used by the event handler to communicate the write to the
+// pipe is finised, it's exposed via PipeData.Finished pointer.
+func (mp *Watcher) finishedCb() {
+	mp.setWaitingWrite(false)
+}
+
+func (mp *Watcher) isWaitingWrite() bool {
+	mp.mutex.Lock()
+	defer mp.mutex.Unlock()
+	return mp.waitingWrite
+}
+
+func (mp *Watcher) setWaitingWrite(val bool) {
+	mp.mutex.Lock()
+	defer mp.mutex.Unlock()
+	mp.waitingWrite = val
+}
+
 // Run listens to ssh_trusted_ca's pipe open calls and report back the event.
 func (mp *Watcher) Run(ctx context.Context) (bool, string, interface{}, error) {
 	var canceled bool
 
+	for mp.isWaitingWrite() {
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	// Channel used to cancel the context cancelation go routine.
+	// Used when the Watcher is returning to the event manager.
+	cancelContext := make(chan bool)
+	defer close(cancelContext)
+
 	// Cancelation handling code.
 	go func() {
 		select {
+		case <-cancelContext:
+			break
 		case <-ctx.Done():
 			canceled = true
 
@@ -95,5 +125,8 @@ func (mp *Watcher) Run(ctx context.Context) (bool, string, interface{}, error) {
 		return false, ReadEvent, nil, nil
 	}
 
-	return true, ReadEvent, &PipeData{File: pipeFile}, nil
+	cancelContext <- true
+	mp.setWaitingWrite(true)
+
+	return true, ReadEvent, &PipeData{File: pipeFile, Finished: mp.finishedCb}, nil
 }
