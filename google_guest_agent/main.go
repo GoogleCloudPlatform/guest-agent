@@ -130,16 +130,9 @@ func run(ctx context.Context) {
 		// Local logging is syslog; we will just use stdout in Linux.
 		opts.DisableLocalLogging = true
 	}
+
 	if os.Getenv("GUEST_AGENT_DEBUG") != "" {
 		opts.Debug = true
-	}
-
-	mdsClient = metadata.New()
-
-	var err error
-	newMetadata, err = mdsClient.Get(ctx)
-	if err == nil {
-		opts.ProjectName = newMetadata.Project.ProjectID
 	}
 
 	if err := logger.Init(ctx, opts); err != nil {
@@ -156,10 +149,13 @@ func run(ctx context.Context) {
 		cfgfile = winConfigPath
 	}
 
+	var err error
 	config, err = parseConfig(cfgfile)
 	if err != nil && !os.IsNotExist(err) {
 		logger.Errorf("Error parsing config %s: %s", cfgfile, err)
 	}
+
+	mdsClient = metadata.New()
 
 	agentInit(ctx)
 
@@ -171,6 +167,16 @@ func run(ctx context.Context) {
 			logger.Debugf("Error getting metdata: %v", err)
 		}
 	}
+
+	// Try to re-initialize logger now, we know after agentInit() is more likely to have metadata available.
+	// TODO: move all this metadata dependent code to its own metadata event handler.
+	if newMetadata != nil {
+		opts.ProjectName = newMetadata.Project.ProjectID
+		if err := logger.Init(ctx, opts); err != nil {
+			logger.Errorf("Error initializing logger: %v", err)
+		}
+	}
+
 	// Only record telemetry if we have metdata, and telemetry isnt disabled.
 	// Telemetry should onlyt be recorded once in an agents lifetime and is done on a best effort basis.
 	if newMetadata != nil && !newMetadata.Instance.Attributes.DisableTelemetry && !newMetadata.Project.Attributes.DisableTelemetry {
@@ -219,7 +225,12 @@ func run(ctx context.Context) {
 
 		// Make sure we close the pipe after we've done writing to it.
 		pipeData := evData.Data.(*sshtrustedca.PipeData)
-		defer pipeData.File.Close()
+		defer func() {
+			if err := pipeData.File.Close(); err != nil {
+				logger.Errorf("Failed to close pipe: %+v", err)
+			}
+			pipeData.Finished()
+		}()
 
 		// The certificates key/endpoint is not cached, we can't rely on the metadata watcher data because of that.
 		certificate, err := mdsClient.GetKey(ctx, "oslogin/certificates", nil)

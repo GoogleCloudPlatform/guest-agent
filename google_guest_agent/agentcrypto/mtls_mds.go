@@ -49,8 +49,6 @@ const (
 )
 
 var (
-	// defaultCredsDir is the directory location for MTLS MDS credentials.
-	defaultCredsDir = "/etc/pki/tls/certs/mds"
 	googleRootCACertUEFIVar = uefi.VariableName{Name: googleRootCACertEFIVarName, GUID: googleGUID}
 )
 
@@ -156,6 +154,9 @@ func fetchAndWriteClientCredentials(ctx context.Context, rootCA, outputFile stri
 //
 // curl --cacert /etc/pki/tls/certs/mds/root.crt -E /etc/pki/tls/certs/mds/client.key -H "MetadataFlavor: Google" https://169.254.169.254
 func Bootstrap(ctx context.Context) error {
+	// defaultCredsDir is the directory location for MTLS MDS credentials.
+	defaultCredsDir := "/etc/pki/tls/certs/mds"
+
 	// TODO: Finalize on where to store certificates on windows.
 	if runtime.GOOS == "windows" {
 		defaultCredsDir = `C:\Users`

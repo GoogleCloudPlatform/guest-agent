@@ -29,26 +29,26 @@ var (
 	// https://en.wikipedia.org/wiki/Microsoft_Windows_library_files#KERNEL32.DLL
 	kernelDLL = windows.NewLazySystemDLL("kernel32.dll")
 	// https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-getcurrentprocess
-	// Retrieves a pseudo handle for the current process.
+	// procGetCurrentProcess retrieves a pseudo handle for the current process.
 	procGetCurrentProcess = kernelDLL.NewProc("GetCurrentProcess")
 	// https://learn.microsoft.com/en-us/windows/win32/api/handleapi/nf-handleapi-closehandle
-	// Closes an open process object handle.
+	// procCloseHandle closes an open process object handle.
 	procCloseHandle = kernelDLL.NewProc("CloseHandle")
 	// https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-getfirmwareenvironmentvariablew
-	// Retrieves the value of the specified UEFI.
+	// procGetFirmwareEnvironmentVariableW retrieves the value of the specified UEFI.
 	procGetFirmwareEnvironmentVariableW = kernelDLL.NewProc("GetFirmwareEnvironmentVariableW")
 
 	// https://en.wikipedia.org/wiki/Microsoft_Windows_library_files#ADVAPI32.DLL
 	advapiDLL = windows.NewLazySystemDLL("advapi32.dll")
 	// https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-openprocesstoken
-	// Opens the access token (contains the security information for a logon session) associated for a process.
+	// procOpenProcessToken opens the access token (contains the security information for a logon session) associated for a process.
 	// Token identifies the user, the user's groups, and the user's privileges.
 	procOpenProcessToken = advapiDLL.NewProc("OpenProcessToken")
 	// https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-lookupprivilegevaluew
-	// Used to retrieve the locally unique identifier (LUID)
+	// procLookupPrivilegeValueW is used to retrieve the locally unique identifier (LUID)
 	procLookupPrivilegeValueW = advapiDLL.NewProc("LookupPrivilegeValueW")
 	// https://learn.microsoft.com/en-us/windows/win32/api/securitybaseapi/nf-securitybaseapi-adjusttokenprivileges
-	// Used for enabling the privileges on the access token.
+	// procAdjustTokenPrivileges is used for enabling the privileges on the access token.
 	procAdjustTokenPrivileges = advapiDLL.NewProc("AdjustTokenPrivileges")
 )
 
@@ -87,7 +87,6 @@ type TOKEN_PRIVILEGES struct {
 // ReadVariable reads UEFI variable and returns as byte array.
 // Throws an error if variable is invalid or empty.
 func ReadVariable(v VariableName) (*Variable, error) {
-
 	logger.Debugf("Enabling required %s priviliges for agent process", SE_SYSTEM_ENVIRONMENT_NAME)
 	if err := enablePrivilege(SE_SYSTEM_ENVIRONMENT_NAME); err != nil {
 		return nil, err
