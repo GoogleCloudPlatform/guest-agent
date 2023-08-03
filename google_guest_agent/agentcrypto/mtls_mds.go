@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/uefi"
 	"github.com/GoogleCloudPlatform/guest-agent/metadata"
@@ -38,8 +39,6 @@ const (
 	googleGUID = "8be4df61-93ca-11d2-aa0d-00e098032b8c"
 	// googleRootCACertEFIVarName is predefined string part of the UEFI variable name that holds Root CA cert.
 	googleRootCACertEFIVarName = "InstanceRootCACertificate"
-	// defaultCredsDir is the directory location for MTLS MDS credentials.
-	defaultCredsDir = "/etc/pki/tls/certs/mds"
 	// rootCACertFileName is the root CA cert.
 	rootCACertFileName = "root.crt"
 	// clientCredsFileName are client credentials, its basically the file
@@ -118,7 +117,7 @@ func extractKey(importBlob *tpm.ImportBlob) ([]byte, error) {
 // fetchAndWriteClientCredentials fetches encrypted client credentials from MDS,
 // extracts Key Encryption Key (KEK) from vTPM, decrypts the client credentials using KEK,
 // verifies these credentials are signed by root CA and writes it to the output file.
-func fetchAndWriteClientCredentials(ctx context.Context, outputFile string) error {
+func fetchAndWriteClientCredentials(ctx context.Context, rootCA, outputFile string) error {
 	resp, err := getClientCredentials(ctx, metadata.New())
 	if err != nil {
 		return err
@@ -134,7 +133,7 @@ func fetchAndWriteClientCredentials(ctx context.Context, outputFile string) erro
 		return err
 	}
 
-	if err := verifySign(plaintext, filepath.Join(defaultCredsDir, rootCACertFileName)); err != nil {
+	if err := verifySign(plaintext, rootCA); err != nil {
 		return err
 	}
 
@@ -155,13 +154,21 @@ func fetchAndWriteClientCredentials(ctx context.Context, outputFile string) erro
 //
 // curl --cacert /etc/pki/tls/certs/mds/root.crt -E /etc/pki/tls/certs/mds/client.key -H "MetadataFlavor: Google" https://169.254.169.254
 func Bootstrap(ctx context.Context) error {
+	// defaultCredsDir is the directory location for MTLS MDS credentials.
+	defaultCredsDir := "/etc/pki/tls/certs/mds"
+
+	// TODO: Finalize on where to store certificates on windows.
+	if runtime.GOOS == "windows" {
+		defaultCredsDir = `C:\Users`
+	}
+
 	logger.Infof("Fetching Root CA cert...")
 	if err := readAndWriteRootCACert(googleRootCACertUEFIVar, filepath.Join(defaultCredsDir, rootCACertFileName)); err != nil {
 		return fmt.Errorf("failed to read Root CA cert with an error: %w", err)
 	}
 
 	logger.Infof("Fetching client credentials...")
-	if err := fetchAndWriteClientCredentials(ctx, filepath.Join(defaultCredsDir, clientCredsFileName)); err != nil {
+	if err := fetchAndWriteClientCredentials(ctx, filepath.Join(defaultCredsDir, rootCACertFileName), filepath.Join(defaultCredsDir, clientCredsFileName)); err != nil {
 		return fmt.Errorf("failed to generate client credentials with an error: %w", err)
 	}
 
