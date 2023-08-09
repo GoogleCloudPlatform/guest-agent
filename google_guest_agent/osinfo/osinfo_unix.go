@@ -38,27 +38,21 @@ func parseOSRelease(osRelease string) (OSInfo, error) {
 	for _, line := range strings.Split(osRelease, "\n") {
 		var id = line
 		if id = strings.TrimPrefix(line, "ID="); id != line {
-			if len(id) > 0 && id[0] == '"' {
-				id = id[1:]
-			}
-			if len(id) > 0 && id[len(id)-1] == '"' {
-				id = id[:len(id)-1]
-			}
+			id = strings.Trim(id, `"`)
 			ret.OS = parseID(id)
 		}
 		if id = strings.TrimPrefix(line, "VERSION_ID="); id != line {
-			if len(id) > 0 && id[0] == '"' {
-				id = id[1:]
-			}
-			if len(id) > 0 && id[len(id)-1] == '"' {
-				id = id[:len(id)-1]
-			}
+			id = strings.Trim(id, `"`)
 			ret.VersionID = id
 			version, err := parseVersion(id)
 			if err != nil {
 				return ret, fmt.Errorf("couldn't parse version id: %v", err)
 			}
 			ret.Version = version
+		}
+		if name := strings.TrimPrefix(line, "PRETTY_NAME="); name != line {
+			name = strings.Trim(name, `"`)
+			ret.PrettyName = name
 		}
 	}
 	return ret, nil

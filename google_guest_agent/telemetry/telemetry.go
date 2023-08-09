@@ -81,6 +81,6 @@ func Record(ctx context.Context, client metadata.MDSClientInterface, d Data) err
 		"X-Google-Guest-Agent": formatGuestAgent(d),
 		"X-Google-Guest-OS":    formatGuestOS(d),
 	}
-	_, err := client.GetKey(ctx, "project", headers)
+	_, err := client.GetKey(ctx, "", headers)
 	return err
 }

@@ -54,11 +54,11 @@ func TestParseOSRelease(t *testing.T) {
 		want    OSInfo
 		wantErr bool
 	}{
-		{"sles 12", "ID=\"sles\"\nNAME=\"SLES\"\nVERSION=\"12-SP4\"\nVERSION_ID=12", OSInfo{OS: "sles", VersionID: "12", Version: Ver{12, 0, 0, 1}}, false},
-		{"sles 12.4", "ID=sles\nNAME=\"SLES\"\nVERSION=\"12-SP4\"\nVERSION_ID=\"12.4\"", OSInfo{OS: "sles", VersionID: "12.4", Version: Ver{12, 4, 0, 2}}, false},
-		{"debian 9 (stretch)", "ID=debian\nNAME=\"Debian GNU/Linux\"\nVERSION=\"9 (stretch)\"\nVERSION_ID=\"9\"", OSInfo{OS: "debian", VersionID: "9", Version: Ver{9, 0, 0, 1}}, false},
-		{"debian 9", "ID=\"debian\"\nNAME=\"Debian GNU/Linux\"\nVERSION=9\nVERSION_ID=\"9\"", OSInfo{OS: "debian", VersionID: "9", Version: Ver{9, 0, 0, 1}}, false},
-		{"error version parsing", "ID=\"debian\"\nNAME=\"Debian GNU/Linux\"\nVERSION=9\nVERSION_ID=\"something\"", OSInfo{OS: "debian", VersionID: "something"}, true},
+		{"sles 12", "ID=\"sles\"\nPRETTY_NAME=\"SLES\"\nVERSION=\"12-SP4\"\nVERSION_ID=12", OSInfo{OS: "sles", PrettyName: "SLES", VersionID: "12", Version: Ver{12, 0, 0, 1}}, false},
+		{"sles 12.4", "ID=sles\nPRETTY_NAME=\"SLES\"\nVERSION=\"12-SP4\"\nVERSION_ID=\"12.4\"", OSInfo{OS: "sles", PrettyName: "SLES", VersionID: "12.4", Version: Ver{12, 4, 0, 2}}, false},
+		{"debian 9 (stretch)", "ID=debian\nPRETTY_NAME=\"Debian GNU/Linux\"\nVERSION=\"9 (stretch)\"\nVERSION_ID=\"9\"", OSInfo{OS: "debian", PrettyName: "Debian GNU/Linux", VersionID: "9", Version: Ver{9, 0, 0, 1}}, false},
+		{"debian 9", "ID=\"debian\"\nPRETTY_NAME=\"Debian GNU/Linux\"\nVERSION=9\nVERSION_ID=\"9\"", OSInfo{OS: "debian", VersionID: "9", PrettyName: "Debian GNU/Linux", Version: Ver{9, 0, 0, 1}}, false},
+		{"error version parsing", "ID=\"debian\"\nPRETTY_NAME=\"Debian GNU/Linux\"\nVERSION=9\nVERSION_ID=\"something\"", OSInfo{OS: "debian", PrettyName: "Debian GNU/Linux", VersionID: "something"}, true},
 	}
 	for _, tc := range tests {
 		t.Run(tc.desc, func(t *testing.T) {
