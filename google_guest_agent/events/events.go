@@ -66,13 +66,14 @@ type EventData struct {
 }
 
 // EventCb defines the callback interface between watchers and subscribers. The arguments are:
+//   - ctx the app' context passed in from the manager's Run() call.
 //   - evType a string defining the what event type triggered the call.
 //   - data a user context pointer to be consumed by the callback.
 //   - evData a event specific data pointer.
 //
 // The callback should return true if it wants to renew, returning false will case the callback
 // to be unregistered/unsubscribed.
-type EventCb func(evType string, data interface{}, evData *EventData) bool
+type EventCb func(ctx context.Context, evType string, data interface{}, evData *EventData) bool
 
 type eventSubscriber struct {
 	data interface{}
@@ -214,7 +215,7 @@ func (mngr *Manager) Run(ctx context.Context) {
 				keepMe := make([]*eventSubscriber, 0)
 				for _, curr := range mngr.subscribers[busData.evType] {
 					logger.Debugf("Running registered callback for event: %s", busData.evType)
-					renew := curr.cb(busData.evType, curr.data, busData.data)
+					renew := curr.cb(ctx, busData.evType, curr.data, busData.data)
 					if renew {
 						keepMe = append(keepMe, curr)
 					}

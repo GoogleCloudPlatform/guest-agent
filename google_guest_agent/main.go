@@ -18,7 +18,6 @@ package main
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -33,6 +32,7 @@ import (
 	mdsEvent "github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events/metadata"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events/sshtrustedca"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/osinfo"
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/sshca"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/telemetry"
 	"github.com/GoogleCloudPlatform/guest-agent/metadata"
 	"github.com/GoogleCloudPlatform/guest-agent/utils"
@@ -226,64 +226,10 @@ func run(ctx context.Context) {
 		return
 	}
 
-	// TODO: move this event handler and its data types to its own package.
-	var cachedCertificate string
-	eventManager.Subscribe(sshtrustedca.ReadEvent, nil, func(evType string, data interface{}, evData *events.EventData) bool {
-		// There was some error on the pipe watcher, just ignore it.
-		if evData.Error != nil {
-			logger.Debugf("Not handling ssh trusted ca cert event, we got an error: %+v", evData.Error)
-			return true
-		}
-
-		// Make sure we close the pipe after we've done writing to it.
-		pipeData := evData.Data.(*sshtrustedca.PipeData)
-		defer func() {
-			if err := pipeData.File.Close(); err != nil {
-				logger.Errorf("Failed to close pipe: %+v", err)
-			}
-			pipeData.Finished()
-		}()
-
-		// The certificates key/endpoint is not cached, we can't rely on the metadata watcher data because of that.
-		certificate, err := mdsClient.GetKey(ctx, "oslogin/certificates", nil)
-		if err != nil && cachedCertificate != "" {
-			certificate = cachedCertificate
-			logger.Warningf("Failed to get certificate, assuming/using previously cached one.")
-		} else if err != nil {
-			logger.Errorf("Failed to get certificate from metadata server: %+v", err)
-			return true
-		}
-
-		// Keep a copy of the returned certificate for error fallback caching.
-		cachedCertificate = certificate
-		var certs Certificates
-		var outData []string
-
-		if err := json.Unmarshal([]byte(certificate), &certs); err != nil {
-			logger.Errorf("Failed to unmarshal certificate json: %+v", err)
-			return true
-		}
-
-		for _, curr := range certs.Certs {
-			outData = append(outData, curr.PublicKey)
-		}
-
-		outStr := strings.Join(outData, "\n")
-		n, err := pipeData.File.WriteString(outStr)
-		if err != nil {
-			logger.Errorf("Failed to write certificate to the write end of the pipe: %+v", err)
-			return true
-		}
-
-		if n != len(outStr) {
-			logger.Errorf("Wrote the wrong ammout of data, wrote %d bytes instead of %d bytes", n, len(certificate))
-		}
-
-		return true
-	})
+	sshca.Init(eventManager)
 
 	oldMetadata = &metadata.Descriptor{}
-	eventManager.Subscribe(mdsEvent.LongpollEvent, nil, func(evType string, data interface{}, evData *events.EventData) bool {
+	eventManager.Subscribe(mdsEvent.LongpollEvent, nil, func(ctx context.Context, evType string, data interface{}, evData *events.EventData) bool {
 		logger.Debugf("Handling metadata %q event.", evType)
 
 		// If metadata watcher failed there isn't much we can do, just ignore the event and
