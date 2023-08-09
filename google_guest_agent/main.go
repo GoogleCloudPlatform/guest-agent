@@ -18,6 +18,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -38,6 +39,16 @@ import (
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 	"github.com/go-ini/ini"
 )
+
+// Certificates wrapps a list of certificate authorities.
+type Certificates struct {
+	Certs []TrustedCert `json:"trustedCertificateAuthorities"`
+}
+
+// TrustedCert defines the object containing a public key.
+type TrustedCert struct {
+	PublicKey string `json:"publicKey"`
+}
 
 var (
 	programName              = "GCEGuestAgent"
@@ -215,6 +226,7 @@ func run(ctx context.Context) {
 		return
 	}
 
+	// TODO: move this event handler and its data types to its own package.
 	var cachedCertificate string
 	eventManager.Subscribe(sshtrustedca.ReadEvent, nil, func(evType string, data interface{}, evData *events.EventData) bool {
 		// There was some error on the pipe watcher, just ignore it.
@@ -244,13 +256,26 @@ func run(ctx context.Context) {
 
 		// Keep a copy of the returned certificate for error fallback caching.
 		cachedCertificate = certificate
+		var certs Certificates
+		var outData []string
 
-		n, err := pipeData.File.WriteString(certificate)
-		if err != nil {
-			logger.Errorf("Failed to write certificate to the write end of the pipe: %+v", err)
+		if err := json.Unmarshal([]byte(certificate), &certs); err != nil {
+			logger.Errorf("Failed to unmarshal certificate json: %+v", err)
+			return true
 		}
 
-		if n != len(certificate) {
+		for _, curr := range certs.Certs {
+			outData = append(outData, curr.PublicKey)
+		}
+
+		outStr := strings.Join(outData, "\n")
+		n, err := pipeData.File.WriteString(outStr)
+		if err != nil {
+			logger.Errorf("Failed to write certificate to the write end of the pipe: %+v", err)
+			return true
+		}
+
+		if n != len(outStr) {
 			logger.Errorf("Wrote the wrong ammout of data, wrote %d bytes instead of %d bytes", n, len(certificate))
 		}
 
