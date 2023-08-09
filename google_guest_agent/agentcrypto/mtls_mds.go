@@ -21,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"time"
 
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/uefi"
 	"github.com/GoogleCloudPlatform/guest-agent/metadata"
@@ -46,14 +47,30 @@ const (
 	clientCredsFileName = "client.key"
 	// clientCertsKey is the metadata server key at which client identity certificate is exposed.
 	clientCertsKey = "instance/credentials/certs"
+	// MTLSSchedulerID is the identifier used by job scheduler.
+	MTLSSchedulerID = "MTLS_MDS_Credential_Boostrapper"
+	// MTLSScheduleInterval is interval at which credential bootstrapper runs.
+	MTLSScheduleInterval = 48 * time.Hour
 )
 
 var (
 	googleRootCACertUEFIVar = uefi.VariableName{Name: googleRootCACertEFIVarName, GUID: googleGUID}
 )
 
+// CredsJob implements job scheduler interface for generating/rotating credentials.
+type CredsJob struct {
+	client metadata.MDSClientInterface
+}
+
+// New initializer new job.
+func New() *CredsJob {
+	return &CredsJob{
+		client: metadata.New(),
+	}
+}
+
 // readAndWriteRootCACert reads Root CA cert from UEFI variable and writes it to output file.
-func readAndWriteRootCACert(name uefi.VariableName, outputFile string) error {
+func (j *CredsJob) readAndWriteRootCACert(name uefi.VariableName, outputFile string) error {
 	rootCACert, err := uefi.ReadVariable(name)
 
 	if err != nil {
@@ -77,8 +94,8 @@ func readAndWriteRootCACert(name uefi.VariableName, outputFile string) error {
 }
 
 // getClientCredentials fetches encrypted credentials from MDS and unmarshal it into GuestCredentialsResponse.
-func getClientCredentials(ctx context.Context, client metadata.MDSClientInterface) (*pb.GuestCredentialsResponse, error) {
-	creds, err := client.GetKey(ctx, clientCertsKey, nil)
+func (j *CredsJob) getClientCredentials(ctx context.Context) (*pb.GuestCredentialsResponse, error) {
+	creds, err := j.client.GetKey(ctx, clientCertsKey, nil)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get client credentials from MDS: %w", err)
 	}
@@ -93,7 +110,7 @@ func getClientCredentials(ctx context.Context, client metadata.MDSClientInterfac
 
 // extractKey decrypts the key cipher text (Key encryption Key encrypted Data Dencryption Key)
 // through vTPM and returns the key (DEK) as plain text.
-func extractKey(importBlob *tpm.ImportBlob) ([]byte, error) {
+func (j *CredsJob) extractKey(importBlob *tpm.ImportBlob) ([]byte, error) {
 	rwc, err := tpm2.OpenTPM()
 	if err != nil {
 		return nil, fmt.Errorf("unable to open a channel to the TPM: %w", err)
@@ -117,13 +134,13 @@ func extractKey(importBlob *tpm.ImportBlob) ([]byte, error) {
 // fetchAndWriteClientCredentials fetches encrypted client credentials from MDS,
 // extracts Key Encryption Key (KEK) from vTPM, decrypts the client credentials using KEK,
 // verifies these credentials are signed by root CA and writes it to the output file.
-func fetchAndWriteClientCredentials(ctx context.Context, rootCA, outputFile string) error {
-	resp, err := getClientCredentials(ctx, metadata.New())
+func (j *CredsJob) fetchAndWriteClientCredentials(ctx context.Context, rootCA, outputFile string) error {
+	resp, err := j.getClientCredentials(ctx)
 	if err != nil {
 		return err
 	}
 
-	dek, err := extractKey(resp.GetKeyImportBlob())
+	dek, err := j.extractKey(resp.GetKeyImportBlob())
 	if err != nil {
 		return err
 	}
@@ -145,7 +162,7 @@ func fetchAndWriteClientCredentials(ctx context.Context, rootCA, outputFile stri
 	return nil
 }
 
-// Bootstrap generates the required credentials for MTLS MDS workflow.
+// Run generates the required credentials for MTLS MDS workflow.
 //
 // 1. Fetches, verifies and writes Root CA cert from UEFI variable to /etc/pki/tls/certs/mds/root.crt
 // 2. Fetches encrypted client credentials from MDS, decrypts it via vTPM and writes it to /etc/pki/tls/certs/mds/client.key
@@ -153,7 +170,7 @@ func fetchAndWriteClientCredentials(ctx context.Context, rootCA, outputFile stri
 // Example usage of these credentials to call HTTPS endpoint of MDS:
 //
 // curl --cacert /etc/pki/tls/certs/mds/root.crt -E /etc/pki/tls/certs/mds/client.key -H "MetadataFlavor: Google" https://169.254.169.254
-func Bootstrap(ctx context.Context) error {
+func (j *CredsJob) Run(ctx context.Context) (bool, error) {
 	// defaultCredsDir is the directory location for MTLS MDS credentials.
 	defaultCredsDir := "/etc/pki/tls/certs/mds"
 
@@ -163,14 +180,31 @@ func Bootstrap(ctx context.Context) error {
 	}
 
 	logger.Infof("Fetching Root CA cert...")
-	if err := readAndWriteRootCACert(googleRootCACertUEFIVar, filepath.Join(defaultCredsDir, rootCACertFileName)); err != nil {
-		return fmt.Errorf("failed to read Root CA cert with an error: %w", err)
+	if err := j.readAndWriteRootCACert(googleRootCACertUEFIVar, filepath.Join(defaultCredsDir, rootCACertFileName)); err != nil {
+		return true, fmt.Errorf("failed to read Root CA cert with an error: %v", err)
 	}
 
 	logger.Infof("Fetching client credentials...")
-	if err := fetchAndWriteClientCredentials(ctx, filepath.Join(defaultCredsDir, rootCACertFileName), filepath.Join(defaultCredsDir, clientCredsFileName)); err != nil {
-		return fmt.Errorf("failed to generate client credentials with an error: %w", err)
+	if err := j.fetchAndWriteClientCredentials(ctx, filepath.Join(defaultCredsDir, rootCACertFileName), filepath.Join(defaultCredsDir, clientCredsFileName)); err != nil {
+		return true, fmt.Errorf("failed to generate client credentials with an error: %v", err)
 	}
 
-	return nil
+	return true, nil
+}
+
+// ID returns the ID for this job.
+func (j *CredsJob) ID() string {
+	return MTLSSchedulerID
+}
+
+// Interval returns the interval at which job is executed.
+func (j *CredsJob) Interval() (time.Duration, bool) {
+	return MTLSScheduleInterval, true
+}
+
+// ShouldEnable returns true if MDS endpoint for fetching credentials is available on the VM.
+// Used for identifying if we want schedule bootstrapping and enable MDS mTLS credential rotation.
+func (j *CredsJob) ShouldEnable(ctx context.Context) bool {
+	_, err := j.client.GetKey(ctx, clientCertsKey, nil)
+	return err == nil
 }

@@ -27,6 +27,7 @@ import (
 func TestReadAndWriteRootCACert(t *testing.T) {
 	root := t.TempDir()
 	v := uefi.VariableName{Name: "testname", GUID: "testguid", RootDir: root}
+	j := &CredsJob{}
 
 	fakeUefi := []byte("attr" + validCertPEM)
 	path := filepath.Join(root, "testname-testguid")
@@ -37,7 +38,7 @@ func TestReadAndWriteRootCACert(t *testing.T) {
 	defer os.Remove(path)
 
 	crt := filepath.Join(root, "root.crt")
-	if err := readAndWriteRootCACert(v, crt); err != nil {
+	if err := j.readAndWriteRootCACert(v, crt); err != nil {
 		t.Errorf("readAndWriteRootCACert(%+v, %s) failed unexpectedly with error: %v", v, crt, err)
 	}
 
@@ -53,10 +54,11 @@ func TestReadAndWriteRootCACert(t *testing.T) {
 func TestReadAndWriteRootCACertError(t *testing.T) {
 	root := t.TempDir()
 	v := uefi.VariableName{Name: "not", GUID: "exist", RootDir: root}
+	j := &CredsJob{}
 
 	crt := filepath.Join(root, "root.crt")
 	// Non-existent UEFI variable.
-	if err := readAndWriteRootCACert(v, crt); err == nil {
+	if err := j.readAndWriteRootCACert(v, crt); err == nil {
 		t.Errorf("readAndWriteRootCACert(%+v, %s) succeeded unexpectedly for non-existent UEFI variable, want error", v, crt)
 	}
 
@@ -69,32 +71,57 @@ func TestReadAndWriteRootCACertError(t *testing.T) {
 	}
 	defer os.Remove(path)
 
-	if err := readAndWriteRootCACert(v, crt); err == nil {
+	if err := j.readAndWriteRootCACert(v, crt); err == nil {
 		t.Errorf("readAndWriteRootCACert(%+v, %s) succeeded unexpectedly for invalid PEM certificate, want error", v, crt)
 	}
 }
 
 func TestGetClientCredentials(t *testing.T) {
 	ctx := context.WithValue(context.Background(), fakes.MDSOverride, "succeed")
-	client := fakes.NewFakeMDSClient()
+	j := &CredsJob{
+		client: fakes.NewFakeMDSClient(),
+	}
 
-	if _, err := getClientCredentials(ctx, client); err != nil {
+	if _, err := j.getClientCredentials(ctx); err != nil {
 		t.Errorf("getClientCredentials(ctx, client) failed unexpectedly with error: %v", err)
 	}
 }
 
 func TestGetClientCredentialsError(t *testing.T) {
 	ctx := context.Background()
-	client := fakes.NewFakeMDSClient()
-
+	j := &CredsJob{
+		client: fakes.NewFakeMDSClient(),
+	}
 	tests := []string{"fail_mds_connect", "fail_unmarshal"}
 
 	for _, test := range tests {
 		t.Run(test, func(t *testing.T) {
 			ctx = context.WithValue(ctx, fakes.MDSOverride, test)
-			if _, err := getClientCredentials(ctx, client); err == nil {
+			if _, err := j.getClientCredentials(ctx); err == nil {
 				t.Errorf("getClientCredentials(ctx, client) succeeded for %s, want error", test)
 			}
 		})
+	}
+}
+
+func TestShouldEnable(t *testing.T) {
+	ctx := context.WithValue(context.Background(), fakes.MDSOverride, "succeed")
+	j := &CredsJob{
+		client: fakes.NewFakeMDSClient(),
+	}
+
+	if !j.ShouldEnable(ctx) {
+		t.Error("ShouldEnable(ctx) = false, want true")
+	}
+}
+
+func TestShouldEnableError(t *testing.T) {
+	ctx := context.WithValue(context.Background(), fakes.MDSOverride, "fail_mds_connect")
+	j := &CredsJob{
+		client: fakes.NewFakeMDSClient(),
+	}
+
+	if j.ShouldEnable(ctx) {
+		t.Error("ShouldEnable(ctx) = true, want false")
 	}
 }
