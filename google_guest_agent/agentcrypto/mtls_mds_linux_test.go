@@ -38,8 +38,14 @@ func TestReadAndWriteRootCACert(t *testing.T) {
 	defer os.Remove(path)
 
 	crt := filepath.Join(root, "root.crt")
-	if err := j.readAndWriteRootCACert(v, crt); err != nil {
-		t.Errorf("readAndWriteRootCACert(%+v, %s) failed unexpectedly with error: %v", v, crt, err)
+
+	ca, err := j.readRootCACert(v)
+	if err != nil {
+		t.Errorf("readRootCACert(%+v) failed unexpectedly with error: %v", v, err)
+	}
+
+	if err := j.writeRootCACert(ca.Content, crt); err != nil {
+		t.Errorf("writeRootCACert(%s, %s) failed unexpectedly with error: %v", string(ca.Content), crt, err)
 	}
 
 	got, err := os.ReadFile(crt)
@@ -56,10 +62,9 @@ func TestReadAndWriteRootCACertError(t *testing.T) {
 	v := uefi.VariableName{Name: "not", GUID: "exist", RootDir: root}
 	j := &CredsJob{}
 
-	crt := filepath.Join(root, "root.crt")
 	// Non-existent UEFI variable.
-	if err := j.readAndWriteRootCACert(v, crt); err == nil {
-		t.Errorf("readAndWriteRootCACert(%+v, %s) succeeded unexpectedly for non-existent UEFI variable, want error", v, crt)
+	if _, err := j.readRootCACert(v); err == nil {
+		t.Errorf("readRootCACert(%+v) succeeded unexpectedly for non-existent UEFI variable, want error", v)
 	}
 
 	// Invalid PEM certificate.
@@ -71,8 +76,8 @@ func TestReadAndWriteRootCACertError(t *testing.T) {
 	}
 	defer os.Remove(path)
 
-	if err := j.readAndWriteRootCACert(v, crt); err == nil {
-		t.Errorf("readAndWriteRootCACert(%+v, %s) succeeded unexpectedly for invalid PEM certificate, want error", v, crt)
+	if _, err := j.readRootCACert(v); err == nil {
+		t.Errorf("readRootCACert(%+v) succeeded unexpectedly for invalid PEM certificate, want error", v)
 	}
 }
 

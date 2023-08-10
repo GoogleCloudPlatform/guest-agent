@@ -19,6 +19,9 @@ package utils
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -46,7 +49,7 @@ type sshExpiration struct {
 func CheckExpiredKey(key string) error {
 	trimmedKey := strings.Trim(key, " ")
 	if trimmedKey == "" {
-		return errors.New("Invalid ssh key entry - empty key")
+		return errors.New("invalid ssh key entry - empty key")
 	}
 	fields := strings.SplitN(trimmedKey, " ", 4)
 	if len(fields) < 3 {
@@ -55,7 +58,7 @@ func CheckExpiredKey(key string) error {
 	}
 	if len(fields) == 3 && fields[2] == "google-ssh" {
 		// expiring key without expiration format.
-		return errors.New("Invalid ssh key entry - expiration missing")
+		return errors.New("invalid ssh key entry - expiration missing")
 	}
 	if len(fields) >= 3 && fields[2] != "google-ssh" {
 		// Non-expiring key with an arbitrary comment part
@@ -72,7 +75,7 @@ func CheckExpiredKey(key string) error {
 			return err
 		}
 		if expired {
-			return errors.New("Invalid ssh key entry - expired key")
+			return errors.New("invalid ssh key entry - expired key")
 		}
 	}
 
@@ -99,13 +102,13 @@ func CheckExpired(expireOn string) (bool, error) {
 // Currently, the only banned characters are whitespace characters.
 func ValidateUser(user string) error {
 	if user == "" {
-		return errors.New("Invalid username - it is empty")
+		return errors.New("invalid username - it is empty")
 	}
 
-	whiteSpaceRegexp, _ := regexp.Compile("\\s")
+	whiteSpaceRegexp, _ := regexp.Compile(`\s`)
 
 	if whiteSpaceRegexp.MatchString(user) {
-		return errors.New("Invalid username - whitespace detected")
+		return errors.New("invalid username - whitespace detected")
 	}
 	return nil
 }
@@ -115,18 +118,18 @@ func ValidateUser(user string) error {
 func GetUserKey(rawKey string) (string, string, error) {
 	key := strings.Trim(rawKey, " ")
 	if key == "" {
-		return "", "", errors.New("Invalid ssh key entry - empty key")
+		return "", "", errors.New("invalid ssh key entry - empty key")
 	}
 	idx := strings.Index(key, ":")
 	if idx == -1 {
-		return "", "", errors.New("Invalid ssh key entry - unrecognized format. Expecting user:ssh-key")
+		return "", "", errors.New("invalid ssh key entry - unrecognized format. Expecting user:ssh-key")
 	}
 	user := key[:idx]
 	if user == "" {
-		return "", "", errors.New("Invalid ssh key entry - user missing")
+		return "", "", errors.New("invalid ssh key entry - user missing")
 	}
 	if key[idx+1:] == "" {
-		return "", "", errors.New("Invalid ssh key entry - key missing")
+		return "", "", errors.New("invalid ssh key entry - key missing")
 	}
 
 	return user, key[idx+1:], nil
@@ -159,4 +162,12 @@ func (s *SerialPort) Write(b []byte) (int, error) {
 	defer p.Close()
 
 	return p.Write(b)
+}
+
+// WriteFile creates parent directories if required and writes content to the output file.
+func WriteFile(content []byte, outputFile string) error {
+	if err := os.MkdirAll(filepath.Dir(outputFile), 0644); err != nil {
+		return fmt.Errorf("unable to create required directories for %q: %w", outputFile, err)
+	}
+	return os.WriteFile(outputFile, content, 0644)
 }
