@@ -17,12 +17,20 @@ package telemetry
 import (
 	"context"
 	"encoding/base64"
+	"runtime"
+	"time"
 
 	"github.com/GoogleCloudPlatform/guest-agent/metadata"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/osinfo"
 	tpb "github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/telemetry/proto"
+)
+
+var (
+	telemetryJobID    = "telemetryJobID"
+	telemetryInterval = 24 * time.Hour
 )
 
 // Data is telemetry data on the current agent and OS.
@@ -83,4 +91,61 @@ func Record(ctx context.Context, client metadata.MDSClientInterface, d Data) err
 	}
 	_, err := client.GetKey(ctx, "", headers)
 	return err
+}
+
+// TelemetryJob implements job scheduler interface for recording telemetry.
+type TelemetryJob struct {
+	client       metadata.MDSClientInterface
+	programName  string
+	agentVersion string
+}
+
+// New initializes a new TelemetryJob.
+func New(client metadata.MDSClientInterface, programName, agentVersion string) *TelemetryJob {
+	return &TelemetryJob{
+		client:       client,
+		programName:  programName,
+		agentVersion: agentVersion,
+	}
+}
+
+// ID returns the ID for this job.
+func (j *TelemetryJob) ID() string {
+	return telemetryJobID
+}
+
+func (j *TelemetryJob) Run(ctx context.Context) (bool, error) {
+	osInfo := osinfo.Get()
+	d := Data{
+		AgentName:     j.programName,
+		AgentVersion:  j.agentVersion,
+		AgentArch:     runtime.GOARCH,
+		OS:            runtime.GOOS,
+		LongName:      osInfo.PrettyName,
+		ShortName:     osInfo.OS,
+		Version:       osInfo.VersionID,
+		KernelRelease: osInfo.KernelRelease,
+		KernelVersion: osInfo.KernelVersion,
+	}
+	if err := Record(ctx, j.client, d); err != nil {
+		// Log this here in Debug mode as telemetry is best effort.
+		logger.Debugf("Error recording telemetry: %v", err)
+	}
+
+	return j.ShouldEnable(ctx), nil
+}
+
+// Interval returns the interval at which job is executed.
+func (j *TelemetryJob) Interval() (time.Duration, bool) {
+	return telemetryInterval, true
+}
+
+// ShouldEnable returns true as long as DisableTelemetry is not set in metadata.
+func (j *TelemetryJob) ShouldEnable(ctx context.Context) bool {
+	md, err := j.client.Get(ctx)
+	if err != nil {
+		return false
+	}
+
+	return !md.Instance.Attributes.DisableTelemetry && !md.Project.Attributes.DisableTelemetry
 }
