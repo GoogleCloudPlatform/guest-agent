@@ -102,7 +102,7 @@ func TestRun(t *testing.T) {
 	}
 
 	counter := 0
-	eventManager.Subscribe("test-watcher,test-event", &counter, func(evType string, data interface{}, evData *EventData) bool {
+	eventManager.Subscribe("test-watcher,test-event", &counter, func(ctx context.Context, evType string, data interface{}, evData *EventData) bool {
 		dd := data.(*int)
 		*dd++
 		return true
@@ -137,7 +137,7 @@ func TestUnsubscribe(t *testing.T) {
 	}
 
 	counter := 0
-	eventManager.Subscribe("test-watcher,test-event", nil, func(evType string, data interface{}, evData *EventData) bool {
+	eventManager.Subscribe("test-watcher,test-event", nil, func(ctx context.Context, evType string, data interface{}, evData *EventData) bool {
 		if counter == unsubscribeAt {
 			return false
 		}
@@ -172,7 +172,7 @@ func TestCancelBeforeCallbacks(t *testing.T) {
 		t.Fatalf("Failed to init event manager: %+v", err)
 	}
 
-	eventManager.Subscribe("test-watcher,test-event", nil, func(evType string, data interface{}, evData *EventData) bool {
+	eventManager.Subscribe("test-watcher,test-event", nil, func(ctx context.Context, evType string, data interface{}, evData *EventData) bool {
 		t.Errorf("Expected to have canceled before calling callback")
 		return true
 	})
@@ -220,7 +220,7 @@ func TestCancelAfterCallbacks(t *testing.T) {
 		t.Fatalf("Failed to init event manager: %+v", err)
 	}
 
-	eventManager.Subscribe("test-watcher,test-event", nil, func(evType string, data interface{}, evData *EventData) bool {
+	eventManager.Subscribe("test-watcher,test-event", nil, func(ctx context.Context, evType string, data interface{}, evData *EventData) bool {
 		return true
 	})
 
@@ -287,7 +287,7 @@ func TestCancelCallbacksAndWatchers(t *testing.T) {
 				t.Fatalf("Failed to init event manager: %+v", err)
 			}
 
-			eventManager.Subscribe("test-watcher,test-event", nil, func(evType string, data interface{}, evData *EventData) bool {
+			eventManager.Subscribe("test-watcher,test-event", nil, func(ctx context.Context, evType string, data interface{}, evData *EventData) bool {
 				time.Sleep(1 * time.Millisecond)
 				if cancelSubscriberAfter == 0 {
 					return false
