@@ -55,8 +55,13 @@ func (mp *Watcher) ID() string {
 	return WatcherID
 }
 
+// Events returns an slice with all implemented events.
+func (mp *Watcher) Events() []string {
+	return []string{LongpollEvent}
+}
+
 // Run listens to metadata changes and report back the event.
-func (mp *Watcher) Run(ctx context.Context) (bool, string, interface{}, error) {
+func (mp *Watcher) Run(ctx context.Context, evType string) (bool, interface{}, error) {
 	if mp.failedPrevious {
 		time.Sleep(retryWaitDuration)
 	}
@@ -77,5 +82,5 @@ func (mp *Watcher) Run(ctx context.Context) (bool, string, interface{}, error) {
 		mp.failedPrevious = false
 	}
 
-	return true, LongpollEvent, descriptor, err
+	return true, descriptor, err
 }

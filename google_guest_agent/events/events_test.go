@@ -72,13 +72,19 @@ func (tprod *testWatcher) ID() string {
 	return tprod.watcherID
 }
 
-func (tprod *testWatcher) Run(ctx context.Context) (bool, string, interface{}, error) {
-	if tprod.counter >= tprod.maxCount {
-		return false, "", nil, nil
-	}
+func (tprod *testWatcher) Events() []string {
+	return []string{tprod.watcherID + ",test-event"}
+}
+
+func (tprod *testWatcher) Run(ctx context.Context, evType string) (bool, interface{}, error) {
 	tprod.counter++
 	evData := tprod.counter
-	return true, tprod.watcherID + ",test-event", &evData, nil
+
+	if tprod.counter >= tprod.maxCount {
+		return false, nil, nil
+	}
+
+	return true, &evData, nil
 }
 
 func TestRun(t *testing.T) {
@@ -195,9 +201,13 @@ func (tc *testCancel) ID() string {
 	return tc.watcherID
 }
 
-func (tc *testCancel) Run(ctx context.Context) (bool, string, interface{}, error) {
+func (tc *testCancel) Events() []string {
+	return []string{tc.watcherID + ",test-event"}
+}
+
+func (tc *testCancel) Run(ctx context.Context, evType string) (bool, interface{}, error) {
 	time.Sleep(tc.timeout)
-	return true, tc.watcherID + ",test-event", nil, nil
+	return true, nil, nil
 }
 
 func TestCancelAfterCallbacks(t *testing.T) {
@@ -242,13 +252,17 @@ func (tc *testCancelWatcher) ID() string {
 	return tc.watcherID
 }
 
-func (tc *testCancelWatcher) Run(ctx context.Context) (bool, string, interface{}, error) {
+func (tc *testCancelWatcher) Events() []string {
+	return []string{tc.watcherID + ",test-event"}
+}
+
+func (tc *testCancelWatcher) Run(ctx context.Context, evType string) (bool, interface{}, error) {
 	time.Sleep(10 * time.Millisecond)
 	if tc.after == 0 {
-		return false, tc.watcherID + ",test-event", nil, nil
+		return false, nil, nil
 	}
 	tc.after--
-	return true, tc.watcherID + ",test-event", nil, nil
+	return true, nil, nil
 }
 
 func TestCancelCallbacksAndWatchers(t *testing.T) {
@@ -299,4 +313,61 @@ func TestCancelCallbacksAndWatchers(t *testing.T) {
 			eventManager.Run(context.Background())
 		})
 	}
+}
+
+func TestMultipleEvents(t *testing.T) {
+	watcherID := "multiple-events"
+	firstEvent := "multiple-events,first-event"
+	secondEvent := "multiple-events,second-event"
+
+	err := initWatchers([]Watcher{
+		&testMultipleEvents{
+			watcherID: watcherID,
+			eventIDS:  []string{firstEvent, secondEvent},
+		},
+	})
+
+	if err != nil {
+		t.Fatalf("Failed to init/register watcher: %+v", err)
+	}
+
+	eventManager, err := New(&Config{Watchers: []string{watcherID}})
+	if err != nil {
+		t.Fatalf("Failed to init event manager: %+v", err)
+	}
+
+	var hitFirstEvent bool
+	eventManager.Subscribe(firstEvent, nil, func(ctx context.Context, evType string, data interface{}, evData *EventData) bool {
+		hitFirstEvent = true
+		return false
+	})
+
+	var hitSecondEvent bool
+	eventManager.Subscribe(secondEvent, nil, func(ctx context.Context, evType string, data interface{}, evData *EventData) bool {
+		hitSecondEvent = true
+		return false
+	})
+
+	eventManager.Run(context.Background())
+
+	if !hitFirstEvent || !hitSecondEvent {
+		t.Errorf("Failed to call back events, first event hit? (%t), second event hit? (%t)", hitFirstEvent, hitSecondEvent)
+	}
+}
+
+type testMultipleEvents struct {
+	watcherID string
+	eventIDS  []string
+}
+
+func (tt *testMultipleEvents) ID() string {
+	return tt.watcherID
+}
+
+func (tt *testMultipleEvents) Events() []string {
+	return tt.eventIDS
+}
+
+func (tt *testMultipleEvents) Run(ctx context.Context, evType string) (bool, interface{}, error) {
+	return false, nil, nil
 }
