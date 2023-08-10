@@ -93,16 +93,16 @@ func Record(ctx context.Context, client metadata.MDSClientInterface, d Data) err
 	return err
 }
 
-// TelemetryJob implements job scheduler interface for recording telemetry.
-type TelemetryJob struct {
+// Job implements job scheduler interface for recording telemetry.
+type Job struct {
 	client       metadata.MDSClientInterface
 	programName  string
 	agentVersion string
 }
 
 // New initializes a new TelemetryJob.
-func New(client metadata.MDSClientInterface, programName, agentVersion string) *TelemetryJob {
-	return &TelemetryJob{
+func New(client metadata.MDSClientInterface, programName, agentVersion string) *Job {
+	return &Job{
 		client:       client,
 		programName:  programName,
 		agentVersion: agentVersion,
@@ -110,11 +110,12 @@ func New(client metadata.MDSClientInterface, programName, agentVersion string) *
 }
 
 // ID returns the ID for this job.
-func (j *TelemetryJob) ID() string {
+func (j *Job) ID() string {
 	return telemetryJobID
 }
 
-func (j *TelemetryJob) Run(ctx context.Context) (bool, error) {
+// Run records telemetry data.
+func (j *Job) Run(ctx context.Context) (bool, error) {
 	osInfo := osinfo.Get()
 	d := Data{
 		AgentName:     j.programName,
@@ -136,12 +137,12 @@ func (j *TelemetryJob) Run(ctx context.Context) (bool, error) {
 }
 
 // Interval returns the interval at which job is executed.
-func (j *TelemetryJob) Interval() (time.Duration, bool) {
+func (j *Job) Interval() (time.Duration, bool) {
 	return telemetryInterval, true
 }
 
 // ShouldEnable returns true as long as DisableTelemetry is not set in metadata.
-func (j *TelemetryJob) ShouldEnable(ctx context.Context) bool {
+func (j *Job) ShouldEnable(ctx context.Context) bool {
 	md, err := j.client.Get(ctx)
 	if err != nil {
 		return false
