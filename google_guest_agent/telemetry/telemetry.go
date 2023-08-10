@@ -89,6 +89,8 @@ func Record(ctx context.Context, client metadata.MDSClientInterface, d Data) err
 		"X-Google-Guest-Agent": formatGuestAgent(d),
 		"X-Google-Guest-OS":    formatGuestOS(d),
 	}
+	// This is the simplest metadata call we can make, and we dont care about any return value,
+	// all we need to do is make some call with the telemetry headers.
 	_, err := client.GetKey(ctx, "", headers)
 	return err
 }
