@@ -21,7 +21,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/agentcrypto"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 	"github.com/robfig/cron/v3"
 )
@@ -45,53 +44,26 @@ type Job interface {
 type Scheduler struct {
 	cron *cron.Cron
 	jobs map[string]cron.EntryID
-	mu   sync.Mutex
+	mu   sync.RWMutex
 }
 
-var (
-	lock      = &sync.Mutex{}
-	scheduler *Scheduler
-)
+var scheduler *Scheduler
 
-func (s *Scheduler) addDefaultJobs(ctx context.Context, jobs []Job) error {
-	for _, job := range jobs {
-		if job.ShouldEnable(ctx) {
-			s.ScheduleJob(ctx, job)
-		}
-	}
-
-	return nil
-}
-
-// Get initializes, starts and returns scheduler instance.
-// If it was already initialized it returns the existing one.
-func Get(ctx context.Context) (*Scheduler, error) {
-	lock.Lock()
-	defer lock.Unlock()
-
-	if scheduler != nil {
-		return scheduler, nil
-	}
-
+func init() {
 	taskIDs := make(map[string]cron.EntryID)
 	cron := cron.New(cron.WithLogger(&cronLogger{}))
 
 	scheduler = &Scheduler{
 		cron: cron,
 		jobs: taskIDs,
-		mu:   sync.Mutex{},
+		mu:   sync.RWMutex{},
 	}
+}
 
-	// Known default jobs that run on schedule.
-	jobs := []Job{agentcrypto.New()}
-
-	if err := scheduler.addDefaultJobs(ctx, jobs); err != nil {
-		return nil, fmt.Errorf("failed to add default jobs: %w", err)
-	}
-
+// Get starts and returns scheduler instance.
+func Get() *Scheduler {
 	scheduler.start()
-
-	return scheduler, nil
+	return scheduler
 }
 
 // getFunc generates a wrapper function for cron scheduler.
@@ -110,6 +82,10 @@ func (s *Scheduler) getFunc(ctx context.Context, job Job) func() {
 
 // ScheduleJob adds a job to schedule at defined interval.
 func (s *Scheduler) ScheduleJob(ctx context.Context, job Job) error {
+	if !job.ShouldEnable(ctx) {
+		return fmt.Errorf("ShouldEnable() returned false, cannot schedule job %s", job.ID())
+	}
+
 	logger.Infof("Scheduling job: %s", job.ID())
 
 	interval, startNow := job.Interval()
@@ -146,7 +122,8 @@ func (s *Scheduler) jobInit(jobID string, interval time.Duration, job func(), st
 	s.setEntryID(jobID, entry)
 
 	if startImmediately {
-		job()
+		// Start job in a go routine to not block the caller.
+		go job()
 	}
 
 	return nil
@@ -154,8 +131,8 @@ func (s *Scheduler) jobInit(jobID string, interval time.Duration, job func(), st
 
 // UnscheduleJob removes the job from schedule.
 func (s *Scheduler) UnscheduleJob(jobID string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
 	logger.Infof("Unscheduling job %q", jobID)
 

@@ -28,6 +28,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/agentcrypto"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events"
 	mdsEvent "github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events/metadata"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events/sshtrustedca"
@@ -57,7 +58,6 @@ var (
 	oldMetadata, newMetadata *metadata.Descriptor
 	config                   *ini.File
 	osInfo                   osinfo.OSInfo
-	action                   string
 	mdsClient                *metadata.Client
 )
 
@@ -189,14 +189,14 @@ func run(ctx context.Context) {
 		}
 	}
 
-	// Start telemetry recording.
-	sched, err := scheduler.Get(ctx)
-	if err != nil {
-		logger.Errorf("Error getting scheduler: %v", err)
-		return
-	}
-	if err := sched.ScheduleJob(ctx, telemetry.New(mdsClient, programName, version)); err != nil {
-		logger.Errorf("Error scheduling telemetry job: %v", err)
+	// knownJobs is list of default jobs that run on a pre-defined schedule.
+	knownJobs := []scheduler.Job{agentcrypto.New(), telemetry.New(mdsClient, programName, version)}
+	sched := scheduler.Get()
+
+	for _, job := range knownJobs {
+		if err := sched.ScheduleJob(ctx, job); err != nil {
+			logger.Errorf("Failed to schedule job %s with error: %v", job.ID(), err)
+		}
 	}
 
 	eventsConfig := &events.Config{
@@ -296,8 +296,8 @@ func runCmdOutput(cmd *exec.Cmd) *execResult {
 	return &execResult{code: 0, out: stdout.String()}
 }
 
-func runCmdOutputWithTimeout(timeoutSec time.Duration, name string, args ...string) *execResult {
-	ctx, cancel := context.WithTimeout(context.Background(), timeoutSec)
+func runCmdOutputWithTimeout(timeout time.Duration, name string, args ...string) *execResult {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	execResult := runCmdOutput(exec.CommandContext(ctx, name, args...))
 	if ctx.Err() != nil && errors.Is(ctx.Err(), context.DeadlineExceeded) {
