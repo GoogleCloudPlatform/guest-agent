@@ -16,11 +16,8 @@ package scheduler
 
 import (
 	"context"
-	"sync"
 	"testing"
 	"time"
-
-	"github.com/robfig/cron/v3"
 )
 
 type testJob struct {
@@ -60,12 +57,7 @@ func TestSchedule(t *testing.T) {
 		startingNow:  true,
 		ctr:          0,
 	}
-
-	s := Scheduler{
-		cron: cron.New(),
-		jobs: make(map[string]cron.EntryID),
-		mu:   sync.Mutex{},
-	}
+	s := Get()
 
 	if err := s.ScheduleJob(context.Background(), job); err != nil {
 		t.Errorf("AddJob(%s) failed unexecptedly with error: %v", job.ID(), err)
@@ -102,11 +94,7 @@ func TestMultipleSchedules(t *testing.T) {
 		ctr:          0,
 	}
 
-	s := Scheduler{
-		cron: cron.New(),
-		jobs: make(map[string]cron.EntryID),
-		mu:   sync.Mutex{},
-	}
+	s := Get()
 	defer s.Stop()
 
 	// Schedule multiple jobs.
@@ -116,8 +104,6 @@ func TestMultipleSchedules(t *testing.T) {
 	if err := s.ScheduleJob(ctx, job2); err != nil {
 		t.Errorf("AddJob(%s) failed unexecptedly with error: %v", job2.id, err)
 	}
-
-	s.start()
 
 	time.Sleep(2 * time.Second)
 	s.UnscheduleJob(job2.ID())
@@ -141,13 +127,7 @@ func TestMultipleSchedules(t *testing.T) {
 }
 
 func TestStopSchedule(t *testing.T) {
-	s := Scheduler{
-		cron: cron.New(),
-		jobs: make(map[string]cron.EntryID),
-		mu:   sync.Mutex{},
-	}
-	defer s.Stop()
-	s.start()
+	s := Get()
 
 	job := &testJob{
 		interval:     time.Second / 2,
@@ -172,34 +152,15 @@ func TestStopSchedule(t *testing.T) {
 	}
 }
 
-func TestAddDefaultJobs(t *testing.T) {
-	ctx := context.Background()
-	s := Scheduler{
-		cron: cron.New(),
-		jobs: make(map[string]cron.EntryID),
-		mu:   sync.Mutex{},
+func TestScheduleJobError(t *testing.T) {
+	job := &testJob{
+		interval:     time.Second / 2,
+		id:           "test_job",
+		shouldEnable: false,
 	}
+	s := Get()
 
-	jobs := []Job{
-		&testJob{
-			interval:     time.Second / 2,
-			id:           "test_job1",
-			shouldEnable: false,
-		},
-		&testJob{
-			interval:     time.Second / 2,
-			id:           "test_job2",
-			shouldEnable: true,
-		},
-	}
-
-	if err := s.addDefaultJobs(ctx, jobs); err != nil {
-		t.Errorf("addDefaultJobs(ctx, %+v) failed unexpectedly with error: %v", jobs, err)
-	}
-
-	for _, job := range jobs {
-		if _, ok := s.jobs[job.ID()]; job.ShouldEnable(ctx) != ok {
-			t.Errorf("job %s had set shouldEnable: %t, entry found: %t", job.ID(), job.ShouldEnable(ctx), ok)
-		}
+	if err := s.ScheduleJob(context.Background(), job); err == nil {
+		t.Errorf("ScheduleJob(ctx, %s) succeeded unexpectedly when shouldEnable set to false, want error", job.ID())
 	}
 }
