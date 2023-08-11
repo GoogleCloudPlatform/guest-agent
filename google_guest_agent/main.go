@@ -32,6 +32,7 @@ import (
 	mdsEvent "github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events/metadata"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events/sshtrustedca"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/osinfo"
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/scheduler"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/sshca"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/telemetry"
 	"github.com/GoogleCloudPlatform/guest-agent/metadata"
@@ -188,23 +189,14 @@ func run(ctx context.Context) {
 		}
 	}
 
-	// Only record telemetry if we have metdata, and telemetry isnt disabled.
-	// Telemetry should onlyt be recorded once in an agents lifetime and is done on a best effort basis.
-	if newMetadata != nil && !newMetadata.Instance.Attributes.DisableTelemetry && !newMetadata.Project.Attributes.DisableTelemetry {
-		d := telemetry.Data{
-			AgentName:     programName,
-			AgentVersion:  version,
-			AgentArch:     runtime.GOARCH,
-			OS:            runtime.GOOS,
-			LongName:      osInfo.PrettyName,
-			ShortName:     osInfo.OS,
-			Version:       osInfo.VersionID,
-			KernelRelease: osInfo.KernelRelease,
-			KernelVersion: osInfo.KernelVersion,
-		}
-		if err := telemetry.Record(ctx, mdsClient, d); err != nil {
-			logger.Debugf("Error recording telemetry: %v", err)
-		}
+	// Start telemetry recording.
+	sched, err := scheduler.Get(ctx)
+	if err != nil {
+		logger.Errorf("Error getting scheduler: %v", err)
+		return
+	}
+	if err := sched.ScheduleJob(ctx, telemetry.New(mdsClient, programName, version)); err != nil {
+		logger.Errorf("Error scheduling telemetry job: %v", err)
 	}
 
 	eventsConfig := &events.Config{
