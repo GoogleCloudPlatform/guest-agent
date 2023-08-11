@@ -249,9 +249,6 @@ func (a *Attributes) UnmarshalJSON(b []byte) error {
 	value, err = strconv.ParseBool(temp.DisableTelemetry)
 	if err == nil {
 		a.DisableTelemetry = value
-	} else {
-		// Telemetry defaults to disabled.
-		a.DisableTelemetry = true
 	}
 	// So SSHKeys will be nil instead of []string{}
 	if temp.SSHKeys != "" {
