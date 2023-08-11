@@ -97,7 +97,7 @@ type eventBusData struct {
 func init() {
 	err := initWatchers([]Watcher{
 		metadata.New(),
-		sshtrustedca.New(sshtrustedca.DefaultPipePath),
+		sshtrustedca.New(sshtrustedca.DefaultPipePath, true),
 	})
 	if err != nil {
 		logger.Errorf("Failed to initialize watchers: %+v", err)
