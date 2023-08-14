@@ -204,5 +204,9 @@ func (j *CredsJob) Interval() (time.Duration, bool) {
 // Used for identifying if we want schedule bootstrapping and enable MDS mTLS credential rotation.
 func (j *CredsJob) ShouldEnable(ctx context.Context) bool {
 	_, err := j.client.GetKey(ctx, clientCertsKey, nil)
-	return err == nil
+	if err != nil {
+		logger.Warningf("Skipping scheduling credential generation job, failed to reach client credentials endpoint(%s) with error: %v", clientCertsKey, err)
+		return false
+	}
+	return true
 }

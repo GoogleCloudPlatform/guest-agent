@@ -20,7 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -273,24 +273,49 @@ func (c *Client) updateEtag(resp *http.Response) bool {
 	return c.etag != oldEtag
 }
 
+func shouldRetry(resp *http.Response, err error) bool {
+	// If the context was canceled just return the error and don't retry.
+	if err != nil && errors.Is(err, context.Canceled) {
+		return false
+	}
+
+	// Known non-retriable status codes.
+	if resp != nil && resp.StatusCode == 404 {
+		return false
+	}
+
+	return true
+}
+
 func (c *Client) retry(ctx context.Context, cfg requestConfig) (string, error) {
+	var ferr error
 	for i := 1; i <= backoffAttempts; i++ {
 		resp, err := c.do(ctx, cfg)
-
-		// If the context was canceled just return the error and don't retry.
-		if err != nil && errors.Is(err, context.Canceled) {
+		ferr = err
+		// Check if error is retriable, if not just return the error and don't retry.
+		if err != nil && !shouldRetry(resp, err) {
 			return "", err
 		}
 
 		// Apply the backoff strategy.
 		if err != nil {
-			logger.Errorf("Failed to connect to metadata server: %+v", err)
+			logger.Debugf("Attempt %d: failed to connect to metadata server: %+v", i, err)
 			time.Sleep(time.Duration(i) * backoffDuration)
 			continue
 		}
 
-		return resp, nil
+		defer resp.Body.Close()
+		md, err := io.ReadAll(resp.Body)
+		if err != nil {
+			ferr = err
+			logger.Debugf("Attempt %d: failed to read metadata server response bytes: %+v", i, err)
+			time.Sleep(time.Duration(i) * backoffDuration)
+			continue
+		}
+
+		return string(md), nil
 	}
+	logger.Errorf("Exhausted %d retry attempts to connect to MDS, failed with an error: %+v", backoffAttempts, ferr)
 	return "", fmt.Errorf("reached max attempts to connect to metadata")
 }
 
@@ -363,7 +388,7 @@ func (c *Client) WriteGuestAttributes(ctx context.Context, key, value string) er
 	return err
 }
 
-func (c *Client) do(ctx context.Context, cfg requestConfig) (string, error) {
+func (c *Client) do(ctx context.Context, cfg requestConfig) (*http.Response, error) {
 	var (
 		urlTokens []string
 		finalURL  string
@@ -394,7 +419,7 @@ func (c *Client) do(ctx context.Context, cfg requestConfig) (string, error) {
 
 	req, err := http.NewRequestWithContext(ctx, "GET", finalURL, nil)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	req.Header.Add("Metadata-Flavor", "Google")
@@ -406,28 +431,22 @@ func (c *Client) do(ctx context.Context, cfg requestConfig) (string, error) {
 	// If we are canceling httpClient will also wrap the context's error so
 	// check first the context.
 	if ctx.Err() != nil {
-		return "", ctx.Err()
+		return resp, ctx.Err()
 	}
 
 	if err != nil {
-		return "", fmt.Errorf("error connecting to metadata server: %+v", err)
+		return resp, fmt.Errorf("error connecting to metadata server: %+v", err)
 	}
 
 	statusCodeMsg := "error connecting to metadata server, status code: %d"
 	switch resp.StatusCode {
 	case 404, 412:
-		return "", fmt.Errorf(statusCodeMsg, resp.StatusCode)
+		return resp, fmt.Errorf(statusCodeMsg, resp.StatusCode)
 	}
 
 	if cfg.hang {
 		c.updateEtag(resp)
 	}
 
-	defer resp.Body.Close()
-	md, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("error reading metadata response data: %+v", err)
-	}
-
-	return string(md), nil
+	return resp, nil
 }

@@ -192,11 +192,14 @@ func run(ctx context.Context) {
 	// knownJobs is list of default jobs that run on a pre-defined schedule.
 	knownJobs := []scheduler.Job{agentcrypto.New(), telemetry.New(mdsClient, programName, version)}
 	sched := scheduler.Get()
-
 	for _, job := range knownJobs {
-		if err := sched.ScheduleJob(ctx, job); err != nil {
-			logger.Errorf("Failed to schedule job %s with error: %v", job.ID(), err)
-		}
+		go func(job scheduler.Job) {
+			if err := sched.ScheduleJob(ctx, job); err != nil {
+				logger.Errorf("Failed to schedule job %s with error: %v", job.ID(), err)
+			} else {
+				logger.Infof("Successfully scheduled job %s", job.ID())
+			}
+		}(job)
 	}
 
 	eventsConfig := &events.Config{
