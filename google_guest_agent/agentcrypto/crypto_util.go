@@ -15,6 +15,7 @@
 package agentcrypto
 
 import (
+	"crypto/ecdsa"
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
@@ -36,6 +37,21 @@ func parseCertificate(cert []byte) (*x509.Certificate, error) {
 	}
 
 	return x509Cert, nil
+}
+
+// parsePvtKey validates the key is in valid format and returns the EC Private Key.
+func parsePvtKey(pemKey []byte) (*ecdsa.PrivateKey, error) {
+	key, _ := pem.Decode(pemKey)
+	if key == nil {
+		return nil, fmt.Errorf("failed to decode PEM Key")
+	}
+
+	ecKey, err := x509.ParseECPrivateKey(key.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse EC Private Key: %w", err)
+	}
+
+	return ecKey, nil
 }
 
 // verifySign verifies the client certificate is valid and signed by root CA.

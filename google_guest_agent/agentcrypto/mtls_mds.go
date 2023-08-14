@@ -18,9 +18,7 @@ package agentcrypto
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
-	"runtime"
 	"time"
 
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/uefi"
@@ -69,28 +67,19 @@ func New() *CredsJob {
 	}
 }
 
-// readAndWriteRootCACert reads Root CA cert from UEFI variable and writes it to output file.
-func (j *CredsJob) readAndWriteRootCACert(name uefi.VariableName, outputFile string) error {
+// readRootCACert reads Root CA cert from UEFI variable.
+func (j *CredsJob) readRootCACert(name uefi.VariableName) (*uefi.Variable, error) {
 	rootCACert, err := uefi.ReadVariable(name)
-
 	if err != nil {
-		return fmt.Errorf("unable to read root CA cert file contents: %w", err)
+		return nil, fmt.Errorf("unable to read root CA cert file contents: %w", err)
 	}
 
 	if _, err := parseCertificate(rootCACert.Content); err != nil {
-		return fmt.Errorf("unable to verify Root CA cert: %w", err)
+		return nil, fmt.Errorf("unable to verify Root CA cert: %w", err)
 	}
 
-	if err := os.MkdirAll(filepath.Dir(outputFile), 0644); err != nil {
-		return fmt.Errorf("unable to create required directories for %q: %w", outputFile, err)
-	}
-
-	if err := os.WriteFile(outputFile, rootCACert.Content, 0644); err != nil {
-		return fmt.Errorf("unable to write root CA cert file contents to file: %w", err)
-	}
-
-	logger.Infof("Successfully wrote root CA Cert file to %q", outputFile)
-	return nil
+	logger.Infof("Successfully read root CA Cert from %+v", name)
+	return rootCACert, nil
 }
 
 // getClientCredentials fetches encrypted credentials from MDS and unmarshal it into GuestCredentialsResponse.
@@ -131,35 +120,30 @@ func (j *CredsJob) extractKey(importBlob *tpm.ImportBlob) ([]byte, error) {
 	return dek, nil
 }
 
-// fetchAndWriteClientCredentials fetches encrypted client credentials from MDS,
+// fetchClientCredentials fetches encrypted client credentials from MDS,
 // extracts Key Encryption Key (KEK) from vTPM, decrypts the client credentials using KEK,
-// verifies these credentials are signed by root CA and writes it to the output file.
-func (j *CredsJob) fetchAndWriteClientCredentials(ctx context.Context, rootCA, outputFile string) error {
+// and verifies that the certificate is signed by root CA.
+func (j *CredsJob) fetchClientCredentials(ctx context.Context, rootCA string) ([]byte, error) {
 	resp, err := j.getClientCredentials(ctx)
 	if err != nil {
-		return err
+		return []byte{}, err
 	}
 
 	dek, err := j.extractKey(resp.GetKeyImportBlob())
 	if err != nil {
-		return err
+		return []byte{}, err
 	}
 
 	plaintext, err := decrypt(dek, resp.GetEncryptedCredentials(), nil)
 	if err != nil {
-		return err
+		return []byte{}, err
 	}
 
 	if err := verifySign(plaintext, rootCA); err != nil {
-		return err
+		return []byte{}, err
 	}
 
-	if err := os.WriteFile(outputFile, plaintext, 0644); err != nil {
-		return fmt.Errorf("unable to write client credentials to file: %w", err)
-	}
-
-	logger.Infof("Successfully wrote client credentials to %q", outputFile)
-	return nil
+	return plaintext, nil
 }
 
 // Run generates the required credentials for MTLS MDS workflow.
@@ -167,26 +151,40 @@ func (j *CredsJob) fetchAndWriteClientCredentials(ctx context.Context, rootCA, o
 // 1. Fetches, verifies and writes Root CA cert from UEFI variable to /etc/pki/tls/certs/mds/root.crt
 // 2. Fetches encrypted client credentials from MDS, decrypts it via vTPM and writes it to /etc/pki/tls/certs/mds/client.key
 //
+// Note that these credentials are at `C:\Program Files\Google\Compute Engine\certs\mds` on Windows.
+// Additionally agent also generates a PFX file on windows that can be used invoking HTTPS endpoint.
+//
 // Example usage of these credentials to call HTTPS endpoint of MDS:
 //
 // curl --cacert /etc/pki/tls/certs/mds/root.crt -E /etc/pki/tls/certs/mds/client.key -H "MetadataFlavor: Google" https://169.254.169.254
+//
+// Windows example:
+//
+// $cert = Get-PfxCertificate -FilePath "C:\Program Files\Google\Compute Engine\certs\mds\client.key.pfx"
+// or
+// $cert = Get-ChildItem Cert:\LocalMachine\My | Where-Object { $_.Issuer -like "*google.internal*" }
+// Invoke-RestMethod -Uri https://169.254.169.254 -Method Get -Headers @{"Metadata-Flavor"="Google"} -Certificate $cert
 func (j *CredsJob) Run(ctx context.Context) (bool, error) {
-	// defaultCredsDir is the directory location for MTLS MDS credentials.
-	defaultCredsDir := "/etc/pki/tls/certs/mds"
+	logger.Infof("Fetching Root CA cert...")
 
-	// TODO: Finalize on where to store certificates on windows.
-	if runtime.GOOS == "windows" {
-		defaultCredsDir = `C:\Users`
+	v, err := j.readRootCACert(googleRootCACertUEFIVar)
+	if err != nil {
+		return true, fmt.Errorf("failed to read Root CA cert with an error: %w", err)
 	}
 
-	logger.Infof("Fetching Root CA cert...")
-	if err := j.readAndWriteRootCACert(googleRootCACertUEFIVar, filepath.Join(defaultCredsDir, rootCACertFileName)); err != nil {
-		return true, fmt.Errorf("failed to read Root CA cert with an error: %v", err)
+	if err := j.writeRootCACert(v.Content, filepath.Join(defaultCredsDir, rootCACertFileName)); err != nil {
+		return true, fmt.Errorf("failed to store Root CA cert with an error: %w", err)
 	}
 
 	logger.Infof("Fetching client credentials...")
-	if err := j.fetchAndWriteClientCredentials(ctx, filepath.Join(defaultCredsDir, rootCACertFileName), filepath.Join(defaultCredsDir, clientCredsFileName)); err != nil {
-		return true, fmt.Errorf("failed to generate client credentials with an error: %v", err)
+
+	creds, err := j.fetchClientCredentials(ctx, filepath.Join(defaultCredsDir, rootCACertFileName))
+	if err != nil {
+		return true, fmt.Errorf("failed to generate client credentials with an error: %w", err)
+	}
+
+	if err := j.writeClientCredentials(creds, filepath.Join(defaultCredsDir, clientCredsFileName)); err != nil {
+		return true, fmt.Errorf("failed to store client credentials with an error: %w", err)
 	}
 
 	return true, nil
