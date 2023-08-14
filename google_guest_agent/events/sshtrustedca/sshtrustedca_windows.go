@@ -20,6 +20,6 @@ import (
 )
 
 // Run is a no-op implementation for windows.
-func (mp *Watcher) Run(ctx context.Context) (bool, string, interface{}, error) {
-	return false, ReadEvent, nil, fmt.Errorf("SSH Trusted CA cert pipe Watcher is not yet implemented for windows.")
+func (mp *Watcher) Run(ctx context.Context, evType string) (bool, interface{}, error) {
+	return false, nil, fmt.Errorf("SSH Trusted CA cert pipe Watcher is not yet implemented for windows.")
 }

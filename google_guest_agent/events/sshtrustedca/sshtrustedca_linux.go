@@ -68,7 +68,7 @@ func (mp *Watcher) setWaitingWrite(val bool) {
 }
 
 // Run listens to ssh_trusted_ca's pipe open calls and report back the event.
-func (mp *Watcher) Run(ctx context.Context) (bool, string, interface{}, error) {
+func (mp *Watcher) Run(ctx context.Context, evType string) (bool, interface{}, error) {
 	var canceled bool
 
 	for mp.isWaitingWrite() {
@@ -106,14 +106,14 @@ func (mp *Watcher) Run(ctx context.Context) (bool, string, interface{}, error) {
 	// If the configured named pipe doesn't exists we create it before emitting events
 	// from it.
 	if err := createNamedPipe(mp.pipePath); err != nil {
-		return true, ReadEvent, nil, err
+		return true, nil, err
 	}
 
 	// Open the pipe as writeonly, it will block until a read is performed from the
 	// other end of the pipe.
 	pipeFile, err := os.OpenFile(mp.pipePath, os.O_WRONLY, 0644)
 	if err != nil {
-		return true, ReadEvent, nil, err
+		return true, nil, err
 	}
 
 	// Have we got a ctx.Done()? if so lets just return from here and unregister
@@ -122,11 +122,11 @@ func (mp *Watcher) Run(ctx context.Context) (bool, string, interface{}, error) {
 		if err := pipeFile.Close(); err != nil {
 			logger.Errorf("Failed to close readonly pipe: %+v", err)
 		}
-		return false, ReadEvent, nil, nil
+		return false, nil, nil
 	}
 
 	cancelContext <- true
 	mp.setWaitingWrite(true)
 
-	return true, ReadEvent, &PipeData{File: pipeFile, Finished: mp.finishedCb}, nil
+	return true, &PipeData{File: pipeFile, Finished: mp.finishedCb}, nil
 }

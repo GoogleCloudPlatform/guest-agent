@@ -77,7 +77,7 @@ func TestPipe(t *testing.T) {
 		}
 	}()
 
-	_, _, evData, err := watcher.Run(context.Background())
+	_, evData, err := watcher.Run(context.Background(), ReadEvent)
 	if err != nil {
 		t.Fatalf("Watcher failed: %+v", err)
 	}
@@ -119,5 +119,5 @@ func TestCancel(t *testing.T) {
 		}
 	}()
 
-	watcher.Run(ctx)
+	watcher.Run(ctx, ReadEvent)
 }

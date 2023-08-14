@@ -35,13 +35,14 @@ var (
 type Watcher interface {
 	// ID returns the watcher id.
 	ID() string
+	// Events return a slice with all the event types a given Watcher handles.
+	Events() []string
 	// Run implements the actuall "listening" strategy and emits a event "signal".
 	// It must return:
 	//   - [bool] if the watcher should renew(run again).
-	//   - [string] the event type id.
 	//   - [interface{}] a event context data pointer further describing the event(if needed).
 	//   - [err] error case the Watcher failed and wants to notify subscribers(see EventData).
-	Run(ctx context.Context) (bool, string, interface{}, error)
+	Run(ctx context.Context, evType string) (bool, interface{}, error)
 }
 
 // Manager defines the interface between events management layer and the
@@ -63,6 +64,14 @@ type EventData struct {
 	Data interface{}
 	// Error is used when a Watcher has failed and wants communicate its subscribers about the error.
 	Error error
+}
+
+// WatcherEventType wraps/couples together a Watcher and an event type.
+type WatcherEventType struct {
+	// watcher is the watcher implementation for a given event type.
+	watcher Watcher
+	// evType idenfities the event type this object refences to.
+	evType string
 }
 
 // EventCb defines the callback interface between watchers and subscribers. The arguments are:
@@ -140,6 +149,16 @@ func (mngr *Manager) Subscribe(evType string, data interface{}, cb EventCb) {
 			cb:   cb,
 		},
 	)
+}
+
+func (mngr *Manager) eventTypes() []*WatcherEventType {
+	var res []*WatcherEventType
+	for _, watcher := range mngr.watchers {
+		for _, evType := range watcher.Events() {
+			res = append(res, &WatcherEventType{watcher, evType})
+		}
+	}
+	return res
 }
 
 type watcherQueue struct {
@@ -246,21 +265,20 @@ func (mngr *Manager) Run(ctx context.Context) {
 		watchersMap: make(map[string]bool),
 	}
 
-	// Creates a goroutine for each registered watcher and keep handling its
+	// Creates a goroutine for each registered watcher's event and keep handling its
 	// execution until they give up/finishes their job by returning renew = false.
-	for _, curr := range mngr.watchers {
-		control.add(curr.ID())
+	for _, curr := range mngr.eventTypes() {
+		control.add(curr.evType)
 		wg.Add(1)
 
-		go func(bus chan<- eventBusData, watcher Watcher, cancelContext chan<- bool, cancelCallback chan<- bool) {
-			var evType string
+		go func(bus chan<- eventBusData, watcher Watcher, evType string, cancelContext chan<- bool, cancelCallback chan<- bool) {
 			var evData interface{}
 			var err error
 
 			defer wg.Done()
 
 			for renew := true; renew; {
-				renew, evType, evData, err = watcher.Run(ctx)
+				renew, evData, err = watcher.Run(ctx, evType)
 
 				logger.Debugf("Watcher(%s) returned event: %q, should renew?: %t", watcher.ID(), evType, renew)
 
@@ -277,12 +295,12 @@ func (mngr *Manager) Run(ctx context.Context) {
 				}
 			}
 
-			if !leaving && control.del(watcher.ID()) == 0 {
+			if !leaving && control.del(evType) == 0 {
 				logger.Debugf("All watchers are finished, signaling to leave.")
 				cancelContext <- true
 				cancelCallback <- true
 			}
-		}(syncBus, curr, cancelContext, cancelCallback)
+		}(syncBus, curr.watcher, curr.evType, cancelContext, cancelCallback)
 	}
 
 	wg.Wait()

@@ -64,3 +64,8 @@ func New(pipePath string) *Watcher {
 func (mp *Watcher) ID() string {
 	return WatcherID
 }
+
+// Events returns an slice with all implemented events.
+func (mp *Watcher) Events() []string {
+	return []string{ReadEvent}
+}
