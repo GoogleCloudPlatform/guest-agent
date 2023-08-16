@@ -14,6 +14,7 @@ on Windows and Linux GCE VMs in order to enable GCE platform features.
     * [Network](#network)
     * [Windows Failover Cluster Support](#windows-failover-cluster-support)
     * [Instance Setup](#instance-setup)
+    * [Telemetry](#telemetry)
 * [Metadata Scripts](#metadata-scripts)
 * [Configuration](#configuration)
 * [Packaging](#packaging)
@@ -132,6 +133,18 @@ The guest agent will perform some actions one time only, on the first VM boot:
 
 *   Generate SSH host keys.
 *   Create the `boto` config for using Google Cloud Storage.
+
+#### Telemetry
+
+The guest agent will record some basic system telemetry information at start and
+then once every 24 hours. 
+
+*   Guest agent version and architecture
+*   Operating system name and version
+*   Operating system kernel release and version
+
+Telemetry can be disabled by setting the metadata key `disable-guest-telemetry`
+to `true`.
 
 ## Metadata Scripts
 

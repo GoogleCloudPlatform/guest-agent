@@ -57,7 +57,7 @@ func TestWatchMetadata(t *testing.T) {
 			WindowsKey{Exponent: "exponent", UserName: "username", Modulus: "modulus", ExpireOn: et, AddToAdministrators: func() *bool { ret := true; return &ret }()},
 		},
 		SSHKeys:          []string{"name:ssh-rsa [KEY] hostname", "name:ssh-rsa [KEY] hostname"},
-		DisableTelemetry: true,
+		DisableTelemetry: false,
 	}
 	for _, e := range []string{etag1, etag2} {
 		got, err := client.Watch(context.Background())
