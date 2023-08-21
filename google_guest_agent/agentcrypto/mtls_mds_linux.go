@@ -18,7 +18,7 @@ import "github.com/GoogleCloudPlatform/guest-agent/utils"
 
 const (
 	// defaultCredsDir is the directory location for MTLS MDS credentials.
-	defaultCredsDir = "/etc/pki/tls/certs/mds"
+	defaultCredsDir = "/run/google-mds-mtls"
 )
 
 // writeRootCACert writes Root CA cert from UEFI variable to output file.
