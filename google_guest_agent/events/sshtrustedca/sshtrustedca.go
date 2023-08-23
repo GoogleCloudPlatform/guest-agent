@@ -34,10 +34,6 @@ type Watcher struct {
 	// pipePath points to the named pipe it's writing to.
 	pipePath string
 
-	// configSELinux is a flag used to determine if we should attempt configure SELinux,
-	// tests will want to have it disabled.
-	configSELinux bool
-
 	// waitingWrite is a flag to inform the Watcher that the Handler has or
 	// hasn't finished writing.
 	waitingWrite bool
@@ -58,10 +54,9 @@ type PipeData struct {
 }
 
 // New allocates and initializes a new Watcher.
-func New(pipePath string, configSELinux bool) *Watcher {
+func New(pipePath string) *Watcher {
 	return &Watcher{
-		pipePath:      pipePath,
-		configSELinux: configSELinux,
+		pipePath: pipePath,
 	}
 }
 
