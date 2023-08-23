@@ -18,48 +18,15 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
-	"path"
 	"path/filepath"
-	"strings"
 	"syscall"
 	"time"
 
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 )
 
-const (
-	// localFileContext is the path to the SELinux' local context matching rules.
-	localFileContext = "/etc/selinux/targeted/contexts/files/file_contexts.local"
-)
-
-// Create selinux file context if not yet set, returns true if restorecon must be executed.
-func configureSELinux(pipePath string) (bool, error) {
-	if _, err := os.Stat(path.Dir(pipePath)); err != nil {
-		if os.IsNotExist(err) {
-			return false, nil
-		}
-		return false, err
-	}
-
-	data, err := os.ReadFile(localFileContext)
-	if err != nil {
-		return false, err
-	}
-
-	for _, line := range strings.Split(string(data), "\n") {
-		if strings.HasPrefix(line, pipePath) {
-			logger.Debugf("SELinux is configured for sshca pipe: %s", pipePath)
-			return true, nil
-		}
-	}
-
-	conf := fmt.Sprintf("\n%s  -p system_u:object_r:sshd_key_t:s0\n", pipePath)
-	return true, os.WriteFile(localFileContext, []byte(string(data)+conf), 0644)
-}
-
 // Create a named pipe if it doesn't exist.
-func createNamedPipe(pipePath string, configSELinux bool) error {
+func createNamedPipe(pipePath string) error {
 	pipeDir := filepath.Dir(pipePath)
 	_, err := os.Stat(pipeDir)
 
@@ -74,23 +41,6 @@ func createNamedPipe(pipePath string, configSELinux bool) error {
 		if os.IsNotExist(err) {
 			if err := syscall.Mkfifo(pipePath, 0644); err != nil {
 				return fmt.Errorf("failed to create named pipe: %+v", err)
-			}
-
-			if configSELinux {
-				hasFileContext, err := configureSELinux(pipePath)
-				if err != nil {
-					return fmt.Errorf("failed to configure SELinux: %+v", err)
-				}
-
-				if hasFileContext {
-					// Try to setup selinux context if available.
-					restorecon, err := exec.LookPath("restorecon")
-					if err == nil {
-						if err := exec.Command(restorecon, "-F", pipePath).Run(); err != nil {
-							return fmt.Errorf("failed to setup selinux context: %+v", err)
-						}
-					}
-				}
 			}
 		} else {
 			return fmt.Errorf("failed to stat file: " + pipePath)
@@ -155,7 +105,7 @@ func (mp *Watcher) Run(ctx context.Context, evType string) (bool, interface{}, e
 
 	// If the configured named pipe doesn't exists we create it before emitting events
 	// from it.
-	if err := createNamedPipe(mp.pipePath, mp.configSELinux); err != nil {
+	if err := createNamedPipe(mp.pipePath); err != nil {
 		return true, nil, err
 	}
 
