@@ -81,7 +81,9 @@ func verifySign(cert []byte, rootCAFile string) error {
 	}
 
 	roots := x509.NewCertPool()
-	roots.AppendCertsFromPEM(caCertPEM)
+	if !roots.AppendCertsFromPEM(caCertPEM) {
+		return fmt.Errorf("failed to add %q to new certpool for verifying client certificate", rootCAFile)
+	}
 
 	opts := x509.VerifyOptions{
 		Roots:     roots,
