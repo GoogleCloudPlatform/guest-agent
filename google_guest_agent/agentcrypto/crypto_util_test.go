@@ -16,6 +16,11 @@ package agentcrypto
 
 import (
 	"bytes"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
+	"encoding/pem"
 	"os"
 	"path/filepath"
 	"testing"
@@ -194,5 +199,50 @@ zBbQ2g==
 				t.Errorf("verifySign succeeded unexpectedly for %s, want error", test.name)
 			}
 		})
+	}
+}
+
+func TestSerialNumber(t *testing.T) {
+	f := filepath.Join(t.TempDir(), "cert")
+	if err := os.WriteFile(f, []byte(validCertPEM), 0777); err != nil {
+		t.Errorf("Failed to create test cert file: %v", err)
+	}
+
+	want := "137d4565568f5d35"
+	got, err := serialNumber(f)
+
+	if err != nil {
+		t.Errorf("serialNumber(%s) failed unexpectedly with error: %v", f, err)
+	}
+	if got != want {
+		t.Errorf("serialNumber(%s) = %s, want %s", f, got, want)
+	}
+}
+
+func generatePrivateKey(t *testing.T) (*ecdsa.PrivateKey, []byte) {
+	t.Helper()
+
+	key, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
+	if err != nil {
+		t.Fatalf("Failed to generate key: %v", err)
+	}
+
+	x509Encoded, err := x509.MarshalECPrivateKey(key)
+	if err != nil {
+		t.Fatalf("Failed to Marshal EC PrivateKey: %v", err)
+	}
+
+	return key, pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: x509Encoded})
+}
+
+func TestParseECPrivateKey(t *testing.T) {
+	key, pem := generatePrivateKey(t)
+	got, err := parsePvtKey(pem)
+	if err != nil {
+		t.Errorf("parsePvtKey(%s) failed unexpectedly with error: %v", string(pem), err)
+	}
+
+	if !key.Equal(got) {
+		t.Errorf("parsePvtKey(%s) parsed private key incorrectly", string(pem))
 	}
 }

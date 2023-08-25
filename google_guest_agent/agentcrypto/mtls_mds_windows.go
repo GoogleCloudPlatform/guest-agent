@@ -41,6 +41,11 @@ const (
 	my = "MY"
 	// root is predefined cert store for root trusted CA certs.
 	root = "ROOT"
+	// certificateIssuer is the issuer of client/root certificates for MDS mTLS.
+	certificateIssuer = "google.internal"
+	// maxCertEnumeration specifies the maximum number of times to search for a certificate
+	// with a serial number from a given issuer before giving up.
+	maxCertEnumeration = 5
 )
 
 var (
@@ -77,8 +82,69 @@ func (j *CredsJob) writeRootCACert(cacert []byte, outputFile string) error {
 	return nil
 }
 
+// findCert finds and returns certificate issued by issuer with the serial number in the given the store.
+func findCert(storeName, issuer, certID string) (*windows.CertContext, error) {
+	logger.Infof("Searching for certificate with serial number %s in store %s by issuer %s", certID, storeName, issuer)
+
+	st, err := windows.CertOpenStore(
+		windows.CERT_STORE_PROV_SYSTEM,
+		0,
+		0,
+		windows.CERT_SYSTEM_STORE_LOCAL_MACHINE,
+		uintptr(unsafe.Pointer(syscall.StringToUTF16Ptr(storeName))))
+	if err != nil {
+		return nil, fmt.Errorf("failed to open cert store: %w", err)
+	}
+	defer windows.CertCloseStore(st, 0)
+
+	// prev is used for enumerating through all the certificates that matches the issuer.
+	// On the first call to the function this parameter is NULL on all subsequent calls,
+	// this parameter is the last CertContext pointer returned by the CertFindCertificateInStore function
+	var prev *windows.CertContext
+
+	// maxCertEnumeration would avoid requiring a infinite loop that relies on enumerating
+	// until we get nil crt.
+	for i := 1; i <= maxCertEnumeration; i++ {
+		logger.Debugf("Attempt %d, searching certificate...", i)
+
+		// https://learn.microsoft.com/en-us/windows/win32/api/wincrypt/nf-wincrypt-certfindcertificateinstore
+		crt, err := windows.CertFindCertificateInStore(
+			st,
+			windows.X509_ASN_ENCODING|windows.PKCS_7_ASN_ENCODING,
+			0,
+			windows.CERT_FIND_ISSUER_STR,
+			unsafe.Pointer(syscall.StringToUTF16Ptr(issuer)),
+			prev)
+
+		if err != nil {
+			return nil, fmt.Errorf("unable to find certificate: %w", err)
+		}
+		if crt == nil {
+			return nil, fmt.Errorf("no certificate by issuer %s with ID %s", issuer, certID)
+		}
+
+		x509Cert, err := certContextToX509(crt)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse certificate context: %w", err)
+		}
+
+		if fmt.Sprintf("%x", x509Cert.SerialNumber) == certID {
+			return crt, nil
+		}
+
+		prev = crt
+	}
+
+	return nil, nil
+}
+
 // writeClientCredentials stores client credentials (certificate and private key).
 func (j *CredsJob) writeClientCredentials(creds []byte, outputFile string) error {
+	num, err := serialNumber(outputFile)
+	if err != nil {
+		logger.Warningf("Could not get previous serial number, will skip cleanup: %v", err)
+	}
+
 	if err := utils.WriteFile(creds, outputFile); err != nil {
 		return fmt.Errorf("failed to write client key: %w", err)
 	}
@@ -119,20 +185,28 @@ func (j *CredsJob) writeClientCredentials(creds []byte, outputFile string) error
 		return fmt.Errorf("failed to store pfx cert context: %w", err)
 	}
 
-	// Best effort to cleanup previous certificates and keep only the latest.
-	// When the agent restarts, it will not have the previous context in memory.
-	// Therefore, it will not remove any old certificates that are not required.
-	// If there are multiple similar certificates, clients should try to use the one
-	// with the longest expiry date, as that will be the latest version of it.
-	// TODO: See if we can have a more robust process for cleaning up old certificates,
-	// while ensuring that we don't delete any that were not installed by the agent process.
+	// Search for previous certificate if its not already in memory.
+	if prevCtx == nil && num != "" {
+		prevCtx, err = findCert(my, certificateIssuer, num)
+		if err != nil {
+			logger.Warningf("Failed to find previous certificate with error: %v", err)
+		}
+	}
+
+	// Remove previous certificate only after successful refresh.
 	if err := deleteCert(prevCtx, my); err != nil {
-		logger.Warningf("Failed to delete previous certificate with error: %v", err)
+		logger.Warningf("Failed to delete previous certificate(%s) with error: %v", num, err)
 	}
 
 	prevCtx = windows.CertDuplicateCertificateContext(crtCtx)
 
 	return nil
+}
+
+// certContextToX509 creates an x509 Certificate from a Windows cert context.
+func certContextToX509(ctx *windows.CertContext) (*x509.Certificate, error) {
+	der := unsafe.Slice(ctx.EncodedCert, int(ctx.Length))
+	return x509.ParseCertificate(der)
 }
 
 // generatePFX accepts certificate concatenated with private key and generates a PFX out of it.

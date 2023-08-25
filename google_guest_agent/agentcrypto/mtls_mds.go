@@ -148,15 +148,15 @@ func (j *CredsJob) fetchClientCredentials(ctx context.Context, rootCA string) ([
 
 // Run generates the required credentials for MTLS MDS workflow.
 //
-// 1. Fetches, verifies and writes Root CA cert from UEFI variable to /etc/pki/tls/certs/mds/root.crt
-// 2. Fetches encrypted client credentials from MDS, decrypts it via vTPM and writes it to /etc/pki/tls/certs/mds/client.key
+// 1. Fetches, verifies and writes Root CA cert from UEFI variable to /run/google-mds-mtls/root.crt
+// 2. Fetches encrypted client credentials from MDS, decrypts it via vTPM and writes it to /run/google-mds-mtls/client.key
 //
 // Note that these credentials are at `C:\Program Files\Google\Compute Engine\certs\mds` on Windows.
 // Additionally agent also generates a PFX file on windows that can be used invoking HTTPS endpoint.
 //
 // Example usage of these credentials to call HTTPS endpoint of MDS:
 //
-// curl --cacert /etc/pki/tls/certs/mds/root.crt -E /etc/pki/tls/certs/mds/client.key -H "MetadataFlavor: Google" https://169.254.169.254
+// curl --cacert /run/google-mds-mtls/root.crt -E /run/google-mds-mtls/client.key -H "MetadataFlavor: Google" https://169.254.169.254
 //
 // Windows example:
 //
@@ -187,6 +187,7 @@ func (j *CredsJob) Run(ctx context.Context) (bool, error) {
 		return true, fmt.Errorf("failed to store client credentials with an error: %w", err)
 	}
 
+	logger.Infof("Successfully bootstrapped MDS mTLS credentials")
 	return true, nil
 }
 

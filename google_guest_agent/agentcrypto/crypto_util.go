@@ -54,6 +54,20 @@ func parsePvtKey(pemKey []byte) (*ecdsa.PrivateKey, error) {
 	return ecKey, nil
 }
 
+// serialNumber reads the certificate from file and returns the serial number in hex.
+func serialNumber(f string) (string, error) {
+	d, err := os.ReadFile(f)
+	if err != nil {
+		return "", fmt.Errorf("unable to read previous client credential file %q: %w", f, err)
+	}
+
+	crt, err := parseCertificate(d)
+	if err != nil {
+		return "", fmt.Errorf("unable to parse certificate at %q: %w", f, err)
+	}
+	return fmt.Sprintf("%x", crt.SerialNumber), nil
+}
+
 // verifySign verifies the client certificate is valid and signed by root CA.
 func verifySign(cert []byte, rootCAFile string) error {
 	caCertPEM, err := os.ReadFile(rootCAFile)
@@ -75,7 +89,7 @@ func verifySign(cert []byte, rootCAFile string) error {
 	}
 
 	if _, err := x509Cert.Verify(opts); err != nil {
-		return fmt.Errorf("failed to verify if client certificate against root CA %q: %w", rootCAFile, err)
+		return fmt.Errorf("failed to verify client certificate against root CA %q: %w", rootCAFile, err)
 	}
 
 	return nil
