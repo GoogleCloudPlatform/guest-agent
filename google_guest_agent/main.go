@@ -16,13 +16,10 @@
 package main
 
 import (
-	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"runtime"
 	"strings"
 	"sync"
@@ -131,7 +128,7 @@ func runUpdate(ctx context.Context) {
 	wg.Wait()
 }
 
-func run(ctx context.Context) {
+func runAgent(ctx context.Context) {
 	opts := logger.LogOpts{LoggerName: programName}
 	if runtime.GOOS == "windows" {
 		opts.FormatFunction = logFormatWindows
@@ -250,65 +247,6 @@ func run(ctx context.Context) {
 	logger.Infof("GCE Agent Stopped")
 }
 
-type execResult struct {
-	// Return code. Set to -1 if we failed to run the command.
-	code int
-	// Stderr or err.Error if we failed to run the command.
-	err string
-	// Stdout or "" if we failed to run the command.
-	out string
-}
-
-func (e execResult) Error() string {
-	return strings.TrimSuffix(e.err, "\n")
-}
-
-func (e execResult) ExitCode() int {
-	return e.code
-}
-
-func (e execResult) Stdout() string {
-	return e.out
-}
-
-func (e execResult) Stderr() string {
-	return e.err
-}
-
-func runCmd(cmd *exec.Cmd) error {
-	res := runCmdOutput(cmd)
-	if res.ExitCode() != 0 {
-		return res
-	}
-	return nil
-}
-
-func runCmdOutput(cmd *exec.Cmd) *execResult {
-	logger.Debugf("exec: %v", cmd)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	err := cmd.Run()
-	if err != nil {
-		if ee, ok := err.(*exec.ExitError); ok {
-			return &execResult{code: ee.ExitCode(), out: stdout.String(), err: stderr.String()}
-		}
-		return &execResult{code: -1, err: err.Error()}
-	}
-	return &execResult{code: 0, out: stdout.String()}
-}
-
-func runCmdOutputWithTimeout(ctx context.Context, timeout time.Duration, name string, args ...string) *execResult {
-	ctx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-	execResult := runCmdOutput(exec.CommandContext(ctx, name, args...))
-	if ctx.Err() != nil && errors.Is(ctx.Err(), context.DeadlineExceeded) {
-		execResult.code = 124 // By convention
-	}
-	return execResult
-}
-
 func logFormatWindows(e logger.LogEntry) string {
 	now := time.Now().Format("2006/01/02 15:04:05")
 	// 2006/01/02 15:04:05 GCEGuestAgent This is a log message.
@@ -344,11 +282,11 @@ func main() {
 	}
 
 	if action == "noservice" {
-		run(ctx)
+		runAgent(ctx)
 		os.Exit(0)
 	}
 
-	if err := register(ctx, "GCEAgent", "GCEAgent", "", run, action); err != nil {
+	if err := register(ctx, "GCEAgent", "GCEAgent", "", runAgent, action); err != nil {
 		logger.Fatalf("error registering service: %s", err)
 	}
 }

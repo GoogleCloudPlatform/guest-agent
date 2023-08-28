@@ -22,6 +22,8 @@ import (
 	"os"
 	"os/user"
 	"syscall"
+
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/run"
 )
 
 func getUID(path string) string {
@@ -38,12 +40,14 @@ func createUser(username, uid string) error {
 	if uid != "" {
 		useradd = fmt.Sprintf("%s -u %s", useradd, uid)
 	}
-	return runCmd(createUserGroupCmd(useradd, username, ""))
+	cmd, args := createUserGroupCmd(useradd, username, "")
+	return run.Quiet(cmd, args...)
 }
 
 func addUserToGroup(user, group string) error {
 	gpasswdadd := config.Section("Accounts").Key("gpasswd_add_cmd").MustString("gpasswd -a {user} {group}")
-	return runCmd(createUserGroupCmd(gpasswdadd, user, group))
+	cmd, args := createUserGroupCmd(gpasswdadd, user, group)
+	return run.Quiet(cmd, args...)
 }
 
 func userExists(name string) (bool, error) {

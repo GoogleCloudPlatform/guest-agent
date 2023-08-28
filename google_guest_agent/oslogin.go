@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events/sshtrustedca"
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/run"
 	"github.com/GoogleCloudPlatform/guest-agent/metadata"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 )
@@ -146,7 +147,7 @@ func (o *osloginMgr) set(ctx context.Context) error {
 		}
 
 		logger.Debugf("starting OS Login nss cache fill")
-		if err := runCmd(exec.Command("google_oslogin_nss_cache")); err != nil {
+		if err := run.Quiet("google_oslogin_nss_cache"); err != nil {
 			logger.Errorf("Error updating NSS cache: %v.", err)
 		}
 
@@ -357,7 +358,7 @@ func createOSLoginDirs() error {
 			return err
 		}
 		if restoreconerr == nil {
-			runCmd(exec.Command(restorecon, dir))
+			run.Quiet(restorecon, dir)
 		}
 	}
 	return nil
@@ -385,7 +386,7 @@ func systemctlTryRestart(servicename string) error {
 	if !systemctlUnitExists(servicename) {
 		return nil
 	}
-	return runCmd(exec.Command("systemctl", "try-restart", servicename+".service"))
+	return run.Quiet("systemctl", "try-restart", servicename+".service")
 }
 
 // systemctlReloadOrRestart tries to reload a running systemd service if
@@ -394,7 +395,7 @@ func systemctlReloadOrRestart(servicename string) error {
 	if !systemctlUnitExists(servicename) {
 		return nil
 	}
-	return runCmd(exec.Command("systemctl", "reload-or-restart", servicename+".service"))
+	return run.Quiet("systemctl", "reload-or-restart", servicename+".service")
 }
 
 // systemctlStart tries to start a stopped systemd service. Started services
@@ -403,10 +404,10 @@ func systemctlStart(servicename string) error {
 	if !systemctlUnitExists(servicename) {
 		return nil
 	}
-	return runCmd(exec.Command("systemctl", "start", servicename+".service"))
+	return run.Quiet("systemctl", "start", servicename+".service")
 }
 
 func systemctlUnitExists(servicename string) bool {
-	res := runCmdOutput(exec.Command("systemctl", "list-units", "--all", servicename+".service"))
-	return !strings.Contains(res.Stdout(), "0 loaded units listed")
+	res := run.WithOutput("systemctl", "list-units", "--all", servicename+".service")
+	return !strings.Contains(res.StdOut, "0 loaded units listed")
 }

@@ -16,9 +16,9 @@ package main
 
 import (
 	"context"
-	"os/exec"
 	"runtime"
 
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/run"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 )
 
@@ -39,23 +39,23 @@ func (a *clockskewMgr) disabled(os string) (disabled bool) {
 
 func (a *clockskewMgr) set(ctx context.Context) error {
 	if runtime.GOOS == "freebsd" {
-		err := runCmd(exec.Command("service", "ntpd", "status"))
+		err := run.Quiet("service", "ntpd", "status")
 		if err == nil {
-			if err := runCmd(exec.Command("service", "ntpd", "stop")); err != nil {
+			if err := run.Quiet("service", "ntpd", "stop"); err != nil {
 				return err
 			}
 			defer func() {
-				if err := runCmd(exec.Command("service", "ntpd", "start")); err != nil {
+				if err := run.Quiet("service", "ntpd", "start"); err != nil {
 					logger.Warningf("Error starting 'ntpd' after clock sync: %v.", err)
 				}
 			}()
 		}
 		// TODO get server
-		return runCmd(exec.Command("ntpdate", "169.254.169.254"))
+		return run.Quiet("ntpdate", "169.254.169.254")
 	}
 
-	res := runCmdOutput(exec.Command("/sbin/hwclock", "--hctosys", "-u", "--noadjfile"))
-	if res.ExitCode() != 0 || res.Stderr() != "" {
+	res := run.WithOutput("/sbin/hwclock", "--hctosys", "-u", "--noadjfile")
+	if res.ExitCode != 0 || res.StdErr != "" {
 		return error(res)
 	}
 	return nil
