@@ -21,12 +21,12 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"os/exec"
 	"path"
 	"sort"
 	"strconv"
 	"strings"
 
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/run"
 	"github.com/GoogleCloudPlatform/guest-agent/utils"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 )
@@ -327,13 +327,13 @@ func readGoogleUsersFile() (map[string]string, error) {
 
 // Replaces {user} or {group} in command string. Supports legacy python-era
 // user command overrides.
-func createUserGroupCmd(cmd, user, group string) *exec.Cmd {
+func createUserGroupCmd(cmd, user, group string) (string, []string) {
 	cmd = strings.Replace(cmd, "{user}", user, 1)
 	cmd = strings.Replace(cmd, "{group}", group, 1)
-	cmds := strings.Fields(cmd)
 
-	// We don't use runCmd here because we might need the exit codes.
-	return exec.Command(cmds[0], cmds[1:]...)
+	// We don't run the command here because we might need the exit codes.
+	tokens := strings.Fields(cmd)
+	return tokens[0], tokens[1:]
 }
 
 // createGoogleUser creates a Google managed user account if needed and adds it
@@ -361,13 +361,15 @@ func createGoogleUser(user string) error {
 func removeGoogleUser(user string) error {
 	if config.Section("Accounts").Key("deprovision_remove").MustBool(false) {
 		userdel := config.Section("Accounts").Key("userdel_cmd").MustString("userdel -r {user}")
-		return runCmd(createUserGroupCmd(userdel, user, ""))
+		name, args := createUserGroupCmd(userdel, user, "")
+		return run.Quiet(name, args...)
 	}
 	if err := updateAuthorizedKeysFile(user, []string{}); err != nil {
 		return err
 	}
 	gpasswddel := config.Section("Accounts").Key("gpasswd_remove_cmd").MustString("gpasswd -d {user} {group}")
-	return runCmd(createUserGroupCmd(gpasswddel, user, "google-sudoers"))
+	name, args := createUserGroupCmd(gpasswddel, user, "google-sudoers")
+	return run.Quiet(name, args...)
 }
 
 // createSudoersFile creates the google_sudoers configuration file if it does
@@ -389,12 +391,13 @@ func createSudoersFile() error {
 // createSudoersGroup creates the google-sudoers group if it does not exist.
 func createSudoersGroup() error {
 	groupadd := config.Section("Accounts").Key("groupadd_cmd").MustString("groupadd {group}")
-	ret := runCmdOutput(createUserGroupCmd(groupadd, "", "google-sudoers"))
-	if ret.ExitCode() == 9 {
+	name, args := createUserGroupCmd(groupadd, "", "google-sudoers")
+	ret := run.WithOutput(name, args...)
+	if ret.ExitCode == 9 {
 		// 9 means group already exists.
 		return nil
 	}
-	if ret.ExitCode() != 0 {
+	if ret.ExitCode != 0 {
 		return error(ret)
 	}
 	logger.Infof("Created google sudoers file")
@@ -483,6 +486,10 @@ func updateAuthorizedKeysFile(user string, keys []string) error {
 		os.Remove(tempPath)
 		return fmt.Errorf("error setting ownership of new keys file: %v", err)
 	}
-	runCmd(exec.Command("restorecon", tempPath))
+
+	if err := run.Quiet("restorecon", tempPath); err != nil {
+		return fmt.Errorf("error setting selinux context: %+v", err)
+	}
+
 	return os.Rename(tempPath, akpath)
 }

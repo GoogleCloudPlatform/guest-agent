@@ -20,6 +20,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/run"
 	sspb "github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/snapshot_service"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 	"github.com/golang/groupcache/lru"
@@ -59,17 +60,16 @@ func runScript(ctx context.Context, path, disks string, config snapshotConfig) (
 		return -1, sspb.AgentErrorCode_SCRIPT_NOT_FOUND
 	}
 
-	execResult := runCmdOutputWithTimeout(ctx, config.timeout, path, disks)
-
-	if execResult.code == 124 {
-		return execResult.code, sspb.AgentErrorCode_SCRIPT_TIMED_OUT
+	execResult := run.WithOutputTimeout(ctx, config.timeout, path, disks)
+	if execResult.ExitCode == 124 {
+		return execResult.ExitCode, sspb.AgentErrorCode_SCRIPT_TIMED_OUT
 	}
 
-	if execResult.code != 0 {
-		return execResult.code, sspb.AgentErrorCode_UNHANDLED_SCRIPT_ERROR
+	if execResult.ExitCode != 0 {
+		return execResult.ExitCode, sspb.AgentErrorCode_UNHANDLED_SCRIPT_ERROR
 	}
 
-	return execResult.code, sspb.AgentErrorCode_NO_ERROR
+	return execResult.ExitCode, sspb.AgentErrorCode_NO_ERROR
 }
 
 func listenForSnapshotRequests(ctx context.Context, address string, requestChan chan<- *sspb.GuestMessage) {

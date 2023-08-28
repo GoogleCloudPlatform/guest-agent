@@ -20,12 +20,12 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"os/exec"
 	"reflect"
 	"runtime"
 	"strings"
 	"time"
 
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/run"
 	"github.com/GoogleCloudPlatform/guest-agent/metadata"
 	"github.com/GoogleCloudPlatform/guest-agent/utils"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
@@ -137,12 +137,12 @@ func getLocalRoutes(ifname string) ([]string, error) {
 
 	protoID := config.Section("IpForwarding").Key("ethernet_proto_id").MustString(defaultProtoID)
 	args := fmt.Sprintf("route list table local type local scope host dev %s proto %s", ifname, protoID)
-	out := runCmdOutput(exec.Command("ip", strings.Split(args, " ")...))
-	if out.ExitCode() != 0 {
+	out := run.WithOutput("ip", strings.Split(args, " ")...)
+	if out.ExitCode != 0 {
 		return nil, error(out)
 	}
 	var res []string
-	for _, line := range strings.Split(out.Stdout(), "\n") {
+	for _, line := range strings.Split(out.StdOut, "\n") {
 		line = strings.TrimPrefix(line, "local ")
 		line = strings.TrimSpace(line)
 		if line != "" {
@@ -152,11 +152,11 @@ func getLocalRoutes(ifname string) ([]string, error) {
 
 	// and again for IPv6 routes, without 'scope host' which is IPv4 only
 	args = fmt.Sprintf("-6 route list table local type local dev %s proto %s", ifname, protoID)
-	out = runCmdOutput(exec.Command("ip", strings.Split(args, " ")...))
-	if out.ExitCode() != 0 {
+	out = run.WithOutput("ip", strings.Split(args, " ")...)
+	if out.ExitCode != 0 {
 		return nil, error(out)
 	}
-	for _, line := range strings.Split(out.Stdout(), "\n") {
+	for _, line := range strings.Split(out.StdOut, "\n") {
 		line = strings.TrimPrefix(line, "local ")
 		line = strings.Split(line, " ")[0]
 		line = strings.TrimSpace(line)
@@ -179,7 +179,7 @@ func addLocalRoute(ip, ifname string) error {
 	}
 	protoID := config.Section("IpForwarding").Key("ethernet_proto_id").MustString(defaultProtoID)
 	args := fmt.Sprintf("route add to local %s scope host dev %s proto %s", ip, ifname, protoID)
-	return runCmd(exec.Command("ip", strings.Split(args, " ")...))
+	return run.Quiet("ip", strings.Split(args, " ")...)
 }
 
 // TODO: removeLocalRoute should be changed to removeIPForwardEntry and match getIPForwardEntries.
@@ -194,7 +194,7 @@ func removeLocalRoute(ip, ifname string) error {
 	}
 	protoID := config.Section("IpForwarding").Key("ethernet_proto_id").MustString(defaultProtoID)
 	args := fmt.Sprintf("route delete to local %s scope host dev %s proto %s", ip, ifname, protoID)
-	return runCmd(exec.Command("ip", strings.Split(args, " ")...))
+	return run.Quiet("ip", strings.Split(args, " ")...)
 }
 
 // Filter out forwarded ips based on WSFC (Windows Failover Cluster Settings).
@@ -468,32 +468,32 @@ func configureIPv6() error {
 		// Before obtaining or releasing an IPv6 lease, we wait for
 		// 'tentative' IPs as part of SLAAC. We wait up to 5 seconds
 		// for this condition to automatically resolve.
-		tentative := exec.Command("ip", "-6", "-o", "a", "s", "dev", iface.Name, "scope", "link", "tentative")
+		tentative := []string{"-6", "-o", "a", "s", "dev", iface.Name, "scope", "link", "tentative"}
 		for i := 0; i < 5; i++ {
-			res := runCmdOutput(tentative)
-			if res.ExitCode() == 0 && res.Stdout() == "" {
+			res := run.WithOutput("ip", tentative...)
+			if res.ExitCode == 0 && res.StdOut == "" {
 				break
 			}
 			time.Sleep(1 * time.Second)
 		}
-		if err := runCmd(exec.Command("dhclient", "-r", "-6", "-1", "-v", iface.Name)); err != nil {
+		if err := run.Quiet("dhclient", "-r", "-6", "-1", "-v", iface.Name); err != nil {
 			return err
 		}
 	case oldNi.DHCPv6Refresh == "" && newNi.DHCPv6Refresh != "":
 		// enable
-		tentative := exec.Command("ip", "-6", "-o", "a", "s", "dev", iface.Name, "scope", "link", "tentative")
+		tentative := []string{"-6", "-o", "a", "s", "dev", iface.Name, "scope", "link", "tentative"}
 		for i := 0; i < 5; i++ {
-			res := runCmdOutput(tentative)
-			if res.ExitCode() == 0 && res.Stdout() == "" {
+			res := run.WithOutput("ip", tentative...)
+			if res.ExitCode == 0 && res.StdOut == "" {
 				break
 			}
 			time.Sleep(1 * time.Second)
 		}
 		val := fmt.Sprintf("net.ipv6.conf.%s.accept_ra_rt_info_max_plen=128", iface.Name)
-		if err := runCmd(exec.Command("sysctl", val)); err != nil {
+		if err := run.Quiet("sysctl", val); err != nil {
 			return err
 		}
-		if err := runCmd(exec.Command("dhclient", "-1", "-6", "-v", iface.Name)); err != nil {
+		if err := run.Quiet("dhclient", "-1", "-6", "-v", iface.Name); err != nil {
 			return err
 		}
 	}
@@ -553,11 +553,12 @@ func enableNetworkInterfaces() error {
 	default:
 		dhcpCommand := config.Section("NetworkInterfaces").Key("dhcp_command").String()
 		if dhcpCommand != "" {
-			return runCmd(exec.Command(dhcpCommand))
+			tokens := strings.Split(dhcpCommand, " ")
+			return run.Quiet(tokens[0], tokens[1:]...)
 		}
 
 		// Try IPv4 first as it's higher priority.
-		if err := runCmd(exec.Command("dhclient", googleInterfaces...)); err != nil {
+		if err := run.Quiet("dhclient", googleInterfaces...); err != nil {
 			return err
 		}
 
@@ -567,14 +568,14 @@ func enableNetworkInterfaces() error {
 		for _, iface := range googleIpv6Interfaces {
 			// Enable kernel to accept to route advertisements.
 			val := fmt.Sprintf("net.ipv6.conf.%s.accept_ra_rt_info_max_plen=128", iface)
-			if err := runCmd(exec.Command("sysctl", val)); err != nil {
+			if err := run.Quiet("sysctl", val); err != nil {
 				return err
 			}
 		}
 
 		var dhclientArgs6 []string
 		dhclientArgs6 = append([]string{"-6"}, googleIpv6Interfaces...)
-		return runCmd(exec.Command("dhclient", dhclientArgs6...))
+		return run.Quiet("dhclient", dhclientArgs6...)
 	}
 }
 
@@ -606,7 +607,7 @@ func enableSLESInterfaces(interfaces []string) error {
 		priority += 100
 	}
 	args := append([]string{"ifup", "--timeout", "1"}, interfaces...)
-	return runCmd(exec.Command("/usr/sbin/wicked", args...))
+	return run.Quiet("/usr/sbin/wicked", args...)
 }
 
 // disableNM writes an ifcfg file with DHCP and NetworkManager disabled.

@@ -18,6 +18,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/run"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 	"golang.org/x/sys/windows/registry"
 )
@@ -106,8 +107,8 @@ func deleteRegKey(key, name string) error {
 }
 
 func checkWindowsServiceRunning(servicename string) bool {
-	res := runCmdOutput(exec.Command("sc", "query", servicename))
-	return strings.Contains(res.Stdout(), "RUNNING")
+	res := run.WithOutput("sc", "query", servicename)
+	return strings.Contains(res.StdOut, "RUNNING")
 }
 
 func getWindowsServiceImagePath(regKey string) (string, error) {
