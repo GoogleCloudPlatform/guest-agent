@@ -299,8 +299,8 @@ func runCmdOutput(cmd *exec.Cmd) *execResult {
 	return &execResult{code: 0, out: stdout.String()}
 }
 
-func runCmdOutputWithTimeout(timeout time.Duration, name string, args ...string) *execResult {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+func runCmdOutputWithTimeout(ctx context.Context, timeout time.Duration, name string, args ...string) *execResult {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	execResult := runCmdOutput(exec.CommandContext(ctx, name, args...))
 	if ctx.Err() != nil && errors.Is(ctx.Err(), context.DeadlineExceeded) {
