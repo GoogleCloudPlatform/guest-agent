@@ -107,7 +107,7 @@ func agentInit(ctx context.Context) {
 			logger.Infof("Snapshot listener enabled")
 			snapshotServiceIP := config.Section("Snapshots").Key("snapshot_service_ip").MustString("169.254.169.254")
 			snapshotServicePort := config.Section("Snapshots").Key("snapshot_service_port").MustInt(8081)
-			startSnapshotListener(snapshotServiceIP, snapshotServicePort)
+			startSnapshotListener(ctx, snapshotServiceIP, snapshotServicePort)
 		}
 
 		// These scripts are run regardless of metadata/network access and config options.

@@ -52,14 +52,14 @@ func getSnapshotConfig() (snapshotConfig, error) {
 	return conf, nil
 }
 
-func runScript(path, disks string, config snapshotConfig) (int, sspb.AgentErrorCode) {
+func runScript(ctx context.Context, path, disks string, config snapshotConfig) (int, sspb.AgentErrorCode) {
 	logger.Infof("Running guest consistent snapshot script at: %s.", path)
 
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return -1, sspb.AgentErrorCode_SCRIPT_NOT_FOUND
 	}
 
-	execResult := runCmdOutputWithTimeout(config.timeout, path, disks)
+	execResult := runCmdOutputWithTimeout(ctx, config.timeout, path, disks)
 
 	if execResult.code == 124 {
 		return execResult.code, sspb.AgentErrorCode_SCRIPT_TIMED_OUT
@@ -72,7 +72,7 @@ func runScript(path, disks string, config snapshotConfig) (int, sspb.AgentErrorC
 	return execResult.code, sspb.AgentErrorCode_NO_ERROR
 }
 
-func listenForSnapshotRequests(address string, requestChan chan<- *sspb.GuestMessage) {
+func listenForSnapshotRequests(ctx context.Context, address string, requestChan chan<- *sspb.GuestMessage) {
 	for {
 		// Start hanging connection on server that feeds to channel
 		logger.Infof("Attempting to connect to snapshot service at %s.", address)
@@ -83,7 +83,7 @@ func listenForSnapshotRequests(address string, requestChan chan<- *sspb.GuestMes
 		}
 
 		c := sspb.NewSnapshotServiceClient(conn)
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(ctx)
 		guestReady := sspb.GuestReady{
 			RequestServerInfo: false,
 		}
@@ -106,7 +106,7 @@ func listenForSnapshotRequests(address string, requestChan chan<- *sspb.GuestMes
 	}
 }
 
-func getSnapshotResponse(guestMessage *sspb.GuestMessage) *sspb.SnapshotResponse {
+func getSnapshotResponse(ctx context.Context, guestMessage *sspb.GuestMessage) *sspb.SnapshotResponse {
 	switch {
 	case guestMessage.GetSnapshotRequest() != nil:
 		request := guestMessage.GetSnapshotRequest()
@@ -147,7 +147,7 @@ func getSnapshotResponse(guestMessage *sspb.GuestMessage) *sspb.SnapshotResponse
 			return nil
 		}
 
-		scriptsReturnCode, agentErrorCode := runScript(url, request.GetDiskList(), config)
+		scriptsReturnCode, agentErrorCode := runScript(ctx, url, request.GetDiskList(), config)
 		response.ScriptsReturnCode = int32(scriptsReturnCode)
 		response.AgentReturnCode = agentErrorCode
 
@@ -157,7 +157,7 @@ func getSnapshotResponse(guestMessage *sspb.GuestMessage) *sspb.SnapshotResponse
 	return nil
 }
 
-func handleSnapshotRequests(address string, requestChan <-chan *sspb.GuestMessage) {
+func handleSnapshotRequests(ctx context.Context, address string, requestChan <-chan *sspb.GuestMessage) {
 	for {
 		conn, err := grpc.Dial(address, grpc.WithInsecure(), grpc.WithBlock())
 		if err != nil {
@@ -167,7 +167,7 @@ func handleSnapshotRequests(address string, requestChan <-chan *sspb.GuestMessag
 		for {
 			// Listen on channel and respond
 			guestMessage := <-requestChan
-			response := getSnapshotResponse(guestMessage)
+			response := getSnapshotResponse(ctx, guestMessage)
 
 			// We either got a duplicated pre/post or an invalid request
 			// in both cases we want to ignore it.
@@ -179,7 +179,7 @@ func handleSnapshotRequests(address string, requestChan <-chan *sspb.GuestMessag
 				logger.Infof("Attempt %d/%d of handling snapshot request.", i+1, maxRequestHandleAttempts)
 
 				c := sspb.NewSnapshotServiceClient(conn)
-				ctx, cancel := context.WithCancel(context.Background())
+				ctx, cancel := context.WithCancel(ctx)
 				defer cancel()
 
 				_, err = c.HandleResponsesFromGuest(ctx, response)
@@ -196,7 +196,7 @@ func handleSnapshotRequests(address string, requestChan <-chan *sspb.GuestMessag
 	}
 }
 
-func startSnapshotListener(snapshotServiceIP string, snapshotServicePort int) {
+func startSnapshotListener(ctx context.Context, snapshotServiceIP string, snapshotServicePort int) {
 	requestChan := make(chan *sspb.GuestMessage)
 	address := fmt.Sprintf("%s:%d", snapshotServiceIP, snapshotServicePort)
 
@@ -207,6 +207,6 @@ func startSnapshotListener(snapshotServiceIP string, snapshotServicePort int) {
 		os.MkdirAll(scriptsDir, 0700)
 	}
 
-	go listenForSnapshotRequests(address, requestChan)
-	go handleSnapshotRequests(address, requestChan)
+	go listenForSnapshotRequests(ctx, address, requestChan)
+	go handleSnapshotRequests(ctx, address, requestChan)
 }
