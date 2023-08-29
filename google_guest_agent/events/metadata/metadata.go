@@ -39,7 +39,7 @@ var (
 
 // Watcher is the metadata event watcher implementation.
 type Watcher struct {
-	client         *metadata.Client
+	client         metadata.MDSClientInterface
 	failedPrevious bool
 }
 
@@ -62,10 +62,6 @@ func (mp *Watcher) Events() []string {
 
 // Run listens to metadata changes and report back the event.
 func (mp *Watcher) Run(ctx context.Context, evType string) (bool, interface{}, error) {
-	if mp.failedPrevious {
-		time.Sleep(retryWaitDuration)
-	}
-
 	descriptor, err := mp.client.Watch(ctx)
 	if err != nil {
 		// Only log error once to avoid transient errors and not to spam the log on network failures.
