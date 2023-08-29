@@ -130,14 +130,14 @@ type ipForwardEntry struct {
 }
 
 // TODO: getLocalRoutes and getIPForwardEntries should be merged.
-func getLocalRoutes(ifname string) ([]string, error) {
+func getLocalRoutes(ctx context.Context, ifname string) ([]string, error) {
 	if runtime.GOOS == "windows" {
 		return nil, errors.New("getLocalRoutes unimplemented on Windows")
 	}
 
 	protoID := config.Section("IpForwarding").Key("ethernet_proto_id").MustString(defaultProtoID)
 	args := fmt.Sprintf("route list table local type local scope host dev %s proto %s", ifname, protoID)
-	out := run.WithOutput("ip", strings.Split(args, " ")...)
+	out := run.WithOutput(ctx, "ip", strings.Split(args, " ")...)
 	if out.ExitCode != 0 {
 		return nil, error(out)
 	}
@@ -152,7 +152,7 @@ func getLocalRoutes(ifname string) ([]string, error) {
 
 	// and again for IPv6 routes, without 'scope host' which is IPv4 only
 	args = fmt.Sprintf("-6 route list table local type local dev %s proto %s", ifname, protoID)
-	out = run.WithOutput("ip", strings.Split(args, " ")...)
+	out = run.WithOutput(ctx, "ip", strings.Split(args, " ")...)
 	if out.ExitCode != 0 {
 		return nil, error(out)
 	}
@@ -168,7 +168,7 @@ func getLocalRoutes(ifname string) ([]string, error) {
 }
 
 // TODO: addLocalRoute and addRoute should be merged with the addition of ipForwardType to ipForwardEntry.
-func addLocalRoute(ip, ifname string) error {
+func addLocalRoute(ctx context.Context, ip, ifname string) error {
 	if runtime.GOOS == "windows" {
 		return errors.New("addLocalRoute unimplemented on Windows")
 	}
@@ -179,11 +179,11 @@ func addLocalRoute(ip, ifname string) error {
 	}
 	protoID := config.Section("IpForwarding").Key("ethernet_proto_id").MustString(defaultProtoID)
 	args := fmt.Sprintf("route add to local %s scope host dev %s proto %s", ip, ifname, protoID)
-	return run.Quiet("ip", strings.Split(args, " ")...)
+	return run.Quiet(ctx, "ip", strings.Split(args, " ")...)
 }
 
 // TODO: removeLocalRoute should be changed to removeIPForwardEntry and match getIPForwardEntries.
-func removeLocalRoute(ip, ifname string) error {
+func removeLocalRoute(ctx context.Context, ip, ifname string) error {
 	if runtime.GOOS == "windows" {
 		return errors.New("removeLocalRoute unimplemented on Windows")
 	}
@@ -194,7 +194,7 @@ func removeLocalRoute(ip, ifname string) error {
 	}
 	protoID := config.Section("IpForwarding").Key("ethernet_proto_id").MustString(defaultProtoID)
 	args := fmt.Sprintf("route delete to local %s scope host dev %s proto %s", ip, ifname, protoID)
-	return run.Quiet("ip", strings.Split(args, " ")...)
+	return run.Quiet(ctx, "ip", strings.Split(args, " ")...)
 }
 
 // Filter out forwarded ips based on WSFC (Windows Failover Cluster Settings).
@@ -298,7 +298,7 @@ func (a *addressMgr) set(ctx context.Context) error {
 	if config.Section("NetworkInterfaces").Key("setup").MustBool(true) {
 		if runtime.GOOS != "windows" {
 			logger.Debugf("Configure IPv6")
-			if err := configureIPv6(); err != nil {
+			if err := configureIPv6(ctx); err != nil {
 				// Continue through IPv6 configuration errors.
 				logger.Errorf("Error configuring IPv6: %v", err)
 			}
@@ -306,7 +306,7 @@ func (a *addressMgr) set(ctx context.Context) error {
 
 		if runtime.GOOS != "windows" && !interfacesEnabled {
 			logger.Debugf("Enable network interfaces")
-			if err := enableNetworkInterfaces(); err != nil {
+			if err := enableNetworkInterfaces(ctx); err != nil {
 				return err
 			}
 			interfacesEnabled = true
@@ -360,7 +360,7 @@ func (a *addressMgr) set(ctx context.Context) error {
 				}
 			}
 		} else {
-			forwardedIPs, err = getLocalRoutes(iface.Name)
+			forwardedIPs, err = getLocalRoutes(ctx, iface.Name)
 			if err != nil {
 				logger.Errorf("Error getting routes: %v", err)
 				continue
@@ -409,7 +409,7 @@ func (a *addressMgr) set(ctx context.Context) error {
 					err = addAddress(net.ParseIP(ip), net.IPv4Mask(255, 255, 255, 255), uint32(iface.Index))
 				}
 			} else {
-				err = addLocalRoute(ip, iface.Name)
+				err = addLocalRoute(ctx, ip, iface.Name)
 			}
 			if err == nil {
 				registryEntries = append(registryEntries, ip)
@@ -426,7 +426,7 @@ func (a *addressMgr) set(ctx context.Context) error {
 				}
 				err = removeAddress(net.ParseIP(ip), uint32(iface.Index))
 			} else {
-				err = removeLocalRoute(ip, iface.Name)
+				err = removeLocalRoute(ctx, ip, iface.Name)
 			}
 			if err != nil {
 				logger.Errorf("error removing route: %v", err)
@@ -446,7 +446,7 @@ func (a *addressMgr) set(ctx context.Context) error {
 }
 
 // Enables or disables IPv6 on network interfaces.
-func configureIPv6() error {
+func configureIPv6(ctx context.Context) error {
 	var newNi, oldNi metadata.NetworkInterfaces
 	if len(newMetadata.Instance.NetworkInterfaces) == 0 {
 		return fmt.Errorf("no interfaces found in metadata")
@@ -470,30 +470,30 @@ func configureIPv6() error {
 		// for this condition to automatically resolve.
 		tentative := []string{"-6", "-o", "a", "s", "dev", iface.Name, "scope", "link", "tentative"}
 		for i := 0; i < 5; i++ {
-			res := run.WithOutput("ip", tentative...)
+			res := run.WithOutput(ctx, "ip", tentative...)
 			if res.ExitCode == 0 && res.StdOut == "" {
 				break
 			}
 			time.Sleep(1 * time.Second)
 		}
-		if err := run.Quiet("dhclient", "-r", "-6", "-1", "-v", iface.Name); err != nil {
+		if err := run.Quiet(ctx, "dhclient", "-r", "-6", "-1", "-v", iface.Name); err != nil {
 			return err
 		}
 	case oldNi.DHCPv6Refresh == "" && newNi.DHCPv6Refresh != "":
 		// enable
 		tentative := []string{"-6", "-o", "a", "s", "dev", iface.Name, "scope", "link", "tentative"}
 		for i := 0; i < 5; i++ {
-			res := run.WithOutput("ip", tentative...)
+			res := run.WithOutput(ctx, "ip", tentative...)
 			if res.ExitCode == 0 && res.StdOut == "" {
 				break
 			}
 			time.Sleep(1 * time.Second)
 		}
 		val := fmt.Sprintf("net.ipv6.conf.%s.accept_ra_rt_info_max_plen=128", iface.Name)
-		if err := run.Quiet("sysctl", val); err != nil {
+		if err := run.Quiet(ctx, "sysctl", val); err != nil {
 			return err
 		}
-		if err := run.Quiet("dhclient", "-1", "-6", "-v", iface.Name); err != nil {
+		if err := run.Quiet(ctx, "dhclient", "-1", "-6", "-v", iface.Name); err != nil {
 			return err
 		}
 	}
@@ -504,7 +504,7 @@ func configureIPv6() error {
 // and `dhclient -6 eth1 eth2 ... ethN`.
 // On RHEL7, it also calls disableNM for each interface.
 // On SLES, it calls enableSLESInterfaces instead of dhclient.
-func enableNetworkInterfaces() error {
+func enableNetworkInterfaces(ctx context.Context) error {
 	if len(newMetadata.Instance.NetworkInterfaces) < 2 {
 		return nil
 	}
@@ -541,7 +541,7 @@ func enableNetworkInterfaces() error {
 
 	switch {
 	case osInfo.OS == "sles":
-		return enableSLESInterfaces(googleInterfaces)
+		return enableSLESInterfaces(ctx, googleInterfaces)
 	case (osInfo.OS == "rhel" || osInfo.OS == "centos") && osInfo.Version.Major >= 7:
 		for _, iface := range googleInterfaces {
 			err := disableNM(iface)
@@ -554,11 +554,11 @@ func enableNetworkInterfaces() error {
 		dhcpCommand := config.Section("NetworkInterfaces").Key("dhcp_command").String()
 		if dhcpCommand != "" {
 			tokens := strings.Split(dhcpCommand, " ")
-			return run.Quiet(tokens[0], tokens[1:]...)
+			return run.Quiet(ctx, tokens[0], tokens[1:]...)
 		}
 
 		// Try IPv4 first as it's higher priority.
-		if err := run.Quiet("dhclient", googleInterfaces...); err != nil {
+		if err := run.Quiet(ctx, "dhclient", googleInterfaces...); err != nil {
 			return err
 		}
 
@@ -568,20 +568,20 @@ func enableNetworkInterfaces() error {
 		for _, iface := range googleIpv6Interfaces {
 			// Enable kernel to accept to route advertisements.
 			val := fmt.Sprintf("net.ipv6.conf.%s.accept_ra_rt_info_max_plen=128", iface)
-			if err := run.Quiet("sysctl", val); err != nil {
+			if err := run.Quiet(ctx, "sysctl", val); err != nil {
 				return err
 			}
 		}
 
 		var dhclientArgs6 []string
 		dhclientArgs6 = append([]string{"-6"}, googleIpv6Interfaces...)
-		return run.Quiet("dhclient", dhclientArgs6...)
+		return run.Quiet(ctx, "dhclient", dhclientArgs6...)
 	}
 }
 
 // enableSLESInterfaces writes one ifcfg file for each interface, then
 // runs `wicked ifup eth1 eth2 ... ethN`
-func enableSLESInterfaces(interfaces []string) error {
+func enableSLESInterfaces(ctx context.Context, interfaces []string) error {
 	var err error
 	var priority = 10100
 	for _, iface := range interfaces {
@@ -607,7 +607,7 @@ func enableSLESInterfaces(interfaces []string) error {
 		priority += 100
 	}
 	args := append([]string{"ifup", "--timeout", "1"}, interfaces...)
-	return run.Quiet("/usr/sbin/wicked", args...)
+	return run.Quiet(ctx, "/usr/sbin/wicked", args...)
 }
 
 // disableNM writes an ifcfg file with DHCP and NetworkManager disabled.

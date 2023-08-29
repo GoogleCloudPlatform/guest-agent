@@ -18,6 +18,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 )
 
@@ -43,10 +44,10 @@ func getWindowsServiceImagePath(regKey string) (string, error) {
 	return "", nil
 }
 
-func getWindowsExeVersion(path string) (versionInfo, error) {
+func getWindowsExeVersion(ctx context.Context, path string) (versionInfo, error) {
 	return versionInfo{0, 0}, nil
 }
 
-func checkWindowsServiceRunning(servicename string) bool {
+func checkWindowsServiceRunning(ctx context.Context, servicename string) bool {
 	return false
 }

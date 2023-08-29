@@ -15,7 +15,8 @@
 package main
 
 import (
-	"os/exec"
+	"context"
+	"fmt"
 	"strings"
 
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/run"
@@ -106,8 +107,8 @@ func deleteRegKey(key, name string) error {
 	return k.DeleteValue(name)
 }
 
-func checkWindowsServiceRunning(servicename string) bool {
-	res := run.WithOutput("sc", "query", servicename)
+func checkWindowsServiceRunning(ctx context.Context, servicename string) bool {
+	res := run.WithOutput(ctx, "sc", "query", servicename)
 	return strings.Contains(res.StdOut, "RUNNING")
 }
 
@@ -120,11 +121,11 @@ func getWindowsServiceImagePath(regKey string) (string, error) {
 	return imagePath, nil
 }
 
-func getWindowsExeVersion(path string) (versionInfo, error) {
+func getWindowsExeVersion(ctx context.Context, path string) (versionInfo, error) {
 	psCmd := "(Get-Item '" + path + "').VersionInfo.FileVersion"
-	psVer, err := exec.Command("powershell", "-c", psCmd).Output()
-	if err != nil {
-		return versionInfo{0, 0}, err
+	res := run.WithOutput(ctx, "powershell", "-c", psCmd)
+	if res.ExitCode != 0 {
+		return versionInfo{0, 0}, fmt.Errorf(res.Error())
 	}
-	return parseVersionInfo(psVer)
+	return parseVersionInfo([]byte(res.StdOut))
 }
