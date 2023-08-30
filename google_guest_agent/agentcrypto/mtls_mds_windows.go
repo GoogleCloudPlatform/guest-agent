@@ -19,6 +19,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
+	"os"
 	"path/filepath"
 	"syscall"
 	"unsafe"
@@ -30,10 +31,13 @@ import (
 )
 
 const (
-	// defaultCredsDir is the directory location for MTLS MDS credentials.
-	defaultCredsDir = `C:\Program Files\Google\Compute Engine\certs\mds`
+	// rootCACertFileName is the root CA cert.
+	rootCACertFileName = "mds-mtls-root.crt"
+	// clientCredsFileName are client credentials, its basically the file
+	// that has the EC private key and the client certificate concatenated.
+	clientCredsFileName = "mds-mtls-client.key"
 	// pfxFile stores client credentials in PFX format.
-	pfxFile = "client.key.pfx"
+	pfxFile = "mds-mtls-client.key.pfx"
 	// cryptExportable (CRYPT_EXPORTABLE) is used to mark imported as keys as exportable.
 	cryptExportable = 0x00000001
 	// https://learn.microsoft.com/en-us/windows/win32/seccrypto/system-store-locations
@@ -49,12 +53,14 @@ const (
 )
 
 var (
-	prevCtx *windows.CertContext
+	// defaultCredsDir is the directory location for MTLS MDS credentials.
+	defaultCredsDir = filepath.Join(os.Getenv("ProgramData"), "Google", "Compute Engine")
+	prevCtx         *windows.CertContext
 )
 
 // writeRootCACert writes Root CA cert from UEFI variable to output file.
 func (j *CredsJob) writeRootCACert(cacert []byte, outputFile string) error {
-	if err := utils.WriteFile(cacert, outputFile); err != nil {
+	if err := utils.SaferWriteFile(cacert, outputFile); err != nil {
 		return err
 	}
 
@@ -145,7 +151,7 @@ func (j *CredsJob) writeClientCredentials(creds []byte, outputFile string) error
 		logger.Warningf("Could not get previous serial number, will skip cleanup: %v", err)
 	}
 
-	if err := utils.WriteFile(creds, outputFile); err != nil {
+	if err := utils.SaferWriteFile(creds, outputFile); err != nil {
 		return fmt.Errorf("failed to write client key: %w", err)
 	}
 
@@ -155,7 +161,7 @@ func (j *CredsJob) writeClientCredentials(creds []byte, outputFile string) error
 	}
 
 	p := filepath.Join(filepath.Dir(outputFile), pfxFile)
-	if err := utils.WriteFile(pfx, p); err != nil {
+	if err := utils.SaferWriteFile(pfx, p); err != nil {
 		return fmt.Errorf("failed to write PFX file: %w", err)
 	}
 
