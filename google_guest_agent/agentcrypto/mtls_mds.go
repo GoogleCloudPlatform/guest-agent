@@ -38,11 +38,6 @@ const (
 	googleGUID = "8be4df61-93ca-11d2-aa0d-00e098032b8c"
 	// googleRootCACertEFIVarName is predefined string part of the UEFI variable name that holds Root CA cert.
 	googleRootCACertEFIVarName = "InstanceRootCACertificate"
-	// rootCACertFileName is the root CA cert.
-	rootCACertFileName = "root.crt"
-	// clientCredsFileName are client credentials, its basically the file
-	// that has the EC private key and the client certificate concatenated.
-	clientCredsFileName = "client.key"
 	// clientCertsKey is the metadata server key at which client identity certificate is exposed.
 	clientCertsKey = "instance/credentials/certs"
 	// MTLSSchedulerID is the identifier used by job scheduler.
@@ -160,7 +155,7 @@ func (j *CredsJob) fetchClientCredentials(ctx context.Context, rootCA string) ([
 //
 // Windows example:
 //
-// $cert = Get-PfxCertificate -FilePath "C:\Program Files\Google\Compute Engine\certs\mds\client.key.pfx"
+// $cert = Get-PfxCertificate -FilePath "C:\ProgramData\Google\Compute Engine\mds-mtls-client.key.pfx"
 // or
 // $cert = Get-ChildItem Cert:\LocalMachine\My | Where-Object { $_.Issuer -like "*google.internal*" }
 // Invoke-RestMethod -Uri https://169.254.169.254 -Method Get -Headers @{"Metadata-Flavor"="Google"} -Certificate $cert

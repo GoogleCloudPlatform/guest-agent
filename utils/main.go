@@ -171,3 +171,29 @@ func WriteFile(content []byte, outputFile string) error {
 	}
 	return os.WriteFile(outputFile, content, 0644)
 }
+
+// SaferWriteFile writes to a temporary file and then replaces the expected output file.
+// This prevents other processes from reading partial content while the writer is still writing.
+func SaferWriteFile(content []byte, outputFile string) error {
+	dir := filepath.Dir(outputFile)
+	name := filepath.Base(outputFile)
+
+	if err := os.MkdirAll(dir, 0644); err != nil {
+		return fmt.Errorf("unable to create required directories %q: %w", dir, err)
+	}
+
+	tmp, err := os.CreateTemp(dir, name+"*")
+	if err != nil {
+		return fmt.Errorf("unable to create temporary file under %q: %w", dir, err)
+	}
+
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("failed to close temporary file: %w", err)
+	}
+
+	if err := WriteFile(content, tmp.Name()); err != nil {
+		return fmt.Errorf("unable to write to a temporary file %q: %w", tmp.Name(), err)
+	}
+
+	return os.Rename(tmp.Name(), outputFile)
+}

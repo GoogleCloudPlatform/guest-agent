@@ -19,14 +19,19 @@ import "github.com/GoogleCloudPlatform/guest-agent/utils"
 const (
 	// defaultCredsDir is the directory location for MTLS MDS credentials.
 	defaultCredsDir = "/run/google-mds-mtls"
+	// rootCACertFileName is the root CA cert.
+	rootCACertFileName = "root.crt"
+	// clientCredsFileName are client credentials, its basically the file
+	// that has the EC private key and the client certificate concatenated.
+	clientCredsFileName = "client.key"
 )
 
 // writeRootCACert writes Root CA cert from UEFI variable to output file.
 func (j *CredsJob) writeRootCACert(content []byte, outputFile string) error {
-	return utils.WriteFile(content, outputFile)
+	return utils.SaferWriteFile(content, outputFile)
 }
 
 // writeClientCredentials stores client credentials (certificate and private key).
 func (j *CredsJob) writeClientCredentials(plaintext []byte, outputFile string) error {
-	return utils.WriteFile(plaintext, outputFile)
+	return utils.SaferWriteFile(plaintext, outputFile)
 }

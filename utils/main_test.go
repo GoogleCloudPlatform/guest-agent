@@ -15,6 +15,8 @@
 package utils
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -128,5 +130,22 @@ func TestValidateUser(t *testing.T) {
 		if isValid != tt.valid {
 			t.Errorf("ValidateUser(%s) incorrect return: expected: %t - got: %t", tt.user, tt.valid, isValid)
 		}
+	}
+}
+
+func TestSaferWriteFile(t *testing.T) {
+	f := filepath.Join(t.TempDir(), "file")
+	want := "test-data"
+
+	if err := SaferWriteFile([]byte(want), f); err != nil {
+		t.Errorf("SaferWriteFile(%s, %s) failed unexpectedly with err: %+v", "test-data", f, err)
+	}
+
+	got, err := os.ReadFile(f)
+	if err != nil {
+		t.Errorf("os.ReadFile(%s) failed unexpectedly with err: %+v", f, err)
+	}
+	if string(got) != want {
+		t.Errorf("os.ReadFile(%s) = %s, want %s", f, string(got), want)
 	}
 }
