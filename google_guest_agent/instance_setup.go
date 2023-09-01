@@ -17,7 +17,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"runtime"
@@ -25,7 +24,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/agentcrypto"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/run"
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/scheduler"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 	"github.com/go-ini/ini"
 )
@@ -156,7 +157,7 @@ func agentInit(ctx context.Context) {
 		// the first boot of the instance.
 		// TODO Also do this for windows. liamh@13-11-2019
 		instanceIDFile := config.Section("Instance").Key("instance_id_dir").MustString("/etc") + "/google_instance_id"
-		instanceID, err := ioutil.ReadFile(instanceIDFile)
+		instanceID, err := os.ReadFile(instanceIDFile)
 		if err != nil && !os.IsNotExist(err) {
 			logger.Warningf("Not running first-boot actions, error reading instance ID: %v", err)
 		} else {
@@ -166,7 +167,7 @@ func agentInit(ctx context.Context) {
 
 				// Write instance ID to file for next time before moving on.
 				towrite := fmt.Sprintf("%s\n", newMetadata.Instance.ID.String())
-				if err := ioutil.WriteFile(instanceIDFile, []byte(towrite), 0644); err != nil {
+				if err := os.WriteFile(instanceIDFile, []byte(towrite), 0644); err != nil {
 					logger.Warningf("Failed to write instance ID file: %v", err)
 				}
 			}
@@ -185,13 +186,14 @@ func agentInit(ctx context.Context) {
 
 				// Write instance ID to file.
 				towrite := fmt.Sprintf("%s\n", newMetadata.Instance.ID.String())
-				if err := ioutil.WriteFile(instanceIDFile, []byte(towrite), 0644); err != nil {
+				if err := os.WriteFile(instanceIDFile, []byte(towrite), 0644); err != nil {
 					logger.Warningf("Failed to write instance ID file: %v", err)
 				}
 			}
 		}
-
 	}
+	// Schedules jobs that need to be started before notifying systemd Agent process has started.
+	scheduler.ScheduleJobs(ctx, []scheduler.Job{agentcrypto.New()}, true)
 }
 
 func generateSSHKeys(ctx context.Context) error {
@@ -250,7 +252,7 @@ func generateSSHKeys(ctx context.Context) error {
 			logger.Errorf("Failed to overwrite %q: %v", keyfile+".pub", err)
 			continue
 		}
-		pubKey, err := ioutil.ReadFile(keyfile + ".pub")
+		pubKey, err := os.ReadFile(keyfile + ".pub")
 		if err != nil {
 			logger.Errorf("Can't read %s public key: %v", keytype, err)
 			continue
