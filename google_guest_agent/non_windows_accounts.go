@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"path"
 	"sort"
 	"strconv"
@@ -487,8 +488,11 @@ func updateAuthorizedKeysFile(ctx context.Context, user string, keys []string) e
 		return fmt.Errorf("error setting ownership of new keys file: %v", err)
 	}
 
-	if err := run.Quiet(ctx, "restorecon", tempPath); err != nil {
-		return fmt.Errorf("error setting selinux context: %+v", err)
+	_, err = exec.LookPath("restorecon")
+	if err == nil {
+		if err := run.Quiet(ctx, "restorecon", tempPath); err != nil {
+			return fmt.Errorf("error setting selinux context: %+v", err)
+		}
 	}
 
 	return os.Rename(tempPath, akpath)

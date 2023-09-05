@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"os/exec"
 	"runtime"
 	"sort"
 	"strings"
@@ -265,7 +266,14 @@ func generateSSHKeys(ctx context.Context) error {
 			logger.Warningf("Generated key is malformed, not uploading")
 		}
 	}
-	run.Quiet(ctx, "restorecon", "-FR", hostKeyDir)
+
+	_, err = exec.LookPath("restorecon")
+	if err == nil {
+		if err := run.Quiet(ctx, "restorecon", "-FR", hostKeyDir); err != nil {
+			return fmt.Errorf("Failed to restore SELinux context for: %s", hostKeyDir)
+		}
+	}
+
 	return nil
 }
 
