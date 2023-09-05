@@ -59,7 +59,7 @@ func TestSchedule(t *testing.T) {
 	}
 	s := Get()
 
-	if err := s.ScheduleJob(context.Background(), job); err != nil {
+	if err := s.ScheduleJob(context.Background(), job, false); err != nil {
 		t.Errorf("AddJob(%s) failed unexecptedly with error: %v", job.ID(), err)
 	}
 
@@ -98,10 +98,10 @@ func TestMultipleSchedules(t *testing.T) {
 	defer s.Stop()
 
 	// Schedule multiple jobs.
-	if err := s.ScheduleJob(ctx, job1); err != nil {
+	if err := s.ScheduleJob(ctx, job1, false); err != nil {
 		t.Errorf("AddJob(%s) failed unexecptedly with error: %v", job1.id, err)
 	}
-	if err := s.ScheduleJob(ctx, job2); err != nil {
+	if err := s.ScheduleJob(ctx, job2, false); err != nil {
 		t.Errorf("AddJob(%s) failed unexecptedly with error: %v", job2.id, err)
 	}
 
@@ -138,7 +138,7 @@ func TestStopSchedule(t *testing.T) {
 		ctr:          0,
 	}
 
-	if err := s.ScheduleJob(context.Background(), job); err != nil {
+	if err := s.ScheduleJob(context.Background(), job, false); err != nil {
 		t.Errorf("AddJob(%s) failed unexecptedly with error: %v", job.ID(), err)
 	}
 
@@ -160,7 +160,52 @@ func TestScheduleJobError(t *testing.T) {
 	}
 	s := Get()
 
-	if err := s.ScheduleJob(context.Background(), job); err == nil {
+	if err := s.ScheduleJob(context.Background(), job, false); err == nil {
 		t.Errorf("ScheduleJob(ctx, %s) succeeded unexpectedly when shouldEnable set to false, want error", job.ID())
+	}
+}
+
+type testLongJob struct {
+	id       string
+	sleepFor time.Duration
+}
+
+func (j *testLongJob) Run(_ context.Context) (bool, error) {
+	time.Sleep(j.sleepFor)
+	return false, nil
+}
+
+func (j *testLongJob) ID() string {
+	return j.id
+}
+
+func (j *testLongJob) Interval() (time.Duration, bool) {
+	return 2 * time.Minute, true
+}
+
+func (j *testLongJob) ShouldEnable(_ context.Context) bool {
+	return true
+}
+
+func TestScheduleJobsWait(t *testing.T) {
+	ctx := context.Background()
+	start := time.Now().Second()
+	ScheduleJobs(ctx, []Job{&testLongJob{id: "job1", sleepFor: time.Second}}, true)
+	end := time.Now().Second()
+	want := 1
+
+	if got := end - start; got < want {
+		t.Errorf("ScheduleJobs(ctx, job1, true) returned after %d seconds, expected to wait for %d", got, want)
+	}
+}
+
+func TestScheduleJobsNoWait(t *testing.T) {
+	ctx := context.Background()
+	start := time.Now().Second()
+	ScheduleJobs(ctx, []Job{&testLongJob{id: "job1", sleepFor: time.Second}}, false)
+	end := time.Now().Second()
+
+	if got := end - start; got >= 1 {
+		t.Errorf("ScheduleJobs(ctx, job1, true) returned after %d seconds, expected no wait", got)
 	}
 }

@@ -25,7 +25,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/agentcrypto"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events"
 	mdsEvent "github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events/metadata"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events/sshtrustedca"
@@ -187,17 +186,8 @@ func runAgent(ctx context.Context) {
 	}
 
 	// knownJobs is list of default jobs that run on a pre-defined schedule.
-	knownJobs := []scheduler.Job{agentcrypto.New(), telemetry.New(mdsClient, programName, version)}
-	sched := scheduler.Get()
-	for _, job := range knownJobs {
-		go func(job scheduler.Job) {
-			if err := sched.ScheduleJob(ctx, job); err != nil {
-				logger.Errorf("Failed to schedule job %s with error: %v", job.ID(), err)
-			} else {
-				logger.Infof("Successfully scheduled job %s", job.ID())
-			}
-		}(job)
-	}
+	knownJobs := []scheduler.Job{telemetry.New(mdsClient, programName, version)}
+	scheduler.ScheduleJobs(ctx, knownJobs, false)
 
 	eventsConfig := &events.Config{
 		Watchers: []string{
