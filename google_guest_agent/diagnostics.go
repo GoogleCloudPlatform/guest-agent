@@ -17,11 +17,11 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"os/exec"
 	"reflect"
 	"strconv"
 	"sync/atomic"
 
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/run"
 	"github.com/GoogleCloudPlatform/guest-agent/utils"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 )
@@ -116,13 +116,13 @@ func (d *diagnosticsMgr) set(ctx context.Context) error {
 		logger.Infof("Diagnostics: reject the request, as an existing process is collecting logs from the system")
 		return nil
 	}
-	cmd := exec.Command(diagnosticsCmd, args...)
+
 	go func() {
 		logger.Infof("Diagnostics: collecting logs from the system.")
-		out, err := cmd.CombinedOutput()
-		logger.Infof(string(out[:]))
-		if err != nil {
-			logger.Infof("Error collecting logs: %v", err)
+		res := run.WithCombinedOutput(ctx, diagnosticsCmd, args...)
+		logger.Infof(res.Combined)
+		if res.ExitCode != 0 {
+			logger.Warningf("Error collecting logs: %v", res.Error())
 		}
 		// Job is done, unblock the following requests
 		atomic.SwapInt32(&isDiagnosticsRunning, 0)

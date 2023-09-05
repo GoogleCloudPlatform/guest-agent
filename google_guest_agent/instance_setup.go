@@ -101,7 +101,7 @@ func agentInit(ctx context.Context) {
 		}
 	} else {
 		// Linux instance setup.
-		defer run.Quiet("systemd-notify", "--ready")
+		defer run.Quiet(ctx, "systemd-notify", "--ready")
 		defer logger.Debugf("notify systemd")
 
 		if config.Section("Snapshots").Key("enabled").MustBool(false) {
@@ -114,7 +114,7 @@ func agentInit(ctx context.Context) {
 		// These scripts are run regardless of metadata/network access and config options.
 		for _, script := range []string{"optimize_local_ssd", "set_multiqueue"} {
 			if config.Section("InstanceSetup").Key(script).MustBool(true) {
-				if err := run.Quiet("google_" + script); err != nil {
+				if err := run.Quiet(ctx, "google_"+script); err != nil {
 					logger.Warningf("Failed to run %q script: %v", "google_"+script, err)
 				}
 			}
@@ -148,7 +148,7 @@ func agentInit(ctx context.Context) {
 		// Disable overcommit accounting; e2 instances only.
 		parts := strings.Split(newMetadata.Instance.MachineType, "/")
 		if strings.HasPrefix(parts[len(parts)-1], "e2-") {
-			if err := run.Quiet("sysctl", "vm.overcommit_memory=1"); err != nil {
+			if err := run.Quiet(ctx, "sysctl", "vm.overcommit_memory=1"); err != nil {
 				logger.Warningf("Failed to run 'sysctl vm.overcommit_memory=1': %v", err)
 			}
 		}
@@ -232,7 +232,7 @@ func generateSSHKeys(ctx context.Context) error {
 	// Generate new keys and upload to guest attributes.
 	for keytype := range keytypes {
 		keyfile := fmt.Sprintf("%s/ssh_host_%s_key", hostKeyDir, keytype)
-		if err := run.Quiet("ssh-keygen", "-t", keytype, "-f", keyfile+".temp", "-N", "", "-q"); err != nil {
+		if err := run.Quiet(ctx, "ssh-keygen", "-t", keytype, "-f", keyfile+".temp", "-N", "", "-q"); err != nil {
 			logger.Warningf("Failed to generate SSH host key %q: %v", keyfile, err)
 			continue
 		}
@@ -265,7 +265,7 @@ func generateSSHKeys(ctx context.Context) error {
 			logger.Warningf("Generated key is malformed, not uploading")
 		}
 	}
-	run.Quiet("restorecon", "-FR", hostKeyDir)
+	run.Quiet(ctx, "restorecon", "-FR", hostKeyDir)
 	return nil
 }
 

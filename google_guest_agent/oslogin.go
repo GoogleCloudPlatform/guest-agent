@@ -119,7 +119,7 @@ func (o *osloginMgr) set(ctx context.Context) error {
 	for _, svc := range []string{"nscd", "unscd", "systemd-logind", "cron", "crond"} {
 		// These services should be restarted if running
 		logger.Debugf("systemctl try-restart %s, if it exists", svc)
-		if err := systemctlTryRestart(svc); err != nil {
+		if err := systemctlTryRestart(ctx, svc); err != nil {
 			logger.Errorf("Error restarting service: %v.", err)
 		}
 	}
@@ -127,7 +127,7 @@ func (o *osloginMgr) set(ctx context.Context) error {
 	// SSH should be started if not running, reloaded otherwise.
 	for _, svc := range []string{"ssh", "sshd"} {
 		logger.Debugf("systemctl reload-or-restart %s, if it exists", svc)
-		if err := systemctlReloadOrRestart(svc); err != nil {
+		if err := systemctlReloadOrRestart(ctx, svc); err != nil {
 			logger.Errorf("Error reloading service: %v.", err)
 		}
 	}
@@ -137,7 +137,7 @@ func (o *osloginMgr) set(ctx context.Context) error {
 
 	if enable {
 		logger.Debugf("Create OS Login dirs, if needed")
-		if err := createOSLoginDirs(); err != nil {
+		if err := createOSLoginDirs(ctx); err != nil {
 			logger.Errorf("Error creating OS Login directory: %v.", err)
 		}
 
@@ -147,7 +147,7 @@ func (o *osloginMgr) set(ctx context.Context) error {
 		}
 
 		logger.Debugf("starting OS Login nss cache fill")
-		if err := run.Quiet("google_oslogin_nss_cache"); err != nil {
+		if err := run.Quiet(ctx, "google_oslogin_nss_cache"); err != nil {
 			logger.Errorf("Error updating NSS cache: %v.", err)
 		}
 
@@ -349,7 +349,7 @@ func writeGroupConf(enable bool) error {
 }
 
 // Creates necessary OS Login directories if they don't exist.
-func createOSLoginDirs() error {
+func createOSLoginDirs(ctx context.Context) error {
 	restorecon, restoreconerr := exec.LookPath("restorecon")
 
 	for _, dir := range []string{"/var/google-sudoers.d", "/var/google-users.d"} {
@@ -358,7 +358,7 @@ func createOSLoginDirs() error {
 			return err
 		}
 		if restoreconerr == nil {
-			run.Quiet(restorecon, dir)
+			run.Quiet(ctx, restorecon, dir)
 		}
 	}
 	return nil
@@ -382,32 +382,32 @@ func createOSLoginSudoersFile() error {
 
 // systemctlTryRestart tries to restart a systemd service if it is already
 // running. Stopped services will be ignored.
-func systemctlTryRestart(servicename string) error {
-	if !systemctlUnitExists(servicename) {
+func systemctlTryRestart(ctx context.Context, servicename string) error {
+	if !systemctlUnitExists(ctx, servicename) {
 		return nil
 	}
-	return run.Quiet("systemctl", "try-restart", servicename+".service")
+	return run.Quiet(ctx, "systemctl", "try-restart", servicename+".service")
 }
 
 // systemctlReloadOrRestart tries to reload a running systemd service if
 // supported, restart otherwise. Stopped services will be started.
-func systemctlReloadOrRestart(servicename string) error {
-	if !systemctlUnitExists(servicename) {
+func systemctlReloadOrRestart(ctx context.Context, servicename string) error {
+	if !systemctlUnitExists(ctx, servicename) {
 		return nil
 	}
-	return run.Quiet("systemctl", "reload-or-restart", servicename+".service")
+	return run.Quiet(ctx, "systemctl", "reload-or-restart", servicename+".service")
 }
 
 // systemctlStart tries to start a stopped systemd service. Started services
 // will be ignored.
-func systemctlStart(servicename string) error {
-	if !systemctlUnitExists(servicename) {
+func systemctlStart(ctx context.Context, servicename string) error {
+	if !systemctlUnitExists(ctx, servicename) {
 		return nil
 	}
-	return run.Quiet("systemctl", "start", servicename+".service")
+	return run.Quiet(ctx, "systemctl", "start", servicename+".service")
 }
 
-func systemctlUnitExists(servicename string) bool {
-	res := run.WithOutput("systemctl", "list-units", "--all", servicename+".service")
+func systemctlUnitExists(ctx context.Context, servicename string) bool {
+	res := run.WithOutput(ctx, "systemctl", "list-units", "--all", servicename+".service")
 	return !strings.Contains(res.StdOut, "0 loaded units listed")
 }

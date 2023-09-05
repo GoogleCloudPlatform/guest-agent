@@ -15,6 +15,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"syscall"
 	"unsafe"
@@ -110,7 +111,7 @@ func resetPwd(username, pwd string) error {
 	return nil
 }
 
-func addUserToGroup(username, group string) error {
+func addUserToGroup(ctx context.Context, username, group string) error {
 	gPtr, err := syscall.UTF16PtrFromString(group)
 	if err != nil {
 		return fmt.Errorf("error encoding group to UTF16: %v", err)
@@ -137,7 +138,7 @@ func addUserToGroup(username, group string) error {
 	return nil
 }
 
-func createUser(username, pwd string) error {
+func createUser(ctx context.Context, username, pwd string) error {
 	uPtr, err := syscall.UTF16PtrFromString(username)
 	if err != nil {
 		return fmt.Errorf("error encoding username to UTF16: %v", err)

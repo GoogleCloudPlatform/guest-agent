@@ -51,7 +51,7 @@ func TestQuietSuccess(t *testing.T) {
 	for _, curr := range tests {
 		t.Run(curr, func(t *testing.T) {
 			tokens := strings.Split(curr, " ")
-			if err := Quiet(tokens[0], tokens[1:]...); err != nil {
+			if err := Quiet(context.Background(), tokens[0], tokens[1:]...); err != nil {
 				t.Errorf("run.Quiet(%s) failed with error: %+v, expected success.", curr, err)
 			}
 		})
@@ -68,7 +68,7 @@ func TestQuietFail(t *testing.T) {
 	for _, curr := range tests {
 		t.Run(curr, func(t *testing.T) {
 			tokens := strings.Split(curr, " ")
-			if err := Quiet(tokens[0], tokens[1:]...); err == nil {
+			if err := Quiet(context.Background(), tokens[0], tokens[1:]...); err == nil {
 				t.Errorf("run.Quiet(%s) command succeed, expected failure.", curr)
 			}
 		})
@@ -90,7 +90,7 @@ func TestOutputSuccess(t *testing.T) {
 	for _, curr := range tests {
 		t.Run(curr.cmd, func(t *testing.T) {
 			tokens := strings.Split(curr.cmd, " ")
-			res := WithOutput(tokens[0], tokens[1:]...)
+			res := WithOutput(context.Background(), tokens[0], tokens[1:]...)
 			if res.ExitCode != 0 {
 				t.Errorf("run.WithOutput(%s) failed with exitCode: %b, expected success.", curr, res.ExitCode)
 			}
@@ -111,9 +111,53 @@ func TestOutputFail(t *testing.T) {
 	for _, curr := range tests {
 		t.Run(curr, func(t *testing.T) {
 			tokens := strings.Split(curr, " ")
-			res := WithOutput(tokens[0], tokens[1:]...)
+			res := WithOutput(context.Background(), tokens[0], tokens[1:]...)
 			if res.ExitCode == 0 {
 				t.Errorf("run.WithOutput(%s) command succeeded, expected failure.", curr)
+			}
+		})
+	}
+}
+
+func TestCombinedOutputSuccess(t *testing.T) {
+	testDir := buildDataContent(t)
+	tests := []struct {
+		cmd    string
+		output string
+	}{
+		{"grep -R data " + testDir, path.Join(testDir, "data") + ":random data\n"},
+		{"echo foobar", "foobar\n"},
+		{"echo -n foobar", "foobar"},
+		{"cat " + path.Join(testDir, "data"), "random data"},
+	}
+
+	for _, curr := range tests {
+		t.Run(curr.cmd, func(t *testing.T) {
+			tokens := strings.Split(curr.cmd, " ")
+			res := WithCombinedOutput(context.Background(), tokens[0], tokens[1:]...)
+			if res.ExitCode != 0 {
+				t.Errorf("run.WithCombinedOutput(%s) failed with exitCode: %b, expected success.", curr, res.ExitCode)
+			}
+			if res.Combined != curr.output {
+				t.Errorf("run.WithCombinedOutput(%s) failed with stdout: %s, expected empty stdout.", curr.cmd, res.StdOut)
+			}
+		})
+	}
+}
+
+func TestCombinedOutputFail(t *testing.T) {
+	testDir := buildDataContent(t)
+	tests := []string{
+		"grep -R foobar " + testDir,
+		"cat /root/foobar",
+	}
+
+	for _, curr := range tests {
+		t.Run(curr, func(t *testing.T) {
+			tokens := strings.Split(curr, " ")
+			res := WithCombinedOutput(context.Background(), tokens[0], tokens[1:]...)
+			if res.ExitCode == 0 {
+				t.Errorf("run.WithCombinedoutput(%s) command succeeded, expected failure.", curr)
 			}
 		})
 	}

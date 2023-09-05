@@ -18,6 +18,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/user"
@@ -35,19 +36,19 @@ func getUID(path string) string {
 	return ""
 }
 
-func createUser(username, uid string) error {
+func createUser(ctx context.Context, username, uid string) error {
 	useradd := config.Section("Accounts").Key("useradd_cmd").MustString("useradd -m -s /bin/bash -p * {user}")
 	if uid != "" {
 		useradd = fmt.Sprintf("%s -u %s", useradd, uid)
 	}
 	cmd, args := createUserGroupCmd(useradd, username, "")
-	return run.Quiet(cmd, args...)
+	return run.Quiet(ctx, cmd, args...)
 }
 
-func addUserToGroup(user, group string) error {
+func addUserToGroup(ctx context.Context, user, group string) error {
 	gpasswdadd := config.Section("Accounts").Key("gpasswd_add_cmd").MustString("gpasswd -a {user} {group}")
 	cmd, args := createUserGroupCmd(gpasswdadd, user, group)
-	return run.Quiet(cmd, args...)
+	return run.Quiet(ctx, cmd, args...)
 }
 
 func userExists(name string) (bool, error) {

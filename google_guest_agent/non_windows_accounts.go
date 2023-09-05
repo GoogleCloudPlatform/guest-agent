@@ -119,7 +119,7 @@ func (a *accountsMgr) set(ctx context.Context) error {
 		logger.Errorf("Error creating google-sudoers file: %v.", err)
 	}
 	logger.Debugf("create sudoers group if needed")
-	if err := createSudoersGroup(); err != nil {
+	if err := createSudoersGroup(ctx); err != nil {
 		logger.Errorf("Error creating google-sudoers group: %v.", err)
 	}
 
@@ -141,7 +141,7 @@ func (a *accountsMgr) set(ctx context.Context) error {
 	for user, userKeys := range mdKeyMap {
 		if _, err := getPasswd(user); err != nil {
 			logger.Infof("Creating user %s.", user)
-			if err := createGoogleUser(user); err != nil {
+			if err := createGoogleUser(ctx, user); err != nil {
 				logger.Errorf("Error creating user: %s.", err)
 				continue
 			}
@@ -149,13 +149,13 @@ func (a *accountsMgr) set(ctx context.Context) error {
 		}
 		if _, ok := gUsers[user]; !ok {
 			logger.Infof("Adding existing user %s to google-sudoers group.", user)
-			if err := addUserToGroup(user, "google-sudoers"); err != nil {
+			if err := addUserToGroup(ctx, user, "google-sudoers"); err != nil {
 				logger.Errorf("%v.", err)
 			}
 		}
 		if !compareStringSlice(userKeys, sshKeys[user]) {
 			logger.Infof("Updating keys for user %s.", user)
-			if err := updateAuthorizedKeysFile(user, userKeys); err != nil {
+			if err := updateAuthorizedKeysFile(ctx, user, userKeys); err != nil {
 				logger.Errorf("Error updating SSH keys for %s: %v.", user, err)
 				continue
 			}
@@ -167,7 +167,7 @@ func (a *accountsMgr) set(ctx context.Context) error {
 	for user := range gUsers {
 		if _, ok := mdKeyMap[user]; !ok && user != "" {
 			logger.Infof("Removing user %s.", user)
-			err = removeGoogleUser(user)
+			err = removeGoogleUser(ctx, user)
 			if err != nil {
 				logger.Errorf("Error removing user: %v.", err)
 			}
@@ -186,7 +186,7 @@ func (a *accountsMgr) set(ctx context.Context) error {
 	// can be disabled by the instance configs file.
 	for _, svc := range []string{"ssh", "sshd"} {
 		// Ignore output, it's just a best effort.
-		systemctlStart(svc)
+		systemctlStart(ctx, svc)
 	}
 
 	return nil
@@ -338,38 +338,38 @@ func createUserGroupCmd(cmd, user, group string) (string, []string) {
 
 // createGoogleUser creates a Google managed user account if needed and adds it
 // to the configured groups.
-func createGoogleUser(user string) error {
+func createGoogleUser(ctx context.Context, user string) error {
 	var uid string
 	if config.Section("Accounts").Key("reuse_homedir").MustBool(false) {
 		uid = getUID(fmt.Sprintf("/home/%s", user))
 	}
 
-	if err := createUser(user, uid); err != nil {
+	if err := createUser(ctx, user, uid); err != nil {
 		return err
 	}
 	groups := config.Section("Accounts").Key("groups").MustString("adm,dip,docker,lxd,plugdev,video")
 	for _, group := range strings.Split(groups, ",") {
-		addUserToGroup(user, group)
+		addUserToGroup(ctx, user, group)
 	}
-	return addUserToGroup(user, "google-sudoers")
+	return addUserToGroup(ctx, user, "google-sudoers")
 }
 
 // removeGoogleUser removes Google managed users. If deprovision_remove is true, the
 // user and its home directory are removed. Otherwise, SSH keys and sudoer
 // permissions are removed but the user remains on the system. Group membership
 // is not changed.
-func removeGoogleUser(user string) error {
+func removeGoogleUser(ctx context.Context, user string) error {
 	if config.Section("Accounts").Key("deprovision_remove").MustBool(false) {
 		userdel := config.Section("Accounts").Key("userdel_cmd").MustString("userdel -r {user}")
 		name, args := createUserGroupCmd(userdel, user, "")
-		return run.Quiet(name, args...)
+		return run.Quiet(ctx, name, args...)
 	}
-	if err := updateAuthorizedKeysFile(user, []string{}); err != nil {
+	if err := updateAuthorizedKeysFile(ctx, user, []string{}); err != nil {
 		return err
 	}
 	gpasswddel := config.Section("Accounts").Key("gpasswd_remove_cmd").MustString("gpasswd -d {user} {group}")
 	name, args := createUserGroupCmd(gpasswddel, user, "google-sudoers")
-	return run.Quiet(name, args...)
+	return run.Quiet(ctx, name, args...)
 }
 
 // createSudoersFile creates the google_sudoers configuration file if it does
@@ -389,10 +389,10 @@ func createSudoersFile() error {
 }
 
 // createSudoersGroup creates the google-sudoers group if it does not exist.
-func createSudoersGroup() error {
+func createSudoersGroup(ctx context.Context) error {
 	groupadd := config.Section("Accounts").Key("groupadd_cmd").MustString("groupadd {group}")
 	name, args := createUserGroupCmd(groupadd, "", "google-sudoers")
-	ret := run.WithOutput(name, args...)
+	ret := run.WithOutput(ctx, name, args...)
 	if ret.ExitCode == 9 {
 		// 9 means group already exists.
 		return nil
@@ -408,7 +408,7 @@ func createSudoersGroup() error {
 // AuthorizedKeys file. The file and containing directory are created if it
 // does not exist. Uses a temporary file to avoid partial updates in case of
 // errors. If no keys are provided, the authorized keys file is removed.
-func updateAuthorizedKeysFile(user string, keys []string) error {
+func updateAuthorizedKeysFile(ctx context.Context, user string, keys []string) error {
 	gcomment := "# Added by Google"
 
 	passwd, err := getPasswd(user)
@@ -487,7 +487,7 @@ func updateAuthorizedKeysFile(user string, keys []string) error {
 		return fmt.Errorf("error setting ownership of new keys file: %v", err)
 	}
 
-	if err := run.Quiet("restorecon", tempPath); err != nil {
+	if err := run.Quiet(ctx, "restorecon", tempPath); err != nil {
 		return fmt.Errorf("error setting selinux context: %+v", err)
 	}
 
