@@ -38,8 +38,6 @@ const (
 	clientCredsFileName = "mds-mtls-client.key"
 	// pfxFile stores client credentials in PFX format.
 	pfxFile = "mds-mtls-client.key.pfx"
-	// cryptExportable (CRYPT_EXPORTABLE) is used to mark imported as keys as exportable.
-	cryptExportable = 0x00000001
 	// https://learn.microsoft.com/en-us/windows/win32/seccrypto/system-store-locations
 	// my is predefined personal cert store.
 	my = "MY"
@@ -171,7 +169,7 @@ func (j *CredsJob) writeClientCredentials(creds []byte, outputFile string) error
 	}
 
 	// https://learn.microsoft.com/en-us/windows/win32/api/wincrypt/nf-wincrypt-pfximportcertstore
-	handle, err := windows.PFXImportCertStore(&blob, syscall.StringToUTF16Ptr(""), uint32(cryptExportable))
+	handle, err := windows.PFXImportCertStore(&blob, syscall.StringToUTF16Ptr(""), windows.CRYPT_MACHINE_KEYSET)
 	if err != nil {
 		return fmt.Errorf("failed to import PFX in cert store: %w", err)
 	}
