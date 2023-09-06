@@ -32,7 +32,10 @@ type mdsClient struct {
 }
 
 func (mds *mdsClient) Get(ctx context.Context) (*metadata.Descriptor, error) {
-	return nil, fmt.Errorf("Get() not yet implemented")
+	if !mds.disableUnknownFailure {
+		return nil, errUnknown
+	}
+	return nil, nil
 }
 
 func (mds *mdsClient) GetKey(ctx context.Context, key string, headers map[string]string) (string, error) {
@@ -56,7 +59,7 @@ func (mds *mdsClient) WriteGuestAttributes(ctx context.Context, key string, valu
 
 func TestWatcherAPI(t *testing.T) {
 	watcher := New()
-	expectedEvents := []string{LongpollEvent}
+	expectedEvents := []string{ReadyEvent, LongpollEvent}
 	if !reflect.DeepEqual(watcher.Events(), expectedEvents) {
 		t.Fatalf("watcher.Events() returned: %+v, expected: %+v.", watcher.Events(), expectedEvents)
 	}
@@ -66,36 +69,49 @@ func TestWatcherAPI(t *testing.T) {
 	}
 }
 
-func TestWatcherSuccess(t *testing.T) {
-	watcher := New()
-	watcher.client = &mdsClient{disableUnknownFailure: true}
+func testWatcherSuccess(t *testing.T, watcher *Watcher, evType string, shouldRenew bool) {
+	t.Helper()
 
-	renew, evData, err := watcher.Run(context.Background(), LongpollEvent)
+	renew, evData, err := watcher.Run(context.Background(), evType)
 	if err != nil {
-		t.Errorf("watcher.Run(%s) returned error: %+v, expected success.", LongpollEvent, err)
+		t.Errorf("watcher.Run(%s) returned error: %+v, expected success.", evType, err)
 	}
 
-	if !renew {
-		t.Errorf("watcher.Run(%s) returned renew: %t, expected: true.", LongpollEvent, renew)
+	if (shouldRenew && !renew) || (!shouldRenew && renew) {
+		t.Errorf("watcher.Run(%s) returned renew: %t, expected: %t.", evType, renew, shouldRenew)
 	}
 
 	switch evData.(type) {
 	case *metadata.Descriptor:
 	default:
-		t.Errorf("watcher.Run(%s) returned a non descriptor object.", LongpollEvent)
+		t.Errorf("watcher.Run(%s) returned a non descriptor object.", evType)
+	}
+}
+
+func TestWatcherSuccess(t *testing.T) {
+	watcher := New()
+	watcher.client = &mdsClient{disableUnknownFailure: true}
+	testWatcherSuccess(t, watcher, ReadyEvent, false)
+	testWatcherSuccess(t, watcher, LongpollEvent, true)
+}
+
+func testWatcherUnknownFailure(t *testing.T, watcher *Watcher, evType string, shouldRenew bool) {
+	renew, _, err := watcher.Run(context.Background(), evType)
+	if err == nil {
+		t.Errorf("watcher.Run(%s) returned no error, expected: %v.", evType, errUnknown)
+	}
+
+	if (shouldRenew && !renew) || (!shouldRenew && renew) {
+		t.Errorf("watcher.Run(%s) returned renew: %t, expected: %t.", evType, renew, shouldRenew)
 	}
 }
 
 func TestWatcherUnknownFailure(t *testing.T) {
 	watcher := New()
 	watcher.client = &mdsClient{}
+	testWatcherUnknownFailure(t, watcher, ReadyEvent, false)
 
-	renew, _, err := watcher.Run(context.Background(), LongpollEvent)
-	if err == nil {
-		t.Errorf("watcher.Run(%s) returned no error, expected: %v.", LongpollEvent, errUnknown)
-	}
-
-	if !renew {
-		t.Errorf("watcher.Run(%s) returned renew: %t, expected: true.", LongpollEvent, renew)
-	}
+	// Force ready so the LongpollEvent doesn't hang waiting for the watcher to be ready.
+	watcher.ready = true
+	testWatcherUnknownFailure(t, watcher, LongpollEvent, true)
 }
