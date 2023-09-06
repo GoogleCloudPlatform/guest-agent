@@ -81,7 +81,7 @@ func (s *Scheduler) getFunc(ctx context.Context, job Job) func() {
 }
 
 // ScheduleJob adds a job to schedule at defined interval.
-func (s *Scheduler) ScheduleJob(ctx context.Context, job Job) error {
+func (s *Scheduler) ScheduleJob(ctx context.Context, job Job, synchronous bool) error {
 	if !job.ShouldEnable(ctx) {
 		return fmt.Errorf("ShouldEnable() returned false, cannot schedule job %s", job.ID())
 	}
@@ -89,7 +89,7 @@ func (s *Scheduler) ScheduleJob(ctx context.Context, job Job) error {
 	logger.Infof("Scheduling job: %s", job.ID())
 
 	interval, startNow := job.Interval()
-	if err := s.jobInit(job.ID(), interval, s.getFunc(ctx, job), startNow); err != nil {
+	if err := s.jobInit(job.ID(), interval, s.getFunc(ctx, job), startNow, synchronous); err != nil {
 		return err
 	}
 
@@ -105,7 +105,9 @@ func (s *Scheduler) setEntryID(jobID string, entryID cron.EntryID) {
 // jobInit adds job to the schedule to run at specified interval.
 // Setting startImmediately to true executes first run immediately, otherwise
 // first run will be after interval (at now+interval).
-func (s *Scheduler) jobInit(jobID string, interval time.Duration, job func(), startImmediately bool) error {
+// If startImmediately and synchronous both are true, init method will block
+// until job is completed.
+func (s *Scheduler) jobInit(jobID string, interval time.Duration, job func(), startImmediately, synchronous bool) error {
 	logger.Infof("Scheduling job %q to run at %f hr interval", jobID, interval.Hours())
 
 	_, found := s.jobs[jobID]
@@ -122,8 +124,12 @@ func (s *Scheduler) jobInit(jobID string, interval time.Duration, job func(), st
 	s.setEntryID(jobID, entry)
 
 	if startImmediately {
-		// Start job in a go routine to not block the caller.
-		go job()
+		if synchronous {
+			job()
+		} else {
+			// Start job in a go routine to not block the caller.
+			go job()
+		}
 	}
 
 	return nil
@@ -153,4 +159,29 @@ func (s *Scheduler) start() {
 func (s *Scheduler) Stop() {
 	logger.Infof("Stopping the scheduler")
 	s.cron.Stop()
+}
+
+// ScheduleJobs schedules required jobs and waits for it to finish if synchronous is true.
+func ScheduleJobs(ctx context.Context, jobs []Job, synchronous bool) {
+	wg := sync.WaitGroup{}
+	sched := Get()
+	var ids []string
+
+	for _, job := range jobs {
+		wg.Add(1)
+		ids = append(ids, job.ID())
+		go func(job Job) {
+			defer wg.Done()
+			if err := sched.ScheduleJob(ctx, job, synchronous); err != nil {
+				logger.Errorf("Failed to schedule job %s with error: %v", job.ID(), err)
+			} else {
+				logger.Infof("Successfully scheduled job %s", job.ID())
+			}
+		}(job)
+	}
+
+	if synchronous {
+		logger.Debugf("Waiting for %v to finish...", ids)
+		wg.Wait()
+	}
 }

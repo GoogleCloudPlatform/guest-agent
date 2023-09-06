@@ -34,6 +34,8 @@ type Result struct {
 	StdErr string
 	// Stdout or "" if we failed to run the command.
 	StdOut string
+	// Combined is the process' stdout and stderr combined.
+	Combined string
 }
 
 // Error return an error containing the stderr content.
@@ -42,8 +44,8 @@ func (e Result) Error() string {
 }
 
 // Quiet runs a command and doesn't return a result, but an error in case of failure.
-func Quiet(name string, args ...string) error {
-	res := execCommand(exec.Command(name, args...))
+func Quiet(ctx context.Context, name string, args ...string) error {
+	res := execCommand(exec.CommandContext(ctx, name, args...))
 	if res.ExitCode != 0 {
 		return res
 	}
@@ -51,8 +53,8 @@ func Quiet(name string, args ...string) error {
 }
 
 // WithOutput runs a command and returns the result.
-func WithOutput(name string, args ...string) *Result {
-	return execCommand(exec.Command(name, args...))
+func WithOutput(ctx context.Context, name string, args ...string) *Result {
+	return execCommand(exec.CommandContext(ctx, name, args...))
 }
 
 // WithOutputTimeout runs a command with a defined timeout and returns its result.
@@ -66,6 +68,27 @@ func WithOutputTimeout(ctx context.Context, timeout time.Duration, name string, 
 	}
 
 	return res
+}
+
+// WithCombinedOutput returns a result with stderr and stdout combined in the Combined
+// member of Result.
+func WithCombinedOutput(ctx context.Context, name string, args ...string) *Result {
+	cmd := exec.CommandContext(ctx, name, args...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		exitCode := -1
+		if ee, ok := err.(*exec.ExitError); ok {
+			exitCode = ee.ExitCode()
+		}
+		return &Result{
+			ExitCode: exitCode,
+			StdErr:   err.Error(),
+		}
+	}
+
+	return &Result{
+		Combined: string(output),
+	}
 }
 
 func execCommand(cmd *exec.Cmd) *Result {

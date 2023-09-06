@@ -17,15 +17,17 @@ package main
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
+	"os/exec"
 	"runtime"
 	"sort"
 	"strings"
 	"time"
 
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/agentcrypto"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/run"
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/scheduler"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 	"github.com/go-ini/ini"
 )
@@ -100,7 +102,7 @@ func agentInit(ctx context.Context) {
 		}
 	} else {
 		// Linux instance setup.
-		defer run.Quiet("systemd-notify", "--ready")
+		defer run.Quiet(ctx, "systemd-notify", "--ready")
 		defer logger.Debugf("notify systemd")
 
 		if config.Section("Snapshots").Key("enabled").MustBool(false) {
@@ -113,7 +115,7 @@ func agentInit(ctx context.Context) {
 		// These scripts are run regardless of metadata/network access and config options.
 		for _, script := range []string{"optimize_local_ssd", "set_multiqueue"} {
 			if config.Section("InstanceSetup").Key(script).MustBool(true) {
-				if err := run.Quiet("google_" + script); err != nil {
+				if err := run.Quiet(ctx, "google_"+script); err != nil {
 					logger.Warningf("Failed to run %q script: %v", "google_"+script, err)
 				}
 			}
@@ -147,7 +149,7 @@ func agentInit(ctx context.Context) {
 		// Disable overcommit accounting; e2 instances only.
 		parts := strings.Split(newMetadata.Instance.MachineType, "/")
 		if strings.HasPrefix(parts[len(parts)-1], "e2-") {
-			if err := run.Quiet("sysctl", "vm.overcommit_memory=1"); err != nil {
+			if err := run.Quiet(ctx, "sysctl", "vm.overcommit_memory=1"); err != nil {
 				logger.Warningf("Failed to run 'sysctl vm.overcommit_memory=1': %v", err)
 			}
 		}
@@ -156,7 +158,7 @@ func agentInit(ctx context.Context) {
 		// the first boot of the instance.
 		// TODO Also do this for windows. liamh@13-11-2019
 		instanceIDFile := config.Section("Instance").Key("instance_id_dir").MustString("/etc") + "/google_instance_id"
-		instanceID, err := ioutil.ReadFile(instanceIDFile)
+		instanceID, err := os.ReadFile(instanceIDFile)
 		if err != nil && !os.IsNotExist(err) {
 			logger.Warningf("Not running first-boot actions, error reading instance ID: %v", err)
 		} else {
@@ -166,7 +168,7 @@ func agentInit(ctx context.Context) {
 
 				// Write instance ID to file for next time before moving on.
 				towrite := fmt.Sprintf("%s\n", newMetadata.Instance.ID.String())
-				if err := ioutil.WriteFile(instanceIDFile, []byte(towrite), 0644); err != nil {
+				if err := os.WriteFile(instanceIDFile, []byte(towrite), 0644); err != nil {
 					logger.Warningf("Failed to write instance ID file: %v", err)
 				}
 			}
@@ -185,13 +187,14 @@ func agentInit(ctx context.Context) {
 
 				// Write instance ID to file.
 				towrite := fmt.Sprintf("%s\n", newMetadata.Instance.ID.String())
-				if err := ioutil.WriteFile(instanceIDFile, []byte(towrite), 0644); err != nil {
+				if err := os.WriteFile(instanceIDFile, []byte(towrite), 0644); err != nil {
 					logger.Warningf("Failed to write instance ID file: %v", err)
 				}
 			}
 		}
-
 	}
+	// Schedules jobs that need to be started before notifying systemd Agent process has started.
+	scheduler.ScheduleJobs(ctx, []scheduler.Job{agentcrypto.New()}, true)
 }
 
 func generateSSHKeys(ctx context.Context) error {
@@ -230,7 +233,7 @@ func generateSSHKeys(ctx context.Context) error {
 	// Generate new keys and upload to guest attributes.
 	for keytype := range keytypes {
 		keyfile := fmt.Sprintf("%s/ssh_host_%s_key", hostKeyDir, keytype)
-		if err := run.Quiet("ssh-keygen", "-t", keytype, "-f", keyfile+".temp", "-N", "", "-q"); err != nil {
+		if err := run.Quiet(ctx, "ssh-keygen", "-t", keytype, "-f", keyfile+".temp", "-N", "", "-q"); err != nil {
 			logger.Warningf("Failed to generate SSH host key %q: %v", keyfile, err)
 			continue
 		}
@@ -250,7 +253,7 @@ func generateSSHKeys(ctx context.Context) error {
 			logger.Errorf("Failed to overwrite %q: %v", keyfile+".pub", err)
 			continue
 		}
-		pubKey, err := ioutil.ReadFile(keyfile + ".pub")
+		pubKey, err := os.ReadFile(keyfile + ".pub")
 		if err != nil {
 			logger.Errorf("Can't read %s public key: %v", keytype, err)
 			continue
@@ -263,7 +266,14 @@ func generateSSHKeys(ctx context.Context) error {
 			logger.Warningf("Generated key is malformed, not uploading")
 		}
 	}
-	run.Quiet("restorecon", "-FR", hostKeyDir)
+
+	_, err = exec.LookPath("restorecon")
+	if err == nil {
+		if err := run.Quiet(ctx, "restorecon", "-FR", hostKeyDir); err != nil {
+			return fmt.Errorf("Failed to restore SELinux context for: %s", hostKeyDir)
+		}
+	}
+
 	return nil
 }
 
