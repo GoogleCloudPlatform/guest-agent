@@ -20,11 +20,9 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/signal"
 	"runtime"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events"
@@ -129,7 +127,7 @@ func runUpdate(ctx context.Context) {
 	wg.Wait()
 }
 
-func runAgent(ctx context.Context) error {
+func runAgent(ctx context.Context) {
 	opts := logger.LogOpts{LoggerName: programName}
 	if runtime.GOOS == "windows" {
 		opts.FormatFunction = logFormatWindows
@@ -146,7 +144,8 @@ func runAgent(ctx context.Context) error {
 	}
 
 	if err := logger.Init(ctx, opts); err != nil {
-		return fmt.Errorf("error initializing logger: %v", err)
+		fmt.Printf("Error initializing logger: %v", err)
+		os.Exit(1)
 	}
 
 	logger.Infof("GCE Agent Started (version %s)", version)
@@ -161,7 +160,7 @@ func runAgent(ctx context.Context) error {
 	var err error
 	config, err = parseConfig(cfgfile)
 	if err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("error parsing config %s: %s", cfgfile, err)
+		logger.Errorf("Error parsing config %s: %s", cfgfile, err)
 	}
 
 	mdsClient = metadata.New()
@@ -205,7 +204,8 @@ func runAgent(ctx context.Context) error {
 
 	eventManager, err := events.New(eventsConfig)
 	if err != nil {
-		return fmt.Errorf("error initializing event manager: %v", err)
+		logger.Errorf("Error initializing event manager: %v", err)
+		return
 	}
 
 	sshca.Init(eventManager)
@@ -235,7 +235,6 @@ func runAgent(ctx context.Context) error {
 
 	eventManager.Run(ctx)
 	logger.Infof("GCE Agent Stopped")
-	return nil
 }
 
 func logFormatWindows(e logger.LogEntry) string {
@@ -263,17 +262,21 @@ func closer(c io.Closer) {
 }
 
 func main() {
-	ctx, cancelContext := context.WithCancel(context.Background())
-	sigBus := make(chan os.Signal, 1)
+	ctx := context.Background()
 
-	signal.Notify(sigBus, syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGHUP)
-	go func() {
-		signal := <-sigBus
-		logger.Infof("GCE Guest Agent got signal: %d, leaving...", signal)
-		cancelContext()
-	}()
+	var action string
+	if len(os.Args) < 2 {
+		action = "run"
+	} else {
+		action = os.Args[1]
+	}
 
-	if err := runAgent(ctx); err != nil {
-		logger.Fatalf("Failed to run agent: %+v", err)
+	if action == "noservice" {
+		runAgent(ctx)
+		os.Exit(0)
+	}
+
+	if err := register(ctx, "GCEAgent", "GCEAgent", "", runAgent, action); err != nil {
+		logger.Fatalf("error registering service: %s", err)
 	}
 }

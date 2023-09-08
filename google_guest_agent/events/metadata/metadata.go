@@ -17,9 +17,9 @@ package metadata
 
 import (
 	"context"
-	"errors"
 	"net"
 	"net/url"
+	"time"
 
 	"github.com/GoogleCloudPlatform/guest-agent/metadata"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
@@ -30,6 +30,11 @@ const (
 	WatcherID = "metadata-watcher"
 	// LongpollEvent is the metadata's longpoll event type ID.
 	LongpollEvent = "metadata-watcher,longpoll"
+)
+
+var (
+	// arbitrarily defined wait duration(keeps behavioral backward compatibility).
+	retryWaitDuration = 5 * time.Second
 )
 
 // Watcher is the metadata event watcher implementation.
@@ -66,12 +71,6 @@ func (mp *Watcher) Run(ctx context.Context, evType string) (bool, interface{}, e
 					logger.Errorf("Network error when requesting metadata, make sure your instance has an active network and can reach the metadata server.")
 				}
 			}
-
-			if errors.Is(err, context.Canceled) {
-				logger.Infof("Metadata watcher: context was canceled, preparing to leave...")
-				return false, descriptor, nil
-			}
-
 			logger.Errorf("Error watching metadata: %s", err)
 			mp.failedPrevious = true
 		}
