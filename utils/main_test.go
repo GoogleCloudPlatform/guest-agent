@@ -149,3 +149,34 @@ func TestSaferWriteFile(t *testing.T) {
 		t.Errorf("os.ReadFile(%s) = %s, want %s", f, string(got), want)
 	}
 }
+
+func TestCopyFile(t *testing.T) {
+	tmp := t.TempDir()
+	dst := filepath.Join(tmp, "dst")
+	src := filepath.Join(tmp, "src")
+	want := "testdata"
+	if err := os.WriteFile(src, []byte(want), 0777); err != nil {
+		t.Fatalf("failed to write test source file: %v", err)
+	}
+	if err := CopyFile(src, dst); err != nil {
+		t.Errorf("CopyFile(%s, %s) failed unexpectedly with error: %v", src, dst, err)
+	}
+
+	got, err := os.ReadFile(dst)
+	if err != nil {
+		t.Errorf("unable to read %q: %v", dst, err)
+	}
+	if string(got) != want {
+		t.Errorf("CopyFile(%s, %s) copied %q, expected %q", src, dst, string(got), want)
+	}
+}
+
+func TestCopyFileError(t *testing.T) {
+	tmp := t.TempDir()
+	dst := filepath.Join(tmp, "dst")
+	src := filepath.Join(tmp, "src")
+
+	if err := CopyFile(src, dst); err == nil {
+		t.Errorf("CopyFile(%s, %s) succeeded for non-existent file, want error", src, dst)
+	}
+}

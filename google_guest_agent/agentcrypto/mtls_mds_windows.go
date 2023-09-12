@@ -15,6 +15,7 @@
 package agentcrypto
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/x509"
 	"encoding/pem"
@@ -57,7 +58,7 @@ var (
 )
 
 // writeRootCACert writes Root CA cert from UEFI variable to output file.
-func (j *CredsJob) writeRootCACert(cacert []byte, outputFile string) error {
+func (j *CredsJob) writeRootCACert(_ context.Context, cacert []byte, outputFile string) error {
 	if err := utils.SaferWriteFile(cacert, outputFile); err != nil {
 		return err
 	}
