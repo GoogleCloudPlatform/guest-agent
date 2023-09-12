@@ -25,9 +25,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/agentcrypto"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/run"
-	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/scheduler"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 	"github.com/go-ini/ini"
 )
@@ -193,8 +191,6 @@ func agentInit(ctx context.Context) {
 			}
 		}
 	}
-	// Schedules jobs that need to be started before notifying systemd Agent process has started.
-	scheduler.ScheduleJobs(ctx, []scheduler.Job{agentcrypto.New()}, true)
 }
 
 func generateSSHKeys(ctx context.Context) error {
