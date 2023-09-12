@@ -303,7 +303,7 @@ func (c *Client) retry(ctx context.Context, cfg requestConfig) (string, error) {
 
 		defer resp.Body.Close()
 		md, err := io.ReadAll(resp.Body)
-		if err != nil {
+		if err != nil || len(md) == 0 {
 			ferr = err
 			logger.Debugf("Attempt %d: failed to read metadata server response bytes: %+v", i, err)
 			time.Sleep(time.Duration(i) * backoffDuration)
