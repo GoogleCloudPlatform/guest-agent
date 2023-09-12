@@ -27,7 +27,6 @@ import (
 
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events"
 	mdsEvent "github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events/metadata"
-	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events/sshtrustedca"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/osinfo"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/scheduler"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/telemetry"
@@ -192,13 +191,6 @@ func runAgent(ctx context.Context) {
 		Watchers: []string{
 			mdsEvent.WatcherID,
 		},
-	}
-
-	// Only Enable sshtrustedca Watcher if osLogin is enabled.
-	// TODO: ideally we should have a feature flag specifically for this.
-	osLoginEnabled, _, _ := getOSLoginEnabled(newMetadata)
-	if osLoginEnabled {
-		eventsConfig.Watchers = append(eventsConfig.Watchers, sshtrustedca.WatcherID)
 	}
 
 	eventManager, err := events.New(eventsConfig)
