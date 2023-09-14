@@ -48,8 +48,47 @@ type Watcher interface {
 // Manager defines the interface between events management layer and the
 // core guest agent implementation.
 type Manager struct {
-	watchers    map[string]Watcher
+	// watchers maps the registered watchers.
+	watchers map[string]Watcher
+
+	// subscribers maps the subscribed callbacks.
 	subscribers map[string][]*eventSubscriber
+
+	// queue queue struct manages the running watchers, when it gets to len()
+	// down to zero means all watchers are done and we can signal the other
+	// control go routines to leave(given we don't have any more job left to
+	// process).
+	queue *watcherQueue
+}
+
+// watcherQueue wraps the watchers <-> callbacks communication as well as the
+// communication/coordination of the multiple control go routine i.e. the one
+// responsible to calling callbacks after a event is produced by the watcher etc.
+type watcherQueue struct {
+	// queueMutex protects the access to watchersMap
+	queueMutex sync.RWMutex
+
+	// watchersMap maps the currently running watchers.
+	watchersMap map[string]bool
+
+	// finishContextHandler is a channel used to communicate with the context handling
+	// go routine that it should finish/end its job (usually after all watchers are done).
+	finishContextHandler chan bool
+
+	// finishCallbackHandler is a channel used to communicate with the callback handling
+	// go routine that it should finish/end its job (usually after all watchers are done).
+	finishCallbackHandler chan bool
+
+	// watcherDone is a channel used to communicate that a given watcher is finished/done.
+	watcherDone chan string
+
+	// dataBus is the channel used to communicate between watchers (event producer) and the
+	// callback handler (event consumer managing go routine).
+	dataBus chan eventBusData
+
+	// leaving is a flag that indicates no more job should be processed as we are done
+	// with all watchers and callbacks.
+	leaving bool
 }
 
 // Config offers a mechanism for the consumers to configure the Manager behavior.
@@ -74,6 +113,16 @@ type WatcherEventType struct {
 	evType string
 }
 
+type eventSubscriber struct {
+	data interface{}
+	cb   EventCb
+}
+
+type eventBusData struct {
+	evType string
+	data   *EventData
+}
+
 // EventCb defines the callback interface between watchers and subscribers. The arguments are:
 //   - ctx the app' context passed in from the manager's Run() call.
 //   - evType a string defining the what event type triggered the call.
@@ -84,14 +133,26 @@ type WatcherEventType struct {
 // to be unregistered/unsubscribed.
 type EventCb func(ctx context.Context, evType string, data interface{}, evData *EventData) bool
 
-type eventSubscriber struct {
-	data interface{}
-	cb   EventCb
+// length returns how many watchers are currently running.
+func (ep *watcherQueue) length() int {
+	ep.queueMutex.RLock()
+	defer ep.queueMutex.RUnlock()
+	return len(ep.watchersMap)
 }
 
-type eventBusData struct {
-	evType string
-	data   *EventData
+// add adds a new watcher to the queue.
+func (ep *watcherQueue) add(evType string) {
+	ep.queueMutex.Lock()
+	defer ep.queueMutex.Unlock()
+	ep.watchersMap[evType] = true
+}
+
+// del removes a watcher from the queue.
+func (ep *watcherQueue) del(evType string) int {
+	ep.queueMutex.Lock()
+	defer ep.queueMutex.Unlock()
+	delete(ep.watchersMap, evType)
+	return len(ep.watchersMap)
 }
 
 func init() {
@@ -121,6 +182,13 @@ func New(cfg *Config) (*Manager, error) {
 	res := &Manager{
 		watchers:    availableWatchers,
 		subscribers: make(map[string][]*eventSubscriber),
+		queue: &watcherQueue{
+			watchersMap:           make(map[string]bool),
+			dataBus:               make(chan eventBusData),
+			finishCallbackHandler: make(chan bool),
+			finishContextHandler:  make(chan bool),
+			watcherDone:           make(chan string),
+		},
 	}
 
 	// Align manager's config based on consumers provided watchers If it is
@@ -161,68 +229,66 @@ func (mngr *Manager) eventTypes() []*WatcherEventType {
 	return res
 }
 
-type watcherQueue struct {
-	mutex       sync.Mutex
-	watchersMap map[string]bool
-}
+func (mngr *Manager) runWatcher(ctx context.Context, watcher Watcher, evType string) {
+	for renew := true; renew; {
+		var evData interface{}
+		var err error
 
-func (ep *watcherQueue) add(evType string) {
-	ep.mutex.Lock()
-	defer ep.mutex.Unlock()
-	ep.watchersMap[evType] = true
-}
+		renew, evData, err = watcher.Run(ctx, evType)
 
-func (ep *watcherQueue) del(evType string) int {
-	ep.mutex.Lock()
-	defer ep.mutex.Unlock()
-	delete(ep.watchersMap, evType)
-	return len(ep.watchersMap)
+		logger.Debugf("Watcher(%s) returned event: %q, should renew?: %t", watcher.ID(), evType, renew)
+
+		if mngr.queue.leaving {
+			break
+		}
+
+		mngr.queue.dataBus <- eventBusData{
+			evType: evType,
+			data: &EventData{
+				Data:  evData,
+				Error: err,
+			},
+		}
+	}
+
+	logger.Debugf("watcher finishing: %s", evType)
+	mngr.queue.watcherDone <- evType
 }
 
 // Run runs the event manager, it will block until all watchers have given up/failed.
 func (mngr *Manager) Run(ctx context.Context) {
 	var wg sync.WaitGroup
-	var leaving bool
-
-	syncBus := make(chan eventBusData)
-	defer close(syncBus)
-
-	cancelContext := make(chan bool)
-	cancelCallback := make(chan bool)
-
-	defer close(cancelContext)
-	defer close(cancelCallback)
 
 	// Manages the context's done signal, pass it down to the other go routines to
 	// finish its job and leave. Additionally, if the remaining go routines are leaving
-	// we get it handled via syncBus channel and drop this go routine as well.
+	// we get it handled via dataBus channel and drop this go routine as well.
 	wg.Add(1)
-	go func(done <-chan struct{}, cancelContext <-chan bool, cancelCallback chan<- bool) {
+	go func(done <-chan struct{}, finishContextHandler <-chan bool, finishCallbackHandler chan<- bool) {
 		defer wg.Done()
 
 		for {
 			select {
 			case <-done:
 				logger.Debugf("Got context's Done() signal, leaving.")
-				leaving = true
-				cancelCallback <- true
+				mngr.queue.leaving = true
+				finishCallbackHandler <- true
 				return
-			case <-cancelContext:
-				leaving = true
+			case <-finishContextHandler:
+				mngr.queue.leaving = true
 				return
 			}
 		}
-	}(ctx.Done(), cancelContext, cancelCallback)
+	}(ctx.Done(), mngr.queue.finishContextHandler, mngr.queue.finishCallbackHandler)
 
 	// Manages the event processing avoiding blocking the watcher's go routines.
-	// This will listen to syncBus and call the events handlers/callbacks.
+	// This will listen to dataBus and call the events handlers/callbacks.
 	wg.Add(1)
-	go func(bus <-chan eventBusData, cancelCallback <-chan bool) {
+	go func(bus <-chan eventBusData, finishCallbackHandler <-chan bool) {
 		defer wg.Done()
 
 		for {
 			select {
-			case <-cancelCallback:
+			case <-finishCallbackHandler:
 				return
 			case busData := <-bus:
 				subscribers, found := mngr.subscribers[busData.evType]
@@ -256,52 +322,35 @@ func (mngr *Manager) Run(ctx context.Context) {
 				}
 			}
 		}
-	}(syncBus, cancelCallback)
-
-	// This control struct manages the registered watchers, when it gets to len()
-	// down to zero means all watchers are done and we can signal the other 2 control
-	// go routines to leave(given we don't have any more job left to process).
-	control := &watcherQueue{
-		watchersMap: make(map[string]bool),
-	}
+	}(mngr.queue.dataBus, mngr.queue.finishCallbackHandler)
 
 	// Creates a goroutine for each registered watcher's event and keep handling its
 	// execution until they give up/finishes their job by returning renew = false.
 	for _, curr := range mngr.eventTypes() {
-		control.add(curr.evType)
+		mngr.queue.add(curr.evType)
 		wg.Add(1)
-
-		go func(bus chan<- eventBusData, watcher Watcher, evType string, cancelContext chan<- bool, cancelCallback chan<- bool) {
-			var evData interface{}
-			var err error
-
+		go func(watcher Watcher, evType string) {
 			defer wg.Done()
-
-			for renew := true; renew; {
-				renew, evData, err = watcher.Run(ctx, evType)
-
-				logger.Debugf("Watcher(%s) returned event: %q, should renew?: %t", watcher.ID(), evType, renew)
-
-				if leaving {
-					break
-				}
-
-				bus <- eventBusData{
-					evType: evType,
-					data: &EventData{
-						Data:  evData,
-						Error: err,
-					},
-				}
-			}
-
-			if !leaving && control.del(evType) == 0 {
-				logger.Debugf("All watchers are finished, signaling to leave.")
-				cancelContext <- true
-				cancelCallback <- true
-			}
-		}(syncBus, curr.watcher, curr.evType, cancelContext, cancelCallback)
+			mngr.runWatcher(ctx, watcher, evType)
+		}(curr.watcher, curr.evType)
 	}
+
+	// Controls the completion of the watcher go routines, their removal from the queue
+	// and signals to context & callback control go routines about watchers completion.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		for len := mngr.queue.length(); len > 0; {
+			doneStr := <-mngr.queue.watcherDone
+			len = mngr.queue.del(doneStr)
+			if !mngr.queue.leaving && len == 0 {
+				logger.Debugf("All watchers are finished, signaling to leave.")
+				mngr.queue.finishContextHandler <- true
+				mngr.queue.finishCallbackHandler <- true
+			}
+		}
+	}()
 
 	wg.Wait()
 }
