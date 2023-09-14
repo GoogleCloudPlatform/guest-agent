@@ -21,13 +21,13 @@ import (
 	"sync"
 
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events/metadata"
-	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events/sshtrustedca"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 )
 
 var (
-	// availableWatchers mapps all kown available event watchers.
-	availableWatchers = make(map[string]Watcher)
+	defaultWatchers = []Watcher{
+		metadata.New(),
+	}
 )
 
 // Watcher defines the interface between the events manager and the actual
@@ -48,8 +48,20 @@ type Watcher interface {
 // Manager defines the interface between events management layer and the
 // core guest agent implementation.
 type Manager struct {
-	// watchers maps the registered watchers.
-	watchers map[string]Watcher
+	// watcherEvents maps the registered watchers and their events.
+	watcherEvents []*WatcherEventType
+
+	// watchersMap is a convenient manager's mapping of registered watcher instances.
+	watchersMap map[string]bool
+
+	// watchersMutex protects the watchers map.
+	watchersMutex sync.Mutex
+
+	// running is a flag indicating if the Run() was previously called.
+	running bool
+
+	// runningMutex protects the running flag.
+	runningMutex sync.RWMutex
 
 	// subscribers maps the subscribed callbacks.
 	subscribers map[string][]*eventSubscriber
@@ -89,12 +101,6 @@ type watcherQueue struct {
 	// leaving is a flag that indicates no more job should be processed as we are done
 	// with all watchers and callbacks.
 	leaving bool
-}
-
-// Config offers a mechanism for the consumers to configure the Manager behavior.
-type Config struct {
-	// Watchers lists the enabled watchers, of not provided all available watchers will be enabled.
-	Watchers []string
 }
 
 // EventData wraps the data communicated from a Watcher to a Subscriber.
@@ -155,32 +161,21 @@ func (ep *watcherQueue) del(evType string) int {
 	return len(ep.watchersMap)
 }
 
-func init() {
-	err := initWatchers([]Watcher{
-		metadata.New(),
-		sshtrustedca.New(sshtrustedca.DefaultPipePath),
-	})
-	if err != nil {
-		logger.Errorf("Failed to initialize watchers: %+v", err)
-	}
-}
-
-// init initializes the known available event watchers.
-func initWatchers(watchers []Watcher) error {
-	for _, curr := range watchers {
-		// Error if we are accidentaly not properly setting the id.
-		if curr.ID() == "" {
-			return fmt.Errorf("invalid event watcher id, skipping")
+// AddDefaultWatchers add the default watchers:
+//   - metadata
+func (mngr *Manager) AddDefaultWatchers(ctx context.Context) error {
+	for _, curr := range defaultWatchers {
+		if err := mngr.AddWatcher(ctx, curr); err != nil {
+			return err
 		}
-		availableWatchers[curr.ID()] = curr
 	}
 	return nil
 }
 
-// New allocates and initializes a events Manager based on provided cfg.
-func New(cfg *Config) (*Manager, error) {
-	res := &Manager{
-		watchers:    availableWatchers,
+// New allocates and initializes a events Manager.
+func New() *Manager {
+	return &Manager{
+		watchersMap: make(map[string]bool),
 		subscribers: make(map[string][]*eventSubscriber),
 		queue: &watcherQueue{
 			watchersMap:           make(map[string]bool),
@@ -190,21 +185,6 @@ func New(cfg *Config) (*Manager, error) {
 			watcherDone:           make(chan string),
 		},
 	}
-
-	// Align manager's config based on consumers provided watchers If it is
-	// passing in wanted/expected watchers, otherwise use all available ones.
-	if cfg != nil && len(cfg.Watchers) > 0 {
-		res.watchers = make(map[string]Watcher)
-		for _, curr := range cfg.Watchers {
-			// Report back if we don't know the provided watcher id.
-			if _, found := availableWatchers[curr]; !found {
-				return nil, fmt.Errorf("invalid/unknown watcher id: %s", curr)
-			}
-			res.watchers[curr] = availableWatchers[curr]
-		}
-	}
-
-	return res, nil
 }
 
 // Subscribe registers an event consumer/subscriber callback to a given event type, data
@@ -219,14 +199,39 @@ func (mngr *Manager) Subscribe(evType string, data interface{}, cb EventCb) {
 	)
 }
 
-func (mngr *Manager) eventTypes() []*WatcherEventType {
-	var res []*WatcherEventType
-	for _, watcher := range mngr.watchers {
-		for _, evType := range watcher.Events() {
-			res = append(res, &WatcherEventType{watcher, evType})
-		}
+// AddWatcher adds/enables a new watcher. The watcher will be fired up right away if the
+// event manager is already running, otherwise it's scheduled to run when Run() is called.
+func (mngr *Manager) AddWatcher(ctx context.Context, watcher Watcher) error {
+	mngr.watchersMutex.Lock()
+	defer mngr.watchersMutex.Unlock()
+	id := watcher.ID()
+	if _, found := mngr.watchersMap[id]; found {
+		return fmt.Errorf("watcher(%s) was previously added", id)
 	}
-	return res
+
+	// Add the watchers and its events to internal mappings.
+	mngr.watchersMap[id] = true
+	for _, curr := range watcher.Events() {
+		mngr.watcherEvents = append(mngr.watcherEvents, &WatcherEventType{watcher, curr})
+	}
+
+	mngr.runningMutex.RLock()
+	defer mngr.runningMutex.RUnlock()
+	// If we are not running don't bother "running" the watcher, Run() will do it later.
+	if !mngr.running {
+		return nil
+	}
+
+	// If we are already running the "run/launch" the watcher.
+	for _, curr := range watcher.Events() {
+		logger.Debugf("Adding watcher for event: %s", curr)
+		mngr.queue.add(curr)
+		go func(watcher Watcher, evType string) {
+			mngr.runWatcher(ctx, watcher, evType)
+		}(watcher, curr)
+	}
+
+	return nil
 }
 
 func (mngr *Manager) runWatcher(ctx context.Context, watcher Watcher, evType string) {
@@ -256,8 +261,21 @@ func (mngr *Manager) runWatcher(ctx context.Context, watcher Watcher, evType str
 }
 
 // Run runs the event manager, it will block until all watchers have given up/failed.
-func (mngr *Manager) Run(ctx context.Context) {
+// The event manager is meant to be started right after the early initialization code
+// and live until the application ends, the event manager can not be restarted - the Run()
+// method will return an error if one tries to run it twice.
+func (mngr *Manager) Run(ctx context.Context) error {
 	var wg sync.WaitGroup
+
+	mngr.runningMutex.Lock()
+	if mngr.running {
+		mngr.runningMutex.Unlock()
+		return fmt.Errorf("tried calling event manager's Run() twice")
+	}
+	mngr.running = true
+	mngr.runningMutex.Unlock()
+
+	queue := mngr.queue
 
 	// Manages the context's done signal, pass it down to the other go routines to
 	// finish its job and leave. Additionally, if the remaining go routines are leaving
@@ -270,15 +288,15 @@ func (mngr *Manager) Run(ctx context.Context) {
 			select {
 			case <-done:
 				logger.Debugf("Got context's Done() signal, leaving.")
-				mngr.queue.leaving = true
+				queue.leaving = true
 				finishCallbackHandler <- true
 				return
 			case <-finishContextHandler:
-				mngr.queue.leaving = true
+				queue.leaving = true
 				return
 			}
 		}
-	}(ctx.Done(), mngr.queue.finishContextHandler, mngr.queue.finishCallbackHandler)
+	}(ctx.Done(), queue.finishContextHandler, queue.finishCallbackHandler)
 
 	// Manages the event processing avoiding blocking the watcher's go routines.
 	// This will listen to dataBus and call the events handlers/callbacks.
@@ -322,15 +340,13 @@ func (mngr *Manager) Run(ctx context.Context) {
 				}
 			}
 		}
-	}(mngr.queue.dataBus, mngr.queue.finishCallbackHandler)
+	}(queue.dataBus, queue.finishCallbackHandler)
 
 	// Creates a goroutine for each registered watcher's event and keep handling its
 	// execution until they give up/finishes their job by returning renew = false.
-	for _, curr := range mngr.eventTypes() {
-		mngr.queue.add(curr.evType)
-		wg.Add(1)
+	for _, curr := range mngr.watcherEvents {
+		queue.add(curr.evType)
 		go func(watcher Watcher, evType string) {
-			defer wg.Done()
 			mngr.runWatcher(ctx, watcher, evType)
 		}(curr.watcher, curr.evType)
 	}
@@ -341,16 +357,17 @@ func (mngr *Manager) Run(ctx context.Context) {
 	go func() {
 		defer wg.Done()
 
-		for len := mngr.queue.length(); len > 0; {
-			doneStr := <-mngr.queue.watcherDone
-			len = mngr.queue.del(doneStr)
-			if !mngr.queue.leaving && len == 0 {
+		for len := queue.length(); len > 0; {
+			doneStr := <-queue.watcherDone
+			len = queue.del(doneStr)
+			if !queue.leaving && len == 0 {
 				logger.Debugf("All watchers are finished, signaling to leave.")
-				mngr.queue.finishContextHandler <- true
-				mngr.queue.finishCallbackHandler <- true
+				queue.finishContextHandler <- true
+				queue.finishCallbackHandler <- true
 			}
 		}
 	}()
 
 	wg.Wait()
+	return nil
 }

@@ -17,48 +17,26 @@ package events
 import (
 	"context"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events/metadata"
 )
 
-func TestConstructor(t *testing.T) {
-	tests := []struct {
-		config  *Config
-		success bool
-	}{
-		{config: nil, success: true},
-		{config: &Config{Watchers: []string{metadata.WatcherID}}, success: true},
-		{config: &Config{Watchers: []string{"foobar"}}, success: false},
+func TestAddWatcher(t *testing.T) {
+	eventManager := New()
+	metadataWatcher := metadata.New()
+	ctx := context.Background()
+
+	err := eventManager.AddWatcher(ctx, metadataWatcher)
+	if err != nil {
+		t.Errorf("expected success, got error: %+v", err)
 	}
 
-	for i, tt := range tests {
-		t.Run(fmt.Sprintf("test-%d", i), func(t *testing.T) {
-			_, err := New(tt.config)
-			if err != nil && tt.success {
-				t.Errorf("expected success, got error: %+v", err)
-			}
-		})
-	}
-}
-
-func TestInitWatcers(t *testing.T) {
-	tests := []struct {
-		watchers []Watcher
-		success  bool
-	}{
-		{watchers: []Watcher{metadata.New()}, success: true},
-		{watchers: []Watcher{&testWatcher{}}, success: false},
-	}
-
-	for i, tt := range tests {
-		t.Run(fmt.Sprintf("test-%d", i), func(t *testing.T) {
-			err := initWatchers(tt.watchers)
-			if err != nil && tt.success {
-				t.Errorf("expected success, got error: %+v", err)
-			}
-		})
+	err = eventManager.AddWatcher(ctx, metadataWatcher)
+	if err == nil {
+		t.Errorf("expected error, had success, event manager shouldn't add same watcher twice")
 	}
 }
 
@@ -91,20 +69,16 @@ func TestRun(t *testing.T) {
 	watcherID := "test-watcher"
 	maxCount := 10
 
-	err := initWatchers([]Watcher{
-		&testWatcher{
-			watcherID: watcherID,
-			maxCount:  maxCount,
-		},
+	ctx := context.Background()
+	eventManager := New()
+
+	err := eventManager.AddWatcher(ctx, &testWatcher{
+		watcherID: watcherID,
+		maxCount:  maxCount,
 	})
 
 	if err != nil {
-		t.Fatalf("Failed to init/register watcher: %+v", err)
-	}
-
-	eventManager, err := New(&Config{Watchers: []string{watcherID}})
-	if err != nil {
-		t.Fatalf("Failed to init event manager: %+v", err)
+		t.Fatalf("Failed to add watcher to event manager: %+v", err)
 	}
 
 	counter := 0
@@ -114,7 +88,9 @@ func TestRun(t *testing.T) {
 		return true
 	})
 
-	eventManager.Run(context.Background())
+	if err := eventManager.Run(ctx); err != nil {
+		t.Errorf("Failed to run event managed, expected success, got error: %+v", err)
+	}
 
 	if counter != maxCount {
 		t.Errorf("Failed to increment callback counter, expected: %d, got: %d", maxCount, counter)
@@ -126,20 +102,16 @@ func TestUnsubscribe(t *testing.T) {
 	maxCount := 10
 	unsubscribeAt := 2
 
-	err := initWatchers([]Watcher{
-		&testWatcher{
-			watcherID: watcherID,
-			maxCount:  maxCount,
-		},
+	ctx := context.Background()
+	eventManager := New()
+
+	err := eventManager.AddWatcher(ctx, &testWatcher{
+		watcherID: watcherID,
+		maxCount:  maxCount,
 	})
 
 	if err != nil {
-		t.Fatalf("Failed to init/register watcher: %+v", err)
-	}
-
-	eventManager, err := New(&Config{Watchers: []string{watcherID}})
-	if err != nil {
-		t.Fatalf("Failed to init event manager: %+v", err)
+		t.Fatalf("Failed to add watcher to event manager: %+v", err)
 	}
 
 	counter := 0
@@ -151,7 +123,9 @@ func TestUnsubscribe(t *testing.T) {
 		return true
 	})
 
-	eventManager.Run(context.Background())
+	if err := eventManager.Run(ctx); err != nil {
+		t.Errorf("Failed to run event managed, expected success, got error: %+v", err)
+	}
 
 	if counter != unsubscribeAt {
 		t.Errorf("Failed to unsubscribe callback, expected: %d, got: %d", unsubscribeAt, counter)
@@ -162,20 +136,16 @@ func TestCancelBeforeCallbacks(t *testing.T) {
 	watcherID := "test-watcher"
 	timeout := (1 * time.Second) / 100
 
-	err := initWatchers([]Watcher{
-		&testCancel{
-			watcherID: watcherID,
-			timeout:   timeout,
-		},
+	ctx, cancel := context.WithCancel(context.Background())
+	eventManager := New()
+
+	err := eventManager.AddWatcher(ctx, &testCancel{
+		watcherID: watcherID,
+		timeout:   timeout,
 	})
 
 	if err != nil {
-		t.Fatalf("Failed to init/register watcher: %+v", err)
-	}
-
-	eventManager, err := New(&Config{Watchers: []string{watcherID}})
-	if err != nil {
-		t.Fatalf("Failed to init event manager: %+v", err)
+		t.Fatalf("Failed to add watcher to event manager: %+v", err)
 	}
 
 	eventManager.Subscribe("test-watcher,test-event", nil, func(ctx context.Context, evType string, data interface{}, evData *EventData) bool {
@@ -183,13 +153,14 @@ func TestCancelBeforeCallbacks(t *testing.T) {
 		return true
 	})
 
-	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
 		time.Sleep(timeout / 2)
 		cancel()
 	}()
 
-	eventManager.Run(ctx)
+	if err := eventManager.Run(ctx); err != nil {
+		t.Errorf("Failed to run event managed, expected success, got error: %+v", err)
+	}
 }
 
 type testCancel struct {
@@ -214,33 +185,30 @@ func TestCancelAfterCallbacks(t *testing.T) {
 	watcherID := "test-watcher"
 	timeout := (1 * time.Second) / 100
 
-	err := initWatchers([]Watcher{
-		&testCancel{
-			watcherID: watcherID,
-			timeout:   timeout,
-		},
+	ctx, cancel := context.WithCancel(context.Background())
+	eventManager := New()
+
+	err := eventManager.AddWatcher(ctx, &testCancel{
+		watcherID: watcherID,
+		timeout:   timeout,
 	})
 
 	if err != nil {
-		t.Fatalf("Failed to init/register watcher: %+v", err)
-	}
-
-	eventManager, err := New(&Config{Watchers: []string{watcherID}})
-	if err != nil {
-		t.Fatalf("Failed to init event manager: %+v", err)
+		t.Fatalf("Failed to add watcher to event manager: %+v", err)
 	}
 
 	eventManager.Subscribe("test-watcher,test-event", nil, func(ctx context.Context, evType string, data interface{}, evData *EventData) bool {
 		return true
 	})
 
-	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
 		time.Sleep(timeout * 10)
 		cancel()
 	}()
 
-	eventManager.Run(ctx)
+	if err := eventManager.Run(ctx); err != nil {
+		t.Errorf("Failed to run event managed, expected success, got error: %+v", err)
+	}
 }
 
 type testCancelWatcher struct {
@@ -285,20 +253,16 @@ func TestCancelCallbacksAndWatchers(t *testing.T) {
 		t.Run(fmt.Sprintf("test-%d", i), func(t *testing.T) {
 			cancelSubscriberAfter := curr.cancelSubscriberAfter
 
-			err := initWatchers([]Watcher{
-				&testCancelWatcher{
-					watcherID: watcherID,
-					after:     curr.cancelWatcherAfter,
-				},
+			ctx := context.Background()
+			eventManager := New()
+
+			err := eventManager.AddWatcher(ctx, &testCancelWatcher{
+				watcherID: watcherID,
+				after:     curr.cancelWatcherAfter,
 			})
 
 			if err != nil {
-				t.Fatalf("Failed to init/register watcher: %+v", err)
-			}
-
-			eventManager, err := New(&Config{Watchers: []string{watcherID}})
-			if err != nil {
-				t.Fatalf("Failed to init event manager: %+v", err)
+				t.Fatalf("Failed to add watcher to event manager: %+v", err)
 			}
 
 			eventManager.Subscribe("test-watcher,test-event", nil, func(ctx context.Context, evType string, data interface{}, evData *EventData) bool {
@@ -310,7 +274,9 @@ func TestCancelCallbacksAndWatchers(t *testing.T) {
 				return true
 			})
 
-			eventManager.Run(context.Background())
+			if err := eventManager.Run(ctx); err != nil {
+				t.Errorf("Failed to run event managed, expected success, got error: %+v", err)
+			}
 		})
 	}
 }
@@ -320,20 +286,16 @@ func TestMultipleEvents(t *testing.T) {
 	firstEvent := "multiple-events,first-event"
 	secondEvent := "multiple-events,second-event"
 
-	err := initWatchers([]Watcher{
-		&testMultipleEvents{
-			watcherID: watcherID,
-			eventIDS:  []string{firstEvent, secondEvent},
-		},
+	ctx := context.Background()
+	eventManager := New()
+
+	err := eventManager.AddWatcher(ctx, &testMultipleEvents{
+		watcherID: watcherID,
+		eventIDS:  []string{firstEvent, secondEvent},
 	})
 
 	if err != nil {
-		t.Fatalf("Failed to init/register watcher: %+v", err)
-	}
-
-	eventManager, err := New(&Config{Watchers: []string{watcherID}})
-	if err != nil {
-		t.Fatalf("Failed to init event manager: %+v", err)
+		t.Fatalf("Failed to add watcher to event manager: %+v", err)
 	}
 
 	var hitFirstEvent bool
@@ -348,7 +310,9 @@ func TestMultipleEvents(t *testing.T) {
 		return false
 	})
 
-	eventManager.Run(context.Background())
+	if err := eventManager.Run(ctx); err != nil {
+		t.Errorf("Failed to run event managed, expected success, got error: %+v", err)
+	}
 
 	if !hitFirstEvent || !hitSecondEvent {
 		t.Errorf("Failed to call back events, first event hit? (%t), second event hit? (%t)", hitFirstEvent, hitSecondEvent)
@@ -370,4 +334,153 @@ func (tt *testMultipleEvents) Events() []string {
 
 func (tt *testMultipleEvents) Run(ctx context.Context, evType string) (bool, interface{}, error) {
 	return false, nil, nil
+}
+
+func TestAddWatcherAfterRun(t *testing.T) {
+	firstWatcher := &genericWatcher{
+		watcherID:   "first-watcher",
+		shouldRenew: true,
+	}
+
+	secondWatcher := &genericWatcher{
+		watcherID: "second-watcher",
+	}
+
+	ctx := context.Background()
+	eventManager := New()
+
+	err := eventManager.AddWatcher(ctx, firstWatcher)
+
+	if err != nil {
+		t.Fatalf("Failed to add watcher to event manager: %+v", err)
+	}
+
+	eventManager.Subscribe(firstWatcher.eventID(), nil, func(ctx context.Context, evType string, data interface{}, evData *EventData) bool {
+		if err := eventManager.AddWatcher(ctx, secondWatcher); err != nil {
+			t.Errorf("Failed to add a second watcher: %+v, expected success", err)
+		}
+		firstWatcher.shouldRenew = false
+		return false
+	})
+
+	var hitSecondEvent bool
+	eventManager.Subscribe(secondWatcher.eventID(), nil, func(ctx context.Context, evType string, data interface{}, evData *EventData) bool {
+		hitSecondEvent = true
+		return false
+	})
+
+	if err := eventManager.Run(ctx); err != nil {
+		t.Errorf("Failed to run event managed, expected success, got error: %+v", err)
+	}
+
+	if !hitSecondEvent {
+		t.Errorf("Failed registering second watcher, expected hitSecondEvent: false, got: %t", hitSecondEvent)
+	}
+}
+
+type genericWatcher struct {
+	watcherID   string
+	shouldRenew bool
+}
+
+func (gw *genericWatcher) eventID() string {
+	return gw.watcherID + ",test-event"
+}
+
+func (gw *genericWatcher) ID() string {
+	return gw.watcherID
+}
+
+func (gw *genericWatcher) Events() []string {
+	return []string{gw.eventID()}
+}
+
+func (gw *genericWatcher) Run(ctx context.Context, evType string) (bool, interface{}, error) {
+	return gw.shouldRenew, nil, nil
+}
+
+func TestAddDefaultWatchers(t *testing.T) {
+	firstWatcher := &genericWatcher{
+		watcherID:   "first-watcher",
+		shouldRenew: false,
+	}
+
+	defaultWatchers = []Watcher{
+		firstWatcher,
+	}
+
+	ctx := context.Background()
+	eventManager := New()
+
+	err := eventManager.AddDefaultWatchers(ctx)
+
+	if err != nil {
+		t.Fatalf("Failed to add watcher to event manager: %+v", err)
+	}
+
+	if len(eventManager.watchersMap) == 0 {
+		t.Fatalf("Failed to add default watchers, expected: %d, got: %d", len(defaultWatchers),
+			len(eventManager.watchersMap))
+	}
+
+	if len(eventManager.watcherEvents) == 0 {
+		t.Fatalf("Failed to add default watchers, expected: %d, got: %d", len(defaultWatchers),
+			len(eventManager.watcherEvents))
+	}
+}
+
+func TestCallingRunTwice(t *testing.T) {
+	firstWatcher := &genericWatcher{
+		watcherID:   "first-watcher",
+		shouldRenew: false,
+	}
+
+	defaultWatchers = []Watcher{
+		firstWatcher,
+	}
+
+	timeout := (1 * time.Second) / 100
+	ctx, cancel := context.WithCancel(context.Background())
+	eventManager := New()
+
+	err := eventManager.AddDefaultWatchers(ctx)
+
+	if err != nil {
+		t.Fatalf("Failed to add watcher to event manager: %+v", err)
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		time.Sleep(timeout)
+		cancel()
+	}()
+
+	errors := []error{}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if err := eventManager.Run(ctx); err != nil {
+			errors = append(errors, err)
+		}
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if err := eventManager.Run(ctx); err != nil {
+			errors = append(errors, err)
+		}
+	}()
+
+	wg.Wait()
+
+	if len(errors) == 0 {
+		t.Errorf("Executing Run() twice should fail, we got not failure")
+	}
+
+	if len(errors) > 1 {
+		t.Errorf("Executing Run() twice should produce a single error, got: %+v", errors)
+	}
 }

@@ -24,8 +24,10 @@ import (
 	"time"
 
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events/sshtrustedca"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/run"
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/sshca"
 	"github.com/GoogleCloudPlatform/guest-agent/metadata"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 )
@@ -63,6 +65,20 @@ func getOSLoginEnabled(md *metadata.Descriptor) (bool, bool, bool) {
 		skey = *md.Instance.Attributes.SecurityKey
 	}
 	return enable, twofactor, skey
+}
+
+func enableOSLoginCertAuth(ctx context.Context, eventManager *events.Manager) error {
+	// Only Enable sshtrustedca Watcher if osLogin is enabled.
+	// TODO: ideally we should have a feature flag specifically for this.
+	osLoginEnabled, _, _ := getOSLoginEnabled(newMetadata)
+	if osLoginEnabled {
+		if err := eventManager.AddWatcher(ctx, sshtrustedca.New(sshtrustedca.DefaultPipePath)); err != nil {
+			return err
+		}
+		sshca.Init(eventManager)
+	}
+
+	return nil
 }
 
 func (o *osloginMgr) Diff(ctx context.Context) (bool, error) {
