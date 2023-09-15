@@ -17,7 +17,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"runtime"
@@ -232,7 +231,7 @@ func updateSSHConfig(sshConfig string, enable, twofactor, skey bool) string {
 }
 
 func writeSSHConfig(enable, twofactor, skey bool) error {
-	sshConfig, err := ioutil.ReadFile("/etc/ssh/sshd_config")
+	sshConfig, err := os.ReadFile("/etc/ssh/sshd_config")
 	if err != nil {
 		return err
 	}
@@ -266,7 +265,7 @@ func updateNSSwitchConfig(nsswitch string, enable bool) string {
 }
 
 func writeNSSwitchConfig(enable bool) error {
-	nsswitch, err := ioutil.ReadFile("/etc/nsswitch.conf")
+	nsswitch, err := os.ReadFile("/etc/nsswitch.conf")
 	if err != nil {
 		return err
 	}
@@ -309,7 +308,7 @@ func updatePAMsshd(pamsshd string, enable, twofactor bool) string {
 }
 
 func writePAMConfig(enable, twofactor bool) error {
-	pamsshd, err := ioutil.ReadFile("/etc/pam.d/sshd")
+	pamsshd, err := os.ReadFile("/etc/pam.d/sshd")
 	if err != nil {
 		return err
 	}
@@ -335,7 +334,7 @@ func updateGroupConf(groupconf string, enable bool) string {
 }
 
 func writeGroupConf(enable bool) error {
-	groupconf, err := ioutil.ReadFile("/etc/security/group.conf")
+	groupconf, err := os.ReadFile("/etc/security/group.conf")
 	if err != nil {
 		return err
 	}

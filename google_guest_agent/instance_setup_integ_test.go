@@ -19,7 +19,6 @@ package main
 
 import (
 	"context"
-	"io/ioutil"
 	"os"
 	"strings"
 	"testing"
@@ -38,7 +37,7 @@ func TestInstanceSetupSSHKeys(t *testing.T) {
 	config = cfg                    // set the global
 	defer func() { config = nil }() // unset at end of test
 
-	tempdir, err := ioutil.TempDir("/tmp", "test_instance_setup")
+	tempdir, err := os.MkdirTemp("/tmp", "test_instance_setup")
 	if err != nil {
 		t.Fatal("failed to create working dir")
 	}
@@ -117,7 +116,7 @@ func TestInstanceSetupSSHKeysDisabled(t *testing.T) {
 	config = cfg                    // set the global
 	defer func() { config = nil }() // unset at end of test
 
-	tempdir, err := ioutil.TempDir("/tmp", "test_instance_setup")
+	tempdir, err := os.MkdirTemp("/tmp", "test_instance_setup")
 	if err != nil {
 		t.Fatal("failed to create working dir")
 	}
@@ -158,7 +157,7 @@ func TestInstanceSetupBotoConfig(t *testing.T) {
 	config = cfg                    // set the global
 	defer func() { config = nil }() // unset at end of test
 
-	tempdir, err := ioutil.TempDir("/tmp", "test_instance_setup")
+	tempdir, err := os.MkdirTemp("/tmp", "test_instance_setup")
 	if err != nil {
 		t.Fatal("failed to create working dir")
 	}
@@ -204,7 +203,7 @@ func TestInstanceSetupBotoConfigDisabled(t *testing.T) {
 	config = cfg                    // set the global
 	defer func() { config = nil }() // unset at end of test
 
-	tempdir, err := ioutil.TempDir("/tmp", "test_instance_setup")
+	tempdir, err := os.MkdirTemp("/tmp", "test_instance_setup")
 	if err != nil {
 		t.Fatal("failed to create working dir")
 	}

@@ -25,7 +25,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"net/url"
@@ -50,7 +49,7 @@ var (
 	metadataHang   = "/?recursive=true&alt=json&timeout_sec=10&last_etag=NONE"
 	defaultTimeout = 20 * time.Second
 	powerShellArgs = []string{"-NoProfile", "-NoLogo", "-ExecutionPolicy", "Unrestricted", "-File"}
-	errUsage       = fmt.Errorf("No valid arguments specified. Specify one of \"startup\", \"shutdown\" or \"specialize\"")
+	errUsage       = fmt.Errorf("no valid arguments specified. Specify one of \"startup\", \"shutdown\" or \"specialize\"")
 	config         *ini.File
 
 	storageURL = "storage.googleapis.com"
@@ -232,7 +231,7 @@ func getMetadata(key string, recurse bool) ([]byte, error) {
 	}
 	defer res.Body.Close()
 
-	md, err := ioutil.ReadAll(res.Body)
+	md, err := io.ReadAll(res.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -268,7 +267,7 @@ func writeScriptToFile(ctx context.Context, value string, filePath string, gcsSc
 	} else {
 		// Trim leading spaces and newlines.
 		value = strings.TrimLeft(value, " \n\v\f\t\r")
-		if err := ioutil.WriteFile(filePath, []byte(value), 0755); err != nil {
+		if err := os.WriteFile(filePath, []byte(value), 0755); err != nil {
 			return fmt.Errorf("error writing temp file: %v", err)
 		}
 	}
@@ -288,7 +287,7 @@ func setupAndRunScript(ctx context.Context, metadataKey string, value string) er
 	}
 
 	// Make temp directory.
-	tmpDir, err := ioutil.TempDir(config.Section("MetadataScripts").Key("run_dir").String(), "metadata-scripts")
+	tmpDir, err := os.MkdirTemp(config.Section("MetadataScripts").Key("run_dir").String(), "metadata-scripts")
 	if err != nil {
 		return err
 	}

@@ -25,6 +25,7 @@ import (
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 	"github.com/golang/groupcache/lru"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 var (
@@ -36,14 +37,6 @@ var (
 
 type snapshotConfig struct {
 	timeout time.Duration // seconds
-}
-
-type invalidSnapshotConfig struct {
-	msg string
-}
-
-func (e *invalidSnapshotConfig) Error() string {
-	return fmt.Sprintf("invalid config: %s", e.msg)
 }
 
 func getSnapshotConfig() (snapshotConfig, error) {
@@ -159,7 +152,7 @@ func getSnapshotResponse(ctx context.Context, guestMessage *sspb.GuestMessage) *
 
 func handleSnapshotRequests(ctx context.Context, address string, requestChan <-chan *sspb.GuestMessage) {
 	for {
-		conn, err := grpc.Dial(address, grpc.WithInsecure(), grpc.WithBlock())
+		conn, err := grpc.Dial(address, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
 		if err != nil {
 			logger.Errorf("Failed to connect to snapshot service: %v.", err)
 			return

@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"runtime"
@@ -34,7 +33,6 @@ import (
 
 var (
 	programName       = "GoogleAuthorizedKeysCommand"
-	version           string
 	metadataURL       = "http://169.254.169.254/computeMetadata/v1/"
 	metadataRecursive = "/?recursive=true&alt=json"
 	defaultTimeout    = 2 * time.Second
@@ -83,7 +81,7 @@ func getMetadata(key string, recurse bool) ([]byte, error) {
 	}
 	defer res.Body.Close()
 
-	md, err := ioutil.ReadAll(res.Body)
+	md, err := io.ReadAll(res.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -210,5 +208,5 @@ func main() {
 	}
 
 	userKeyList := getUserKeys(username, instanceAttributes, projectAttributes)
-	fmt.Printf(strings.Join(userKeyList, "\n"))
+	fmt.Print(strings.Join(userKeyList, "\n"))
 }

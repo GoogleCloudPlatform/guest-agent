@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"strconv"
 	"strings"
 
@@ -113,10 +113,10 @@ func parseID(id string) string {
 }
 
 func parseRelease() (OSInfo, error) {
-	if releaseFile, err := ioutil.ReadFile(osRelease); err == nil {
+	if releaseFile, err := os.ReadFile(osRelease); err == nil {
 		return parseOSRelease(string(releaseFile))
 	}
-	if releaseFile, err := ioutil.ReadFile(systemRelease); err == nil {
+	if releaseFile, err := os.ReadFile(systemRelease); err == nil {
 		return parseSystemRelease(string(releaseFile))
 	}
 	return OSInfo{}, errors.New("no known release file found")
