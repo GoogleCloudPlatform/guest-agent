@@ -381,6 +381,7 @@ func TestAddWatcherAfterRun(t *testing.T) {
 type genericWatcher struct {
 	watcherID   string
 	shouldRenew bool
+	wait        time.Duration
 }
 
 func (gw *genericWatcher) eventID() string {
@@ -396,6 +397,9 @@ func (gw *genericWatcher) Events() []string {
 }
 
 func (gw *genericWatcher) Run(ctx context.Context, evType string) (bool, interface{}, error) {
+	if gw.wait > 0 {
+		time.Sleep(gw.wait)
+	}
 	return gw.shouldRenew, nil, nil
 }
 
@@ -482,5 +486,153 @@ func TestCallingRunTwice(t *testing.T) {
 
 	if len(errors) > 1 {
 		t.Errorf("Executing Run() twice should produce a single error, got: %+v", errors)
+	}
+}
+
+type testRemoveWatcher struct {
+	watcherID string
+	timeout   time.Duration
+}
+
+func (tc *testRemoveWatcher) ID() string {
+	return tc.watcherID
+}
+
+func (tc *testRemoveWatcher) Events() []string {
+	return []string{tc.watcherID + ",test-event"}
+}
+
+func (tc *testRemoveWatcher) Run(ctx context.Context, evType string) (bool, interface{}, error) {
+	select {
+	case <-ctx.Done():
+		return false, nil, nil
+	case <-time.After(tc.timeout):
+		return true, nil, nil
+	}
+}
+
+func TestRemoveWatcherBeforeCallbacks(t *testing.T) {
+	watcherID := "test-watcher"
+	timeout := (1 * time.Second) / 100
+
+	ctx := context.Background()
+	eventManager := New()
+
+	watcher := &testRemoveWatcher{
+		watcherID: watcherID,
+		timeout:   timeout,
+	}
+
+	err := eventManager.AddWatcher(ctx, watcher)
+
+	if err != nil {
+		t.Fatalf("Failed to add watcher to event manager: %+v", err)
+	}
+
+	eventManager.Subscribe("test-watcher,test-event", nil, func(ctx context.Context, evType string, data interface{}, evData *EventData) bool {
+		t.Errorf("Expected to have canceled before calling callback")
+		return false
+	})
+
+	go func() {
+		time.Sleep(timeout / 2)
+		if err := eventManager.RemoveWatcher(ctx, watcher); err != nil {
+			t.Errorf("Failed to remove watcher: %+v", err)
+		}
+	}()
+
+	if err := eventManager.Run(ctx); err != nil {
+		t.Errorf("Failed running event manager, expected success, got error: %+v", err)
+	}
+}
+
+func TestRemoveWatcherFromCallback(t *testing.T) {
+	watcher := &genericWatcher{
+		watcherID:   "first-watcher",
+		shouldRenew: true,
+	}
+
+	ctx := context.Background()
+	eventManager := New()
+
+	err := eventManager.AddWatcher(ctx, watcher)
+
+	if err != nil {
+		t.Fatalf("Failed to add watcher to event manager: %+v", err)
+	}
+
+	eventManager.Subscribe(watcher.eventID(), nil, func(ctx context.Context, evType string, data interface{}, evData *EventData) bool {
+		if err := eventManager.RemoveWatcher(ctx, watcher); err != nil {
+			t.Fatalf("Failed to remove watcher, it should have succeeded: %+v", err)
+		}
+		return true
+	})
+
+	if err := eventManager.Run(ctx); err != nil {
+		t.Errorf("Failed running event manager, expected success, got error: %+v", err)
+	}
+}
+
+func TestCrossWatcherRemovalFromCallback(t *testing.T) {
+	firstWatcher := &genericWatcher{
+		watcherID:   "first-watcher",
+		shouldRenew: true,
+	}
+
+	secondWatcher := &genericWatcher{
+		watcherID:   "second-watcher",
+		shouldRenew: true,
+	}
+
+	thirdWatcher := &genericWatcher{
+		watcherID:   "third-watcher",
+		shouldRenew: true,
+		wait:        (1 * time.Second) / 3,
+	}
+
+	ctx := context.Background()
+	eventManager := New()
+
+	watchers := []Watcher{
+		firstWatcher,
+		secondWatcher,
+		thirdWatcher,
+	}
+
+	for _, curr := range watchers {
+		err := eventManager.AddWatcher(ctx, curr)
+
+		if err != nil {
+			t.Fatalf("Failed to add watcher to event manager: %+v", err)
+		}
+	}
+
+	removed := false
+	eventManager.Subscribe(thirdWatcher.eventID(), nil, func(ctx context.Context, evType string, data interface{}, evData *EventData) bool {
+		if !removed {
+			if err := eventManager.RemoveWatcher(ctx, firstWatcher); err != nil {
+				t.Errorf("Failed to remove firstWatcher, it should have succeeded: %+v", err)
+			}
+			if err := eventManager.RemoveWatcher(ctx, secondWatcher); err != nil {
+				t.Errorf("Failed to remove secondWatcher, it should have succeeded: %+v", err)
+			}
+			removed = true
+			return true
+		}
+
+		queueLen := eventManager.queue.length()
+		if queueLen != 1 {
+			t.Errorf("Failed to remove watcher, expected remaining watchers: 1, got: %d", queueLen)
+		}
+
+		if err := eventManager.RemoveWatcher(ctx, thirdWatcher); err != nil {
+			t.Errorf("Failed to remove thirdWatcher, it should have succeeded: %+v", err)
+		}
+
+		return false
+	})
+
+	if err := eventManager.Run(ctx); err != nil {
+		t.Errorf("Failed running event manager, expected success, got error: %+v", err)
 	}
 }

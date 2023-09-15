@@ -57,6 +57,9 @@ type Manager struct {
 	// watchersMutex protects the watchers map.
 	watchersMutex sync.Mutex
 
+	// removingWatcherEvents is a map of watchers being removed.
+	removingWatcherEvents map[string]bool
+
 	// running is a flag indicating if the Run() was previously called.
 	running bool
 
@@ -117,6 +120,10 @@ type WatcherEventType struct {
 	watcher Watcher
 	// evType idenfities the event type this object refences to.
 	evType string
+	// removed is a channel used to communicate with the running watcher go routine
+	// that it shouldn't renew even if the watcher requested a renew (in response of a
+	// RemoveWatcher() call.
+	removed chan bool
 }
 
 type eventSubscriber struct {
@@ -175,8 +182,9 @@ func (mngr *Manager) AddDefaultWatchers(ctx context.Context) error {
 // New allocates and initializes a events Manager.
 func New() *Manager {
 	return &Manager{
-		watchersMap: make(map[string]bool),
-		subscribers: make(map[string][]*eventSubscriber),
+		watchersMap:           make(map[string]bool),
+		removingWatcherEvents: make(map[string]bool),
+		subscribers:           make(map[string][]*eventSubscriber),
 		queue: &watcherQueue{
 			watchersMap:           make(map[string]bool),
 			dataBus:               make(chan eventBusData),
@@ -199,6 +207,35 @@ func (mngr *Manager) Subscribe(evType string, data interface{}, cb EventCb) {
 	)
 }
 
+// RemoveWatcher removes a watcher from the event manager. Each running watcher has its own
+// context (derived from the one provided in the AddWatcher() call) and will have it canceled
+// after calling this method.
+func (mngr *Manager) RemoveWatcher(ctx context.Context, watcher Watcher) error {
+	mngr.watchersMutex.Lock()
+	defer mngr.watchersMutex.Unlock()
+
+	id := watcher.ID()
+	logger.Debugf("Got a request to remove watcher: %s", id)
+	if _, found := mngr.watchersMap[id]; !found {
+		return fmt.Errorf("unknown Watcher(%s)", id)
+	}
+
+	for _, curr := range mngr.watcherEvents {
+		if _, found := mngr.removingWatcherEvents[curr.evType]; found {
+			logger.Debugf("Watcher(%s) is being removed, skipping removal request: %s", id, curr.evType)
+			continue
+		}
+
+		if curr.watcher.ID() == id {
+			mngr.removingWatcherEvents[curr.evType] = true
+			logger.Debugf("Removing watcher: %s, event type: %s", id, curr.evType)
+			curr.removed <- true
+		}
+	}
+
+	return nil
+}
+
 // AddWatcher adds/enables a new watcher. The watcher will be fired up right away if the
 // event manager is already running, otherwise it's scheduled to run when Run() is called.
 func (mngr *Manager) AddWatcher(ctx context.Context, watcher Watcher) error {
@@ -210,9 +247,18 @@ func (mngr *Manager) AddWatcher(ctx context.Context, watcher Watcher) error {
 	}
 
 	// Add the watchers and its events to internal mappings.
+	evTypes := make(map[string]*WatcherEventType)
 	mngr.watchersMap[id] = true
+
 	for _, curr := range watcher.Events() {
-		mngr.watcherEvents = append(mngr.watcherEvents, &WatcherEventType{watcher, curr})
+		evType := &WatcherEventType{
+			watcher: watcher,
+			evType:  curr,
+			removed: make(chan bool),
+		}
+
+		evTypes[curr] = evType
+		mngr.watcherEvents = append(mngr.watcherEvents, evType)
 	}
 
 	mngr.runningMutex.RLock()
@@ -226,24 +272,36 @@ func (mngr *Manager) AddWatcher(ctx context.Context, watcher Watcher) error {
 	for _, curr := range watcher.Events() {
 		logger.Debugf("Adding watcher for event: %s", curr)
 		mngr.queue.add(curr)
-		go func(watcher Watcher, evType string) {
-			mngr.runWatcher(ctx, watcher, evType)
-		}(watcher, curr)
+		go func(watcher Watcher, evType string, removed chan bool) {
+			mngr.runWatcher(ctx, watcher, evType, removed)
+		}(watcher, curr, evTypes[curr].removed)
 	}
 
 	return nil
 }
 
-func (mngr *Manager) runWatcher(ctx context.Context, watcher Watcher, evType string) {
+func (mngr *Manager) runWatcher(ctx context.Context, watcher Watcher, evType string, removed chan bool) {
+	nCtx, cancel := context.WithCancel(ctx)
+	abort := false
+	id := watcher.ID()
+
+	go func() {
+		abort = <-removed
+		logger.Debugf("Got a request to abort watcher(%s) for event: %s", id, evType)
+		cancel()
+	}()
+
 	for renew := true; renew; {
 		var evData interface{}
 		var err error
 
-		renew, evData, err = watcher.Run(ctx, evType)
+		renew, evData, err = watcher.Run(nCtx, evType)
 
-		logger.Debugf("Watcher(%s) returned event: %q, should renew?: %t", watcher.ID(), evType, renew)
+		logger.Debugf("Watcher(%s) returned event: %q, should renew?: %t", id, evType, renew)
 
-		if mngr.queue.leaving {
+		if abort || mngr.queue.leaving {
+			logger.Debugf("Watcher(%s), either are aborting(%t) or leaving(%t), breaking renew cycle",
+				id, abort, mngr.queue.leaving)
 			break
 		}
 
@@ -257,6 +315,10 @@ func (mngr *Manager) runWatcher(ctx context.Context, watcher Watcher, evType str
 	}
 
 	logger.Debugf("watcher finishing: %s", evType)
+	if !abort {
+		removed <- true
+	}
+
 	mngr.queue.watcherDone <- evType
 }
 
@@ -292,6 +354,7 @@ func (mngr *Manager) Run(ctx context.Context) error {
 				finishCallbackHandler <- true
 				return
 			case <-finishContextHandler:
+				logger.Debugf("Got context handler finish signal, leaving.")
 				queue.leaving = true
 				return
 			}
@@ -346,9 +409,9 @@ func (mngr *Manager) Run(ctx context.Context) error {
 	// execution until they give up/finishes their job by returning renew = false.
 	for _, curr := range mngr.watcherEvents {
 		queue.add(curr.evType)
-		go func(watcher Watcher, evType string) {
-			mngr.runWatcher(ctx, watcher, evType)
-		}(curr.watcher, curr.evType)
+		go func(watcher Watcher, evType string, removed chan bool) {
+			mngr.runWatcher(ctx, watcher, evType, removed)
+		}(curr.watcher, curr.evType, curr.removed)
 	}
 
 	// Controls the completion of the watcher go routines, their removal from the queue
@@ -360,6 +423,7 @@ func (mngr *Manager) Run(ctx context.Context) error {
 		for len := queue.length(); len > 0; {
 			doneStr := <-queue.watcherDone
 			len = queue.del(doneStr)
+			delete(mngr.removingWatcherEvents, doneStr)
 			if !queue.leaving && len == 0 {
 				logger.Debugf("All watchers are finished, signaling to leave.")
 				queue.finishContextHandler <- true
