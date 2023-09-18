@@ -19,7 +19,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -291,7 +290,7 @@ func getPasswd(user string) (*passwdEntry, error) {
 			return v, err
 		}
 	}
-	return nil, fmt.Errorf("User not found")
+	return nil, fmt.Errorf("user not found")
 }
 
 func writeGoogleUsersFile() error {
@@ -314,7 +313,7 @@ func writeGoogleUsersFile() error {
 
 func readGoogleUsersFile() (map[string]string, error) {
 	res := make(map[string]string)
-	gUsers, err := ioutil.ReadFile(googleUsersFile)
+	gUsers, err := os.ReadFile(googleUsersFile)
 	if err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
@@ -445,7 +444,7 @@ func updateAuthorizedKeysFile(ctx context.Context, user string, keys []string) e
 	}
 
 	tempPath := akpath + ".google"
-	akcontents, err := ioutil.ReadFile(akpath)
+	akcontents, err := os.ReadFile(akpath)
 	if err != nil && !os.IsNotExist(err) {
 		return err
 	}

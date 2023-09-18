@@ -124,7 +124,7 @@ func createOrResetPwd(ctx context.Context, k metadata.WindowsKey) (*credsJSON, e
 		if err := resetPwd(k.UserName, pwd); err != nil {
 			return nil, fmt.Errorf("error running resetPwd: %v", err)
 		}
-		if k.AddToAdministrators != nil && *k.AddToAdministrators == true {
+		if k.AddToAdministrators != nil && *k.AddToAdministrators {
 			if err := addUserToGroup(ctx, k.UserName, "Administrators"); err != nil {
 				return nil, fmt.Errorf("error running addUserToGroup: %v", err)
 			}
@@ -134,7 +134,7 @@ func createOrResetPwd(ctx context.Context, k metadata.WindowsKey) (*credsJSON, e
 		if err := createUser(ctx, k.UserName, pwd); err != nil {
 			return nil, fmt.Errorf("error running createUser: %v", err)
 		}
-		if k.AddToAdministrators == nil || *k.AddToAdministrators == true {
+		if k.AddToAdministrators == nil || *k.AddToAdministrators {
 			if err := addUserToGroup(ctx, k.UserName, "Administrators"); err != nil {
 				return nil, fmt.Errorf("error running addUserToGroup: %v", err)
 			}
@@ -282,7 +282,7 @@ func parseVersionInfo(psOutput []byte) (versionInfo, error) {
 	splitVer := strings.Split(verStr, ".")
 
 	if len(splitVer) < 2 {
-		return verInfo, fmt.Errorf("Cannot parse OpenSSH version string: %v", verStr)
+		return verInfo, fmt.Errorf("cannot parse OpenSSH version string: %v", verStr)
 	}
 
 	majorVer, err := strconv.Atoi(splitVer[0])
@@ -301,7 +301,7 @@ func parseVersionInfo(psOutput []byte) (versionInfo, error) {
 }
 
 func versionOk(checkVersion versionInfo, minVersion versionInfo) error {
-	versionError := fmt.Errorf("Detected OpenSSH version may be incompatible with enable_windows_ssh. Found version %s, Need Version: %s", checkVersion, minVersion)
+	versionError := fmt.Errorf("detected OpenSSH version may be incompatible with enable_windows_ssh. Found version %s, Need Version: %s", checkVersion, minVersion)
 
 	if checkVersion.major < minVersion.major {
 		return versionError
@@ -317,12 +317,12 @@ func versionOk(checkVersion versionInfo, minVersion versionInfo) error {
 func verifyWinSSHVersion(ctx context.Context) error {
 	sshdPath, err := getWindowsServiceImagePath(sshdRegKey)
 	if err != nil {
-		return fmt.Errorf("Cannot determine sshd path: %v", err)
+		return fmt.Errorf("cannot determine sshd path: %v", err)
 	}
 
 	sshdVersion, err := getWindowsExeVersion(ctx, sshdPath)
 	if err != nil {
-		return fmt.Errorf("Cannot determine OpenSSH Version: %v", err)
+		return fmt.Errorf("cannot determine OpenSSH Version: %v", err)
 	}
 
 	return versionOk(sshdVersion, minSSHVersion)

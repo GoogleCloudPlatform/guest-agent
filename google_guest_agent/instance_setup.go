@@ -266,7 +266,7 @@ func generateSSHKeys(ctx context.Context) error {
 	_, err = exec.LookPath("restorecon")
 	if err == nil {
 		if err := run.Quiet(ctx, "restorecon", "-FR", hostKeyDir); err != nil {
-			return fmt.Errorf("Failed to restore SELinux context for: %s", hostKeyDir)
+			return fmt.Errorf("failed to restore SELinux context for: %s", hostKeyDir)
 		}
 	}
 
