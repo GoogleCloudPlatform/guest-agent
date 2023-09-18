@@ -16,6 +16,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -313,7 +314,7 @@ func TestUpdateSSHConfig(t *testing.T) {
 		contents := strings.Join(tt.contents, "\n")
 		want := strings.Join(tt.want, "\n")
 
-		if res := updateSSHConfig(contents, tt.enable, tt.twofactor, tt.skey); res != want {
+		if res := updateSSHConfig(contents, tt.enable, tt.twofactor, false, tt.skey); res != want {
 			t.Errorf("test %v\nwant:\n%v\ngot:\n%v\n", idx, want, res)
 		}
 	}
@@ -396,6 +397,82 @@ func TestUpdatePAMsshd(t *testing.T) {
 		if res := updatePAMsshd(contents, tt.enable, tt.twofactor); res != want {
 			t.Errorf("test %v\nwant:\n%v\ngot:\n%v\n", idx, want, res)
 		}
+	}
+}
+
+func TestUpdatePAMsshdPamless(t *testing.T) {
+	authOSLogin := "auth       [success=done perm_denied=die default=ignore] pam_oslogin_login.so"
+	authGroup := "auth       [default=ignore] pam_group.so"
+	sessionHomeDir := "session    [success=ok default=ignore] pam_mkhomedir.so"
+
+	var tests = []struct {
+		contents, want    []string
+		enable, twofactor bool
+	}{
+		{
+			contents: []string{
+				"line1",
+				"line2",
+			},
+			want: []string{
+				googleBlockStart,
+				authOSLogin,
+				authGroup,
+				googleBlockEnd,
+				"line1",
+				"line2",
+				googleBlockStart,
+				sessionHomeDir,
+				googleBlockEnd,
+			},
+			enable:    true,
+			twofactor: true,
+		},
+		{
+			contents: []string{
+				"line1",
+				"line2",
+			},
+			want: []string{
+				googleBlockStart,
+				authGroup,
+				googleBlockEnd,
+				"line1",
+				"line2",
+				googleBlockStart,
+				sessionHomeDir,
+				googleBlockEnd,
+			},
+			enable:    true,
+			twofactor: false,
+		},
+		{
+			contents: []string{
+				googleBlockStart,
+				"line1",
+				googleBlockEnd,
+				"line2",
+				googleBlockStart,
+				"line3",
+				googleBlockEnd,
+			},
+			want: []string{
+				"line2",
+			},
+			enable:    false,
+			twofactor: true,
+		},
+	}
+
+	for idx, tt := range tests {
+		t.Run(fmt.Sprintf("test-%d", idx), func(t *testing.T) {
+			contents := strings.Join(tt.contents, "\n")
+			want := strings.Join(tt.want, "\n")
+
+			if res := updatePAMsshdPamless(contents, tt.enable, tt.twofactor); res != want {
+				t.Errorf("want:\n%v\ngot:\n%v\n", want, res)
+			}
+		})
 	}
 }
 
