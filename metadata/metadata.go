@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -318,13 +319,9 @@ func (c *Client) retry(ctx context.Context, cfg requestConfig) (string, error) {
 
 // GetKey gets a specific metadata key.
 func (c *Client) GetKey(ctx context.Context, key string, headers map[string]string) (string, error) {
-	// url.JoinPath first exists in go 1.19
-	key = strings.TrimPrefix(key, "/")
-	var reqURL string
-	if strings.HasSuffix(c.metadataURL, "/") {
-		reqURL = c.metadataURL + key
-	} else {
-		reqURL = c.metadataURL + "/" + key
+	reqURL, err := url.JoinPath(c.metadataURL, key)
+	if err != nil {
+		return "", fmt.Errorf("failed to form metadata url: %+v", err)
 	}
 
 	cfg := requestConfig{
@@ -372,7 +369,14 @@ func (c *Client) get(ctx context.Context, hang bool) (*Descriptor, error) {
 // WriteGuestAttributes does a put call to mds changing a guest attribute value.
 func (c *Client) WriteGuestAttributes(ctx context.Context, key, value string) error {
 	logger.Debugf("write guest attribute %q", key)
-	finalURL := c.metadataURL + "instance/guest-attributes/" + key
+
+	finalURL, err := url.JoinPath(c.metadataURL, "instance/guest-attributes/", key)
+	if err != nil {
+		return fmt.Errorf("failed to form metadata url: %+v", err)
+	}
+
+	logger.Debugf("Requesting(PUT) MDS URL: %s", finalURL)
+
 	req, err := http.NewRequest("PUT", finalURL, strings.NewReader(value))
 	if err != nil {
 		return err
@@ -386,35 +390,34 @@ func (c *Client) WriteGuestAttributes(ctx context.Context, key, value string) er
 }
 
 func (c *Client) do(ctx context.Context, cfg requestConfig) (*http.Response, error) {
-	var (
-		urlTokens []string
-		finalURL  string
-	)
+	finalURL, err := url.Parse(cfg.baseURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse url: %+v", err)
+	}
+
+	values := finalURL.Query()
 
 	if cfg.hang {
-		urlTokens = append(urlTokens, "wait_for_change=true")
-		urlTokens = append(urlTokens, "last_etag="+c.etag)
+		values.Add("wait_for_change", "true")
+		values.Add("last_etag", c.etag)
 	}
 
 	if cfg.timeout > 0 {
-		urlTokens = append(urlTokens, fmt.Sprintf("timeout_sec=%d", cfg.timeout))
+		values.Add("timeout_sec", fmt.Sprintf("%d", cfg.timeout))
 	}
 
 	if cfg.recursive {
-		urlTokens = append(urlTokens, "recursive=true")
+		values.Add("recursive", "true")
 	}
 
 	if cfg.jsonOutput {
-		urlTokens = append(urlTokens, "alt=json")
+		values.Add("alt", "json")
 	}
 
-	finalURL = cfg.baseURL
+	finalURL.RawQuery = values.Encode()
+	logger.Debugf("Requesting(GET) MDS URL: %s", finalURL.String())
 
-	if len(urlTokens) > 0 {
-		finalURL = fmt.Sprintf("%s/?%s", finalURL, strings.Join(urlTokens, "&"))
-	}
-
-	req, err := http.NewRequestWithContext(ctx, "GET", finalURL, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", finalURL.String(), nil)
 	if err != nil {
 		return nil, err
 	}
