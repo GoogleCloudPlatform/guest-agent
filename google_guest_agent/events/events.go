@@ -69,6 +69,9 @@ type Manager struct {
 	// subscribers maps the subscribed callbacks.
 	subscribers map[string][]*eventSubscriber
 
+	// subscribersMutex protects subscribers member/map of the manager object.
+	subscribersMutex sync.Mutex
+
 	// queue queue struct manages the running watchers, when it gets to len()
 	// down to zero means all watchers are done and we can signal the other
 	// control go routines to leave(given we don't have any more job left to
@@ -128,7 +131,7 @@ type WatcherEventType struct {
 
 type eventSubscriber struct {
 	data interface{}
-	cb   EventCb
+	cb   *EventCb
 }
 
 type eventBusData struct {
@@ -199,12 +202,37 @@ func New() *Manager {
 // is a context pointer provided by the caller to be passed down when calling cb when
 // a new event happens.
 func (mngr *Manager) Subscribe(evType string, data interface{}, cb EventCb) {
+	mngr.subscribersMutex.Lock()
+	defer mngr.subscribersMutex.Unlock()
 	mngr.subscribers[evType] = append(mngr.subscribers[evType],
 		&eventSubscriber{
 			data: data,
-			cb:   cb,
+			cb:   &cb,
 		},
 	)
+}
+
+func (mngr *Manager) unsubscribe(evType string, cb *EventCb) {
+	var keepMe []*eventSubscriber
+	for _, curr := range mngr.subscribers[evType] {
+		if curr.cb != cb {
+			keepMe = append(keepMe, curr)
+		}
+	}
+
+	mngr.subscribers[evType] = keepMe
+
+	if len(keepMe) == 0 {
+		logger.Debugf("No more subscribers left for evType: %s", evType)
+		delete(mngr.subscribers, evType)
+	}
+}
+
+// Unsubscribe removes the subscription of a given callback for a given event type.
+func (mngr *Manager) Unsubscribe(evType string, cb EventCb) {
+	mngr.subscribersMutex.Lock()
+	defer mngr.subscribersMutex.Unlock()
+	mngr.unsubscribe(evType, &cb)
 }
 
 // RemoveWatcher removes a watcher from the event manager. Each running watcher has its own
@@ -372,32 +400,31 @@ func (mngr *Manager) Run(ctx context.Context) error {
 			case <-finishCallbackHandler:
 				return
 			case busData := <-bus:
-				subscribers, found := mngr.subscribers[busData.evType]
-				if !found || len(subscribers) == 0 {
+				subscribers := mngr.subscribers[busData.evType]
+				if subscribers == nil {
 					logger.Debugf("No subscriber found for event: %s, returning.", busData.evType)
 					continue
 				}
 
-				keepMe := make([]*eventSubscriber, 0)
-				for _, curr := range mngr.subscribers[busData.evType] {
+				deleteMe := make([]*eventSubscriber, 0)
+				for _, curr := range subscribers {
 					logger.Debugf("Running registered callback for event: %s", busData.evType)
-					renew := curr.cb(ctx, busData.evType, curr.data, busData.data)
-					if renew {
-						keepMe = append(keepMe, curr)
+					renew := (*curr.cb)(ctx, busData.evType, curr.data, busData.data)
+					if !renew {
+						deleteMe = append(deleteMe, curr)
 					}
 					logger.Debugf("Returning from event %q subscribed callback, should renew?: %t", busData.evType, renew)
 				}
 
-				mngr.subscribers[busData.evType] = keepMe
-
-				// No more subscribers for this event type, delete it from the subscribers map.
-				if len(keepMe) == 0 {
-					logger.Debugf("No more subscribers left for evType: %s", busData.evType)
-					delete(mngr.subscribers, busData.evType)
+				mngr.subscribersMutex.Lock()
+				for _, curr := range deleteMe {
+					mngr.unsubscribe(busData.evType, curr.cb)
 				}
+				leave := mngr.subscribers[busData.evType] == nil
+				mngr.subscribersMutex.Unlock()
 
 				// No more subscribers at all, we have nothing more left to do here.
-				if len(mngr.subscribers) == 0 {
+				if leave {
 					logger.Debugf("No subscribers left, leaving")
 					break
 				}
