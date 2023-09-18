@@ -197,3 +197,13 @@ func SaferWriteFile(content []byte, outputFile string) error {
 
 	return os.Rename(tmp.Name(), outputFile)
 }
+
+// CopyFile copies content from src to dst.
+func CopyFile(src, dst string) error {
+	b, err := os.ReadFile(src)
+	if err != nil {
+		return fmt.Errorf("failed to read %q: %w", src, err)
+	}
+
+	return WriteFile(b, dst)
+}

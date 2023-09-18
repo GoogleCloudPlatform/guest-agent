@@ -167,7 +167,7 @@ func (j *CredsJob) Run(ctx context.Context) (bool, error) {
 		return true, fmt.Errorf("failed to read Root CA cert with an error: %w", err)
 	}
 
-	if err := j.writeRootCACert(v.Content, filepath.Join(defaultCredsDir, rootCACertFileName)); err != nil {
+	if err := j.writeRootCACert(ctx, v.Content, filepath.Join(defaultCredsDir, rootCACertFileName)); err != nil {
 		return true, fmt.Errorf("failed to store Root CA cert with an error: %w", err)
 	}
 

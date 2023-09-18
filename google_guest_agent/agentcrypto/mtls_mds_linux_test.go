@@ -44,7 +44,7 @@ func TestReadAndWriteRootCACert(t *testing.T) {
 		t.Errorf("readRootCACert(%+v) failed unexpectedly with error: %v", v, err)
 	}
 
-	if err := j.writeRootCACert(ca.Content, crt); err != nil {
+	if err := j.writeRootCACert(context.Background(), ca.Content, crt); err != nil {
 		t.Errorf("writeRootCACert(%s, %s) failed unexpectedly with error: %v", string(ca.Content), crt, err)
 	}
 
@@ -128,5 +128,40 @@ func TestShouldEnableError(t *testing.T) {
 
 	if j.ShouldEnable(ctx) {
 		t.Error("ShouldEnable(ctx) = true, want false")
+	}
+}
+
+func TestCertificateDirFromUpdater(t *testing.T) {
+	tests := []struct {
+		updater string
+		want    string
+	}{
+		{
+			updater: "update-ca-certificates",
+			want:    "/usr/local/share/ca-certificates/",
+		},
+		{
+			updater: "update-ca-trust",
+			want:    "/etc/pki/ca-trust/source/anchors/",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.updater, func(t *testing.T) {
+			got, err := certificateDirFromUpdater(test.updater)
+			if err != nil {
+				t.Errorf("certificateDirFromUpdater(%s) failed unexpectedly with error: %v", test.updater, err)
+			}
+			if got != test.want {
+				t.Errorf("certificateDirFromUpdater(%s) = %s, want %s", test.updater, got, test.want)
+			}
+		})
+	}
+}
+
+func TestCertificateDirFromUpdaterError(t *testing.T) {
+	_, err := certificateDirFromUpdater("unknown")
+	if err == nil {
+		t.Errorf("certificateDirFromUpdater(unknown) succeeded for unknown updater, want error")
 	}
 }
