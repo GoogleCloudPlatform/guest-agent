@@ -20,11 +20,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
-	"net/http"
 	"os"
 	"time"
 
+	"github.com/GoogleCloudPlatform/guest-agent/metadata"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 )
 
@@ -32,68 +31,36 @@ const (
 	contentDirPrefix  = "/run/secrets/workload-spiffe-contents"
 	tempSymlinkPrefix = "/run/secrets/workload-spiffe-symlink"
 	symlink           = "/run/secrets/workload-spiffe-credentials"
+	programName       = "gce_workload_certs_refresh"
 )
 
 var (
-	programName    = "gce_workload_certs_refresh"
-	version        string
-	metadataURL    = "http://169.254.169.254/computeMetadata/v1/"
-	defaultTimeout = 2 * time.Second
+	// mdsClient is the client used to query Metadata server.
+	mdsClient *metadata.Client
 )
+
+func init() {
+	mdsClient = metadata.New()
+}
 
 func logFormat(e logger.LogEntry) string {
 	now := time.Now().Format("2006/01/02 15:04:05")
 	return fmt.Sprintf("%s: %s", now, e.Message)
 }
 
-func getMetadata(key string) ([]byte, error) {
-	client := &http.Client{
-		Timeout: defaultTimeout,
-	}
-
-	url := metadataURL + key
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Add("Metadata-Flavor", "Google")
-
-	var res *http.Response
-
-	// Retry up to 5 times
-	for i := 1; i < 6; i++ {
-		res, err = client.Do(req)
-		if err == nil {
-			break
-		}
-		logger.Errorf("error connecting to metadata server, retrying in 3s, error: %v", err)
-		time.Sleep(time.Duration(3) * time.Second)
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	if res.StatusCode == 404 {
-		return nil, fmt.Errorf("HTTP 404")
-	}
-
+func getMetadata(ctx context.Context, key string) ([]byte, error) {
 	// GCE Workload Certificate endpoints return 412 Precondition failed if the VM was
 	// never configured with valid config values at least once. Without valid config
 	// values GCE cannot provision the workload certificates.
-	if res.StatusCode == 412 {
-		return nil, fmt.Errorf("HTTP 412")
-	}
-
-	defer res.Body.Close()
-	md, err := ioutil.ReadAll(res.Body)
+	resp, err := mdsClient.GetKey(ctx, key, nil)
 	if err != nil {
-		return nil, err
+		return []byte{}, fmt.Errorf("failed to GET %q from MDS with error: %w", key, err)
 	}
-	return md, nil
+	return []byte(resp), nil
 }
 
 /*
-metadata key instance/workload-identities
+metadata key instance/gce-workload-certificates/workload-identities
 
 	{
 	 "status": "OK",
@@ -153,7 +120,7 @@ type WorkloadCredential struct {
 }
 
 /*
-metadata key instance/workload-trusted-root-certs
+metadata key instance/gce-workload-certificates/root-certs
 
 	{
 	 "status": "OK",
@@ -230,20 +197,20 @@ func main() {
 	defer logger.Infof("Done")
 
 	// TODO: prune old dirs
-	if err := refreshCreds(); err != nil {
+	if err := refreshCreds(ctx); err != nil {
 		logger.Fatalf("Error refreshCreds: %v", err.Error())
 	}
 
 }
 
-func refreshCreds() error {
-	project, err := getMetadata("project/project-id")
+func refreshCreds(ctx context.Context) error {
+	project, err := getMetadata(ctx, "project/project-id")
 	if err != nil {
-		return fmt.Errorf("Error getting project ID: %v", err)
+		return fmt.Errorf("error getting project ID: %v", err)
 	}
 
 	// Get status first so it can be written even when other endpoints are empty.
-	certConfigStatus, err := getMetadata("instance/workload-certificates-config-status")
+	certConfigStatus, err := getMetadata(ctx, "instance/gce-workload-certificates/config-status")
 	if err != nil {
 		// Return success when certs are not configured to avoid unnecessary systemd failed units.
 		logger.Infof("Error getting config status, workload certificates may not be configured: %v", err)
@@ -260,12 +227,12 @@ func refreshCreds() error {
 	logger.Infof("Creating timestamp contents dir %s", contentDir)
 
 	if err := os.MkdirAll(contentDir, 0755); err != nil {
-		return fmt.Errorf("Error creating contents dir: %v", err)
+		return fmt.Errorf("error creating contents dir: %v", err)
 	}
 
 	// Write config_status first even if remaining endpoints are empty.
 	if err := os.WriteFile(fmt.Sprintf("%s/config_status", contentDir), certConfigStatus, 0644); err != nil {
-		return fmt.Errorf("Error writing config_status: %v", err)
+		return fmt.Errorf("error writing config_status: %v", err)
 	}
 
 	// Handles the edge case where the config values provided for the first time may be invalid. This ensures
@@ -274,45 +241,45 @@ func refreshCreds() error {
 		logger.Infof("Creating new symlink %s", symlink)
 
 		if err := os.Symlink(contentDir, symlink); err != nil {
-			return fmt.Errorf("Error creating symlink: %v", err)
+			return fmt.Errorf("error creating symlink: %v", err)
 		}
 	}
 
 	// Now get the rest of the content.
-	wisMd, err := getMetadata("instance/workload-identities")
+	wisMd, err := getMetadata(ctx, "instance/gce-workload-certificates/workload-identities")
 	if err != nil {
-		return fmt.Errorf("Error getting workload-identities: %v", err)
+		return fmt.Errorf("error getting workload-identities: %v", err)
 	}
 
-	wtrcsMd, err := getMetadata("instance/workload-trusted-root-certs")
+	wtrcsMd, err := getMetadata(ctx, "instance/gce-workload-certificates/root-certs")
 	if err != nil {
-		return fmt.Errorf("Error getting workload-trusted-root-certs: %v", err)
+		return fmt.Errorf("error getting workload-trusted-root-certs: %v", err)
 	}
 
 	wis := WorkloadIdentities{}
 	if err := json.Unmarshal(wisMd, &wis); err != nil {
-		return fmt.Errorf("Error unmarshaling workload identities response: %v", err)
+		return fmt.Errorf("error unmarshaling workload identities response: %v", err)
 	}
 
 	wtrcs := WorkloadTrustedRootCerts{}
 	if err := json.Unmarshal(wtrcsMd, &wtrcs); err != nil {
-		return fmt.Errorf("Error unmarshaling workload trusted root certs: %v", err)
+		return fmt.Errorf("error unmarshaling workload trusted root certs: %v", err)
 	}
 
 	if err := os.WriteFile(fmt.Sprintf("%s/certificates.pem", contentDir), []byte(wis.WorkloadCredentials[domain].CertificatePem), 0644); err != nil {
-		return fmt.Errorf("Error writing certificates.pem: %v", err)
+		return fmt.Errorf("error writing certificates.pem: %v", err)
 	}
 
 	if err := os.WriteFile(fmt.Sprintf("%s/private_key.pem", contentDir), []byte(wis.WorkloadCredentials[domain].PrivateKeyPem), 0644); err != nil {
-		return fmt.Errorf("Error writing private_key.pem: %v", err)
+		return fmt.Errorf("error writing private_key.pem: %v", err)
 	}
 
 	if err := os.WriteFile(fmt.Sprintf("%s/ca_certificates.pem", contentDir), []byte(wtrcs.RootCertificates[domain].RootCertificatesPem), 0644); err != nil {
-		return fmt.Errorf("Error writing ca_certificates.pem: %v", err)
+		return fmt.Errorf("error writing ca_certificates.pem: %v", err)
 	}
 
 	if err := os.Symlink(contentDir, tempSymlink); err != nil {
-		return fmt.Errorf("Error creating temporary link: %v", err)
+		return fmt.Errorf("error creating temporary link: %v", err)
 	}
 
 	oldTarget, err := os.Readlink(symlink)
@@ -325,18 +292,18 @@ func refreshCreds() error {
 	logger.Infof("Rotating symlink %s", symlink)
 
 	if err := os.Rename(tempSymlink, symlink); err != nil {
-		return fmt.Errorf("Error rotating target link: %v", err)
+		return fmt.Errorf("error rotating target link: %v", err)
 	}
 
 	// Clean up previous contents dir.
 	newTarget, err := os.Readlink(symlink)
 	if err != nil {
-		return fmt.Errorf("Error reading new symlink: %v, unable to remove old symlink target", err)
+		return fmt.Errorf("error reading new symlink: %v, unable to remove old symlink target", err)
 	}
 	if oldTarget != newTarget {
 		logger.Infof("Removing old content dir %s", oldTarget)
 		if err := os.RemoveAll(oldTarget); err != nil {
-			return fmt.Errorf("Failed to remove old symlink target: %v", err)
+			return fmt.Errorf("failed to remove old symlink target: %v", err)
 		}
 	}
 
