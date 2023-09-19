@@ -13,7 +13,6 @@
 //  limitations under the License.
 
 //go:build !windows
-// +build !windows
 
 package main
 
@@ -24,6 +23,7 @@ import (
 	"os/user"
 	"syscall"
 
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/run"
 )
 
@@ -37,7 +37,8 @@ func getUID(path string) string {
 }
 
 func createUser(ctx context.Context, username, uid string) error {
-	useradd := config.Section("Accounts").Key("useradd_cmd").MustString("useradd -m -s /bin/bash -p * {user}")
+	config := cfg.Get()
+	useradd := config.Accounts.UserAddCmd
 	if uid != "" {
 		useradd = fmt.Sprintf("%s -u %s", useradd, uid)
 	}
@@ -46,7 +47,8 @@ func createUser(ctx context.Context, username, uid string) error {
 }
 
 func addUserToGroup(ctx context.Context, user, group string) error {
-	gpasswdadd := config.Section("Accounts").Key("gpasswd_add_cmd").MustString("gpasswd -a {user} {group}")
+	config := cfg.Get()
+	gpasswdadd := config.Accounts.GPasswdAddCmd
 	cmd, args := createUserGroupCmd(gpasswdadd, user, group)
 	return run.Quiet(ctx, cmd, args...)
 }

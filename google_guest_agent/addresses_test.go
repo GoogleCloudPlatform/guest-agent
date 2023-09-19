@@ -15,13 +15,22 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"testing"
 
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
 	"github.com/GoogleCloudPlatform/guest-agent/metadata"
-	"github.com/go-ini/ini"
 )
+
+func reloadConfig(t *testing.T, extraDefaults []byte) {
+	t.Helper()
+	if err := cfg.Load(extraDefaults); err != nil {
+		t.Fatalf("Error parsing config: %+v", err)
+	}
+}
 
 func TestCompareRoutes(t *testing.T) {
 	var tests = []struct {
@@ -74,21 +83,20 @@ func TestAddressDisabled(t *testing.T) {
 		{"disabled in project metadata only", []byte(""), &metadata.Descriptor{Project: metadata.Project{Attributes: metadata.Attributes{DisableAddressManager: mkptr(true)}}}, true},
 	}
 
+	ctx := context.Background()
 	for _, tt := range tests {
-		cfg, err := ini.InsensitiveLoad(tt.data)
-		if err != nil {
-			t.Errorf("test case %q: error parsing config: %v", tt.name, err)
-			continue
-		}
-		if cfg == nil {
-			cfg = &ini.File{}
-		}
-		newMetadata = tt.md
-		config = cfg
-		got := (&addressMgr{}).disabled("")
-		if got != tt.want {
-			t.Errorf("test case %q, addressMgr.disabled() got: %t, want: %t", tt.name, got, tt.want)
-		}
+		t.Run(tt.name, func(t *testing.T) {
+			reloadConfig(t, tt.data)
+			newMetadata = tt.md
+			got, err := (&addressMgr{}).Disabled(ctx)
+			if err != nil {
+				t.Errorf("Failed to run addressMgr's Disabled() call, got error: %+v", err)
+			}
+
+			if got != tt.want {
+				t.Errorf("addressMgr.Disabled() got: %t, want: %t", got, tt.want)
+			}
+		})
 	}
 }
 
@@ -111,23 +119,24 @@ func TestAddressDiff(t *testing.T) {
 		{"disabled in project metadata only", []byte(""), &metadata.Descriptor{Project: metadata.Project{Attributes: metadata.Attributes{EnableWSFC: mkptr(false)}}}, false},
 	}
 
+	ctx := context.Background()
 	for _, tt := range tests {
-		cfg, err := ini.InsensitiveLoad(tt.data)
-		if err != nil {
-			t.Errorf("test case %q: error parsing config: %v", tt.name, err)
-			continue
-		}
-		if cfg == nil {
-			cfg = &ini.File{}
-		}
-		oldWSFCEnable = false
-		oldMetadata = &metadata.Descriptor{}
-		newMetadata = tt.md
-		config = cfg
-		got := (&addressMgr{}).diff()
-		if got != tt.want {
-			t.Errorf("test case %q, addresses.diff() got: %t, want: %t", tt.name, got, tt.want)
-		}
+		t.Run(tt.name, func(t *testing.T) {
+			reloadConfig(t, tt.data)
+
+			oldWSFCEnable = false
+			oldMetadata = &metadata.Descriptor{}
+			newMetadata = tt.md
+
+			got, err := (&addressMgr{}).Diff(ctx)
+			if err != nil {
+				t.Errorf("Failed to run addressMgr's Diff() call, got error: %+v", err)
+			}
+
+			if got != tt.want {
+				t.Errorf("addresses.diff() got: %t, want: %t", got, tt.want)
+			}
+		})
 	}
 }
 
@@ -148,25 +157,29 @@ func TestWsfcFilter(t *testing.T) {
 		{[]byte(`{"instance":{"attributes":{"wsfc-addrs":"192.168.0"}, "networkInterfaces":[{"forwardedIps":["192.168.0.0", "192.168.0.1"]}]}}`), []string{"192.168.0.0", "192.168.0.1"}},
 	}
 
-	config = ini.Empty()
-	for idx, tt := range tests {
-		var md metadata.Descriptor
-		if err := json.Unmarshal(tt.metaDataJSON, &md); err != nil {
-			t.Error("failed to unmarshal test JSON:", tt, err)
-		}
+	for i, tt := range tests {
+		t.Run(fmt.Sprintf("test-%d", i), func(t *testing.T) {
+			var md metadata.Descriptor
 
-		newMetadata = &md
-		testAddress := addressMgr{}
-		testAddress.applyWSFCFilter()
+			reloadConfig(t, nil)
 
-		forwardedIps := []string{}
-		for _, ni := range newMetadata.Instance.NetworkInterfaces {
-			forwardedIps = append(forwardedIps, ni.ForwardedIps...)
-		}
+			if err := json.Unmarshal(tt.metaDataJSON, &md); err != nil {
+				t.Error("failed to unmarshal test JSON:", tt, err)
+			}
 
-		if !reflect.DeepEqual(forwardedIps, tt.expectedIps) {
-			t.Errorf("wsfc filter failed test %d: expect - %q, actual - %q", idx, tt.expectedIps, forwardedIps)
-		}
+			newMetadata = &md
+			testAddress := addressMgr{}
+			testAddress.applyWSFCFilter(cfg.Get())
+
+			forwardedIps := []string{}
+			for _, ni := range newMetadata.Instance.NetworkInterfaces {
+				forwardedIps = append(forwardedIps, ni.ForwardedIps...)
+			}
+
+			if !reflect.DeepEqual(forwardedIps, tt.expectedIps) {
+				t.Errorf("wsfc filter failed: expect - %q, actual - %q", tt.expectedIps, forwardedIps)
+			}
+		})
 	}
 }
 
@@ -181,14 +194,24 @@ func TestWsfcFlagTriggerAddressDiff(t *testing.T) {
 		{&metadata.Descriptor{Project: metadata.Project{Attributes: metadata.Attributes{WSFCAddresses: "192.168.0.1"}}}, &metadata.Descriptor{Project: metadata.Project{Attributes: metadata.Attributes{WSFCAddresses: "192.168.0.2"}}}},
 	}
 
-	config = ini.Empty()
-	for _, tt := range tests {
-		oldWSFCAddresses = tt.oldMetadata.Instance.Attributes.WSFCAddresses
-		newMetadata = tt.newMetadata
-		oldMetadata = tt.oldMetadata
-		testAddress := addressMgr{}
-		if !testAddress.diff() {
-			t.Errorf("old: %v new: %v doesn't trigger diff.", tt.oldMetadata, tt.newMetadata)
-		}
+	ctx := context.Background()
+	for i, tt := range tests {
+		t.Run(fmt.Sprintf("test-%d", i), func(t *testing.T) {
+			reloadConfig(t, nil)
+
+			oldWSFCAddresses = tt.oldMetadata.Instance.Attributes.WSFCAddresses
+			newMetadata = tt.newMetadata
+			oldMetadata = tt.oldMetadata
+			testAddress := addressMgr{}
+
+			diff, err := testAddress.Diff(ctx)
+			if err != nil {
+				t.Errorf("Failed to run addressMgr's Diff() call, got error: %+v", err)
+			}
+
+			if !diff {
+				t.Errorf("old: %v new: %v doesn't trigger diff.", tt.oldMetadata, tt.newMetadata)
+			}
+		})
 	}
 }

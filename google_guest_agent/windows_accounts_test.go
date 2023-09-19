@@ -15,6 +15,7 @@
 package main
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha1"
@@ -30,7 +31,6 @@ import (
 
 	"github.com/GoogleCloudPlatform/guest-agent/metadata"
 	"github.com/GoogleCloudPlatform/guest-agent/utils"
-	"github.com/go-ini/ini"
 )
 
 func mkptr(b bool) *bool {
@@ -77,23 +77,34 @@ func TestAccountsDisabled(t *testing.T) {
 		{"disabled in project metadata only", []byte(""), &metadata.Descriptor{Project: metadata.Project{Attributes: metadata.Attributes{DisableAccountManager: mkptr(true)}}}, true},
 	}
 
+	ctx := context.Background()
 	for _, tt := range tests {
-		cfg, err := ini.InsensitiveLoad(tt.data)
-		if err != nil {
-			t.Errorf("test case %q: error parsing config: %v", tt.name, err)
-			continue
-		}
-		if cfg == nil {
-			cfg = &ini.File{}
-		}
-		newMetadata = tt.md
-		config = cfg
-		got := (&winAccountsMgr{}).disabled("windows")
-		if got != tt.want {
-			t.Errorf("test case %q, accounts.disabled() got: %t, want: %t", tt.name, got, tt.want)
-		}
+		t.Run(tt.name, func(t *testing.T) {
+			reloadConfig(t, tt.data)
+
+			newMetadata = tt.md
+			mgr := &winAccountsMgr{
+				fakeWindows: true,
+			}
+
+			got, err := mgr.Disabled(ctx)
+			if err != nil {
+				t.Errorf("Failed to run winAccountsMgr's Disabled() call: %+v", err)
+			}
+
+			if got != tt.want {
+				t.Errorf("accounts.disabled() got: %t, want: %t", got, tt.want)
+			}
+		})
 	}
-	got := (&winAccountsMgr{}).disabled("linux")
+
+	reloadConfig(t, nil)
+
+	got, err := (&winAccountsMgr{}).Disabled(ctx)
+	if err != nil {
+		t.Errorf("Failed to run winAccountsMgr's Disabled() call: %+v", err)
+	}
+
 	if got != true {
 		t.Errorf("winAccountsMgr.disabled(\"linux\") got: %t, want: true", got)
 	}

@@ -22,10 +22,12 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
 
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/run"
 	"github.com/GoogleCloudPlatform/guest-agent/utils"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
@@ -69,46 +71,47 @@ func removeExpiredKeys(keys []string) []string {
 
 type accountsMgr struct{}
 
-func (a *accountsMgr) diff() bool {
+func (a *accountsMgr) Diff(ctx context.Context) (bool, error) {
 	// If any keys have changed.
 	if !compareStringSlice(newMetadata.Instance.Attributes.SSHKeys, oldMetadata.Instance.Attributes.SSHKeys) {
-		return true
+		return true, nil
 	}
 	if !compareStringSlice(newMetadata.Project.Attributes.SSHKeys, oldMetadata.Project.Attributes.SSHKeys) {
-		return true
+		return true, nil
 	}
 	if newMetadata.Instance.Attributes.BlockProjectKeys != oldMetadata.Instance.Attributes.BlockProjectKeys {
-		return true
+		return true, nil
 	}
 
 	// If any on-disk keys have expired.
 	for _, keys := range sshKeys {
 		if len(keys) != len(removeExpiredKeys(keys)) {
-			return true
+			return true, nil
 		}
 	}
 	// If we've just disabled OS Login.
 	oldOslogin, _, _ := getOSLoginEnabled(oldMetadata)
 	newOslogin, _, _ := getOSLoginEnabled(newMetadata)
 	if oldOslogin && !newOslogin {
-		return true
+		return true, nil
 	}
 
-	return false
+	return false, nil
 }
 
-func (a *accountsMgr) timeout() bool {
-	return false
+func (a *accountsMgr) Timeout(ctx context.Context) (bool, error) {
+	return false, nil
 }
 
-func (a *accountsMgr) disabled(os string) bool {
+func (a *accountsMgr) Disabled(ctx context.Context) (bool, error) {
+	config := cfg.Get()
 	oslogin, _, _ := getOSLoginEnabled(newMetadata)
-	return false ||
-		os == "windows" || oslogin ||
-		!config.Section("Daemons").Key("accounts_daemon").MustBool(true)
+	return false || runtime.GOOS == "windows" || oslogin || !config.Daemons.AccountsDaemon, nil
 }
 
-func (a *accountsMgr) set(ctx context.Context) error {
+func (a *accountsMgr) Set(ctx context.Context) error {
+	config := cfg.Get()
+
 	if sshKeys == nil {
 		logger.Debugf("initialize sshKeys map")
 		sshKeys = make(map[string][]string)
@@ -119,7 +122,7 @@ func (a *accountsMgr) set(ctx context.Context) error {
 		logger.Errorf("Error creating google-sudoers file: %v.", err)
 	}
 	logger.Debugf("create sudoers group if needed")
-	if err := createSudoersGroup(ctx); err != nil {
+	if err := createSudoersGroup(ctx, config); err != nil {
 		logger.Errorf("Error creating google-sudoers group: %v.", err)
 	}
 
@@ -141,7 +144,7 @@ func (a *accountsMgr) set(ctx context.Context) error {
 	for user, userKeys := range mdKeyMap {
 		if _, err := getPasswd(user); err != nil {
 			logger.Infof("Creating user %s.", user)
-			if err := createGoogleUser(ctx, user); err != nil {
+			if err := createGoogleUser(ctx, config, user); err != nil {
 				logger.Errorf("Error creating user: %s.", err)
 				continue
 			}
@@ -167,7 +170,7 @@ func (a *accountsMgr) set(ctx context.Context) error {
 	for user := range gUsers {
 		if _, ok := mdKeyMap[user]; !ok && user != "" {
 			logger.Infof("Removing user %s.", user)
-			err = removeGoogleUser(ctx, user)
+			err = removeGoogleUser(ctx, config, user)
 			if err != nil {
 				logger.Errorf("Error removing user: %v.", err)
 			}
@@ -338,16 +341,16 @@ func createUserGroupCmd(cmd, user, group string) (string, []string) {
 
 // createGoogleUser creates a Google managed user account if needed and adds it
 // to the configured groups.
-func createGoogleUser(ctx context.Context, user string) error {
+func createGoogleUser(ctx context.Context, config *cfg.Sections, user string) error {
 	var uid string
-	if config.Section("Accounts").Key("reuse_homedir").MustBool(false) {
+	if config.Accounts.ReuseHomedir {
 		uid = getUID(fmt.Sprintf("/home/%s", user))
 	}
 
 	if err := createUser(ctx, user, uid); err != nil {
 		return err
 	}
-	groups := config.Section("Accounts").Key("groups").MustString("adm,dip,docker,lxd,plugdev,video")
+	groups := config.Accounts.Groups
 	for _, group := range strings.Split(groups, ",") {
 		addUserToGroup(ctx, user, group)
 	}
@@ -358,16 +361,16 @@ func createGoogleUser(ctx context.Context, user string) error {
 // user and its home directory are removed. Otherwise, SSH keys and sudoer
 // permissions are removed but the user remains on the system. Group membership
 // is not changed.
-func removeGoogleUser(ctx context.Context, user string) error {
-	if config.Section("Accounts").Key("deprovision_remove").MustBool(false) {
-		userdel := config.Section("Accounts").Key("userdel_cmd").MustString("userdel -r {user}")
+func removeGoogleUser(ctx context.Context, config *cfg.Sections, user string) error {
+	if config.Accounts.DeprovisionRemove {
+		userdel := config.Accounts.UserDelCmd
 		name, args := createUserGroupCmd(userdel, user, "")
 		return run.Quiet(ctx, name, args...)
 	}
 	if err := updateAuthorizedKeysFile(ctx, user, []string{}); err != nil {
 		return err
 	}
-	gpasswddel := config.Section("Accounts").Key("gpasswd_remove_cmd").MustString("gpasswd -d {user} {group}")
+	gpasswddel := config.Accounts.GPasswdRemoveCmd
 	name, args := createUserGroupCmd(gpasswddel, user, "google-sudoers")
 	return run.Quiet(ctx, name, args...)
 }
@@ -389,8 +392,8 @@ func createSudoersFile() error {
 }
 
 // createSudoersGroup creates the google-sudoers group if it does not exist.
-func createSudoersGroup(ctx context.Context) error {
-	groupadd := config.Section("Accounts").Key("groupadd_cmd").MustString("groupadd {group}")
+func createSudoersGroup(ctx context.Context, config *cfg.Sections) error {
+	groupadd := config.Accounts.GroupAddCmd
 	name, args := createUserGroupCmd(groupadd, "", "google-sudoers")
 	ret := run.WithOutput(ctx, name, args...)
 	if ret.ExitCode == 9 {
