@@ -99,7 +99,12 @@ func (o *osloginMgr) set(ctx context.Context) error {
 		logger.Infof("Disabling OS Login")
 	}
 
-	if err := writeSSHConfig(enable, twofactor, skey); err != nil {
+	// [Unstable] configuration section has no long term stability or support guarantees/promises.
+	// Configurations defined in the Unstable section will be by default disabled and is intended to
+	// isolate under development features.
+	pamlessAuthStack := config.Section("Unstable").Key("pamless_auth_stack").MustBool(false)
+
+	if err := writeSSHConfig(enable, twofactor, pamlessAuthStack, skey); err != nil {
 		logger.Errorf("Error updating SSH config: %v.", err)
 	}
 
@@ -107,7 +112,7 @@ func (o *osloginMgr) set(ctx context.Context) error {
 		logger.Errorf("Error updating NSS config: %v.", err)
 	}
 
-	if err := writePAMConfig(enable, twofactor); err != nil {
+	if err := writePAMConfig(enable, twofactor, pamlessAuthStack); err != nil {
 		logger.Errorf("Error updating PAM config: %v.", err)
 	}
 
@@ -187,7 +192,7 @@ func writeConfigFile(path, contents string) error {
 	return nil
 }
 
-func updateSSHConfig(sshConfig string, enable, twofactor, skey bool) string {
+func updateSSHConfig(sshConfig string, enable, twofactor, pamlessAuthStack, skey bool) string {
 	// TODO: this feels like a case for a text/template
 	challengeResponseEnable := "ChallengeResponseAuthentication yes"
 	authorizedKeysCommand := "AuthorizedKeysCommand /usr/bin/google_authorized_keys"
@@ -201,6 +206,8 @@ func updateSSHConfig(sshConfig string, enable, twofactor, skey bool) string {
 		}
 	}
 	authorizedKeysUser := "AuthorizedKeysCommandUser root"
+	authorizedPrincipalsCommand := "AuthorizedPrincipalsCommand %u %k"
+	authorizedPrincipalsUser := "AuthorizedPrincipalsCommandUser root"
 
 	// TODO: only enable this key configuration if certs mechanism is enabled
 	trustedUserCAKeys := "TrustedUserCAKeys " + sshtrustedca.DefaultPipePath
@@ -217,6 +224,10 @@ func updateSSHConfig(sshConfig string, enable, twofactor, skey bool) string {
 
 	if enable {
 		osLoginBlock := []string{googleBlockStart, authorizedKeysCommand, authorizedKeysUser, trustedUserCAKeys}
+		if pamlessAuthStack {
+			osLoginBlock = append(osLoginBlock, authorizedPrincipalsCommand, authorizedPrincipalsUser)
+		}
+
 		if twofactor {
 			osLoginBlock = append(osLoginBlock, twoFactorAuthMethods, challengeResponseEnable)
 		}
@@ -230,12 +241,12 @@ func updateSSHConfig(sshConfig string, enable, twofactor, skey bool) string {
 	return strings.Join(filtered, "\n")
 }
 
-func writeSSHConfig(enable, twofactor, skey bool) error {
+func writeSSHConfig(enable, twofactor, pamlessAuthStack, skey bool) error {
 	sshConfig, err := os.ReadFile("/etc/ssh/sshd_config")
 	if err != nil {
 		return err
 	}
-	proposed := updateSSHConfig(string(sshConfig), enable, twofactor, skey)
+	proposed := updateSSHConfig(string(sshConfig), enable, twofactor, pamlessAuthStack, skey)
 	if proposed == string(sshConfig) {
 		return nil
 	}
@@ -276,6 +287,31 @@ func writeNSSwitchConfig(enable bool) error {
 	return writeConfigFile("/etc/nsswitch.conf", proposed)
 }
 
+func updatePAMsshdPamless(pamsshd string, enable, twofactor bool) string {
+	authOSLogin := "auth       [success=done perm_denied=die default=ignore] pam_oslogin_login.so"
+	authGroup := "auth       [default=ignore] pam_group.so"
+	sessionHomeDir := "session    [success=ok default=ignore] pam_mkhomedir.so"
+
+	if runtime.GOOS == "freebsd" {
+		authOSLogin = "auth       optional pam_oslogin_login.so"
+		authGroup = "auth       optional pam_group.so"
+		sessionHomeDir = "session    optional pam_mkhomedir.so"
+	}
+
+	filtered := filterGoogleLines(string(pamsshd))
+	if enable {
+		topOfFile := []string{googleBlockStart}
+		if twofactor {
+			topOfFile = append(topOfFile, authOSLogin)
+		}
+		topOfFile = append(topOfFile, authGroup, googleBlockEnd)
+		bottomOfFile := []string{googleBlockStart, sessionHomeDir, googleBlockEnd}
+		filtered = append(topOfFile, filtered...)
+		filtered = append(filtered, bottomOfFile...)
+	}
+	return strings.Join(filtered, "\n")
+}
+
 // Adds entries to the PAM config for sshd and su which reflect the current
 // enablements. Only writes files if they have changed from what's on disk.
 func updatePAMsshd(pamsshd string, enable, twofactor bool) string {
@@ -307,12 +343,19 @@ func updatePAMsshd(pamsshd string, enable, twofactor bool) string {
 	return strings.Join(filtered, "\n")
 }
 
-func writePAMConfig(enable, twofactor bool) error {
+func writePAMConfig(enable, twofactor, pamlessAuthStack bool) error {
 	pamsshd, err := os.ReadFile("/etc/pam.d/sshd")
 	if err != nil {
 		return err
 	}
-	proposed := updatePAMsshd(string(pamsshd), enable, twofactor)
+
+	var proposed string
+	if pamlessAuthStack {
+		proposed = updatePAMsshdPamless(string(pamsshd), enable, twofactor)
+	} else {
+		proposed = updatePAMsshd(string(pamsshd), enable, twofactor)
+	}
+
 	if proposed != string(pamsshd) {
 		if err := writeConfigFile("/etc/pam.d/sshd", proposed); err != nil {
 			return err
