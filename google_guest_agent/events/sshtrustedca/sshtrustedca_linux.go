@@ -18,15 +18,17 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"syscall"
 	"time"
 
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/run"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 )
 
 // Create a named pipe if it doesn't exist.
-func createNamedPipe(pipePath string) error {
+func createNamedPipe(ctx context.Context, pipePath string) error {
 	pipeDir := filepath.Dir(pipePath)
 	_, err := os.Stat(pipeDir)
 
@@ -46,7 +48,14 @@ func createNamedPipe(pipePath string) error {
 			return fmt.Errorf("failed to stat file: " + pipePath)
 		}
 	}
-	return nil
+
+	restorecon, err := exec.LookPath("restorecon")
+	if err != nil {
+		logger.Infof("No restorecon available, not restoring SELinux context of: %s", pipePath)
+		return nil
+	}
+
+	return run.Quiet(ctx, restorecon, pipePath)
 }
 
 // finishedCb is used by the event handler to communicate the write to the
@@ -105,7 +114,7 @@ func (mp *Watcher) Run(ctx context.Context, evType string) (bool, interface{}, e
 
 	// If the configured named pipe doesn't exists we create it before emitting events
 	// from it.
-	if err := createNamedPipe(mp.pipePath); err != nil {
+	if err := createNamedPipe(ctx, mp.pipePath); err != nil {
 		return true, nil, err
 	}
 
