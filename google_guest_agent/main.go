@@ -25,6 +25,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/agentcrypto"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events"
 	mdsEvent "github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events/metadata"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events/sshtrustedca"
@@ -188,6 +189,11 @@ func runAgent(ctx context.Context) {
 	// knownJobs is list of default jobs that run on a pre-defined schedule.
 	knownJobs := []scheduler.Job{telemetry.New(mdsClient, programName, version)}
 	scheduler.ScheduleJobs(ctx, knownJobs, false)
+
+	// Schedules jobs that need to be started before notifying systemd Agent process has started.
+	if config.Section("Unstable").Key("mds_mtls").MustBool(false) {
+		scheduler.ScheduleJobs(ctx, []scheduler.Job{agentcrypto.New()}, true)
+	}
 
 	eventsConfig := &events.Config{
 		Watchers: []string{
