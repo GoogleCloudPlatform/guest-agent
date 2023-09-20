@@ -210,7 +210,7 @@ func runAgent(ctx context.Context) {
 		return
 	}
 
-	if err := enableOSLoginCertAuth(ctx, eventManager); err != nil {
+	if err := enableDisableOSLoginCertAuth(ctx); err != nil {
 		logger.Errorf("Failed to enable sshtrustedca watcher: %+v", err)
 		return
 	}
@@ -232,6 +232,11 @@ func runAgent(ctx context.Context) {
 		}
 
 		newMetadata = evData.Data.(*metadata.Descriptor)
+
+		if err := enableDisableOSLoginCertAuth(ctx); err != nil {
+			logger.Errorf("Failed to enable/disable sshtrustedca watcher: %+v", err)
+		}
+
 		runUpdate(ctx)
 		oldMetadata = newMetadata
 

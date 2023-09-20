@@ -45,9 +45,15 @@ var (
 )
 
 // Init initializes the sshca's event handler callback.
-func Init(eventManager *events.Manager) {
+func Init() {
 	mdsClient = metadata.New()
-	eventManager.Subscribe(sshtrustedca.ReadEvent, nil, writeFile)
+	events.Get().Subscribe(sshtrustedca.ReadEvent, nil, writeFile)
+}
+
+// Close finishes the sshca module, deallocating everything allocated with Init().
+func Close() {
+	events.Get().Unsubscribe(sshtrustedca.ReadEvent, writeFile)
+	mdsClient = nil
 }
 
 // writeFile is an event handler callback and writes the actual sshca content to the pipe

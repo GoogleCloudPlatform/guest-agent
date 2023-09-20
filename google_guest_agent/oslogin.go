@@ -36,6 +36,7 @@ var (
 	googleComment    = "# Added by Google Compute Engine OS Login."
 	googleBlockStart = "#### Google OS Login control. Do not edit this section. ####"
 	googleBlockEnd   = "#### End Google OS Login control section. ####"
+	trustedCAWatcher events.Watcher
 )
 
 type osloginMgr struct{}
@@ -67,15 +68,25 @@ func getOSLoginEnabled(md *metadata.Descriptor) (bool, bool, bool) {
 	return enable, twofactor, skey
 }
 
-func enableOSLoginCertAuth(ctx context.Context, eventManager *events.Manager) error {
-	// Only Enable sshtrustedca Watcher if osLogin is enabled.
-	// TODO: ideally we should have a feature flag specifically for this.
+func enableDisableOSLoginCertAuth(ctx context.Context) error {
+	eventManager := events.Get()
 	osLoginEnabled, _, _ := getOSLoginEnabled(newMetadata)
 	if osLoginEnabled {
-		if err := eventManager.AddWatcher(ctx, sshtrustedca.New(sshtrustedca.DefaultPipePath)); err != nil {
-			return err
+		if trustedCAWatcher == nil {
+			trustedCAWatcher = sshtrustedca.New(sshtrustedca.DefaultPipePath)
+			if err := eventManager.AddWatcher(ctx, trustedCAWatcher); err != nil {
+				return err
+			}
+			sshca.Init()
 		}
-		sshca.Init(eventManager)
+	} else {
+		if trustedCAWatcher != nil {
+			if err := eventManager.RemoveWatcher(ctx, trustedCAWatcher); err != nil {
+				return err
+			}
+			sshca.Close()
+			trustedCAWatcher = nil
+		}
 	}
 
 	return nil
