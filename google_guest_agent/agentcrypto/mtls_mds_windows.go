@@ -59,7 +59,7 @@ var (
 
 // writeRootCACert writes Root CA cert from UEFI variable to output file.
 func (j *CredsJob) writeRootCACert(_ context.Context, cacert []byte, outputFile string) error {
-	if err := utils.SaferWriteFile(cacert, outputFile); err != nil {
+	if err := utils.SaferWriteFile(cacert, outputFile, 0644); err != nil {
 		return err
 	}
 
@@ -150,7 +150,7 @@ func (j *CredsJob) writeClientCredentials(creds []byte, outputFile string) error
 		logger.Warningf("Could not get previous serial number, will skip cleanup: %v", err)
 	}
 
-	if err := utils.SaferWriteFile(creds, outputFile); err != nil {
+	if err := utils.SaferWriteFile(creds, outputFile, 0644); err != nil {
 		return fmt.Errorf("failed to write client key: %w", err)
 	}
 
@@ -160,7 +160,7 @@ func (j *CredsJob) writeClientCredentials(creds []byte, outputFile string) error
 	}
 
 	p := filepath.Join(filepath.Dir(outputFile), pfxFile)
-	if err := utils.SaferWriteFile(pfx, p); err != nil {
+	if err := utils.SaferWriteFile(pfx, p, 0644); err != nil {
 		return fmt.Errorf("failed to write PFX file: %w", err)
 	}
 

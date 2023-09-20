@@ -37,7 +37,7 @@ const (
 
 // writeRootCACert writes Root CA cert from UEFI variable to output file.
 func (j *CredsJob) writeRootCACert(ctx context.Context, content []byte, outputFile string) error {
-	if err := utils.SaferWriteFile(content, outputFile); err != nil {
+	if err := utils.SaferWriteFile(content, outputFile, 0644); err != nil {
 		return err
 	}
 
@@ -51,7 +51,7 @@ func (j *CredsJob) writeRootCACert(ctx context.Context, content []byte, outputFi
 
 // writeClientCredentials stores client credentials (certificate and private key).
 func (j *CredsJob) writeClientCredentials(plaintext []byte, outputFile string) error {
-	return utils.SaferWriteFile(plaintext, outputFile)
+	return utils.SaferWriteFile(plaintext, outputFile, 0644)
 }
 
 // getCAStoreUpdater interates over known system trust store updaters and returns the first found.
@@ -100,7 +100,7 @@ func updateSystemStore(ctx context.Context, cert string) error {
 
 	dest := filepath.Join(dir, filepath.Base(cert))
 
-	if err := utils.CopyFile(cert, dest); err != nil {
+	if err := utils.CopyFile(cert, dest, 0644); err != nil {
 		return err
 	}
 
