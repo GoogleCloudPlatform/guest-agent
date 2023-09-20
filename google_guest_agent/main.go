@@ -27,8 +27,10 @@ import (
 
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events"
 	mdsEvent "github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events/metadata"
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events/sshtrustedca"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/osinfo"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/scheduler"
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/sshca"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/telemetry"
 	"github.com/GoogleCloudPlatform/guest-agent/metadata"
 	"github.com/GoogleCloudPlatform/guest-agent/utils"
@@ -190,6 +192,7 @@ func runAgent(ctx context.Context) {
 	eventsConfig := &events.Config{
 		Watchers: []string{
 			mdsEvent.WatcherID,
+			sshtrustedca.WatcherID,
 		},
 	}
 
@@ -198,6 +201,8 @@ func runAgent(ctx context.Context) {
 		logger.Errorf("Error initializing event manager: %v", err)
 		return
 	}
+
+	sshca.Init(eventManager)
 
 	oldMetadata = &metadata.Descriptor{}
 	eventManager.Subscribe(mdsEvent.LongpollEvent, nil, func(ctx context.Context, evType string, data interface{}, evData *events.EventData) bool {

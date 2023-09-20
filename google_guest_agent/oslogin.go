@@ -206,7 +206,7 @@ func updateSSHConfig(sshConfig string, enable, twofactor, pamlessAuthStack, skey
 		}
 	}
 	authorizedKeysUser := "AuthorizedKeysCommandUser root"
-	authorizedPrincipalsCommand := "AuthorizedPrincipalsCommand %u %k"
+	authorizedPrincipalsCommand := "AuthorizedPrincipalsCommand /usr/bin/google_authorized_principals %u %k"
 	authorizedPrincipalsUser := "AuthorizedPrincipalsCommandUser root"
 
 	// TODO: only enable this key configuration if certs mechanism is enabled
