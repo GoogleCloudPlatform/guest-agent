@@ -25,7 +25,7 @@ import (
 )
 
 func TestAddWatcher(t *testing.T) {
-	eventManager := New()
+	eventManager := newManager()
 	metadataWatcher := metadata.New()
 	ctx := context.Background()
 
@@ -70,7 +70,7 @@ func TestRun(t *testing.T) {
 	maxCount := 10
 
 	ctx := context.Background()
-	eventManager := New()
+	eventManager := newManager()
 
 	err := eventManager.AddWatcher(ctx, &testWatcher{
 		watcherID: watcherID,
@@ -103,7 +103,7 @@ func TestUnsubscribe(t *testing.T) {
 	unsubscribeAt := 2
 
 	ctx := context.Background()
-	eventManager := New()
+	eventManager := newManager()
 
 	err := eventManager.AddWatcher(ctx, &testWatcher{
 		watcherID: watcherID,
@@ -137,7 +137,7 @@ func TestCancelBeforeCallbacks(t *testing.T) {
 	timeout := (1 * time.Second) / 100
 
 	ctx, cancel := context.WithCancel(context.Background())
-	eventManager := New()
+	eventManager := newManager()
 
 	err := eventManager.AddWatcher(ctx, &testCancel{
 		watcherID: watcherID,
@@ -186,7 +186,7 @@ func TestCancelAfterCallbacks(t *testing.T) {
 	timeout := (1 * time.Second) / 100
 
 	ctx, cancel := context.WithCancel(context.Background())
-	eventManager := New()
+	eventManager := newManager()
 
 	err := eventManager.AddWatcher(ctx, &testCancel{
 		watcherID: watcherID,
@@ -254,7 +254,7 @@ func TestCancelCallbacksAndWatchers(t *testing.T) {
 			cancelSubscriberAfter := curr.cancelSubscriberAfter
 
 			ctx := context.Background()
-			eventManager := New()
+			eventManager := newManager()
 
 			err := eventManager.AddWatcher(ctx, &testCancelWatcher{
 				watcherID: watcherID,
@@ -287,7 +287,7 @@ func TestMultipleEvents(t *testing.T) {
 	secondEvent := "multiple-events,second-event"
 
 	ctx := context.Background()
-	eventManager := New()
+	eventManager := newManager()
 
 	err := eventManager.AddWatcher(ctx, &testMultipleEvents{
 		watcherID: watcherID,
@@ -347,7 +347,7 @@ func TestAddWatcherAfterRun(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	eventManager := New()
+	eventManager := newManager()
 
 	err := eventManager.AddWatcher(ctx, firstWatcher)
 
@@ -414,7 +414,7 @@ func TestAddDefaultWatchers(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	eventManager := New()
+	eventManager := newManager()
 
 	err := eventManager.AddDefaultWatchers(ctx)
 
@@ -445,7 +445,7 @@ func TestCallingRunTwice(t *testing.T) {
 
 	timeout := (1 * time.Second) / 100
 	ctx, cancel := context.WithCancel(context.Background())
-	eventManager := New()
+	eventManager := newManager()
 
 	err := eventManager.AddDefaultWatchers(ctx)
 
@@ -516,7 +516,7 @@ func TestRemoveWatcherBeforeCallbacks(t *testing.T) {
 	timeout := (1 * time.Second) / 100
 
 	ctx := context.Background()
-	eventManager := New()
+	eventManager := newManager()
 
 	watcher := &testRemoveWatcher{
 		watcherID: watcherID,
@@ -553,7 +553,7 @@ func TestRemoveWatcherFromCallback(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	eventManager := New()
+	eventManager := newManager()
 
 	err := eventManager.AddWatcher(ctx, watcher)
 
@@ -591,7 +591,7 @@ func TestCrossWatcherRemovalFromCallback(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	eventManager := New()
+	eventManager := newManager()
 
 	watchers := []Watcher{
 		firstWatcher,

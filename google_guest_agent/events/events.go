@@ -28,6 +28,7 @@ var (
 	defaultWatchers = []Watcher{
 		metadata.New(),
 	}
+	instance *Manager
 )
 
 // Watcher defines the interface between the events manager and the actual
@@ -182,8 +183,8 @@ func (mngr *Manager) AddDefaultWatchers(ctx context.Context) error {
 	return nil
 }
 
-// New allocates and initializes a events Manager.
-func New() *Manager {
+// newManager allocates and initializes a events Manager.
+func newManager() *Manager {
 	return &Manager{
 		watchersMap:           make(map[string]bool),
 		removingWatcherEvents: make(map[string]bool),
@@ -196,6 +197,18 @@ func New() *Manager {
 			watcherDone:           make(chan string),
 		},
 	}
+}
+
+func init() {
+	instance = newManager()
+}
+
+// Get allocates a new manager if one doesn't exists or returns the one previously allocated.
+func Get() *Manager {
+	if instance == nil {
+		panic("The event's manager instance should had being initialized.")
+	}
+	return instance
 }
 
 // Subscribe registers an event consumer/subscriber callback to a given event type, data

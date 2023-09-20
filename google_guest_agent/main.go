@@ -204,7 +204,7 @@ func runAgent(ctx context.Context) {
 		scheduler.ScheduleJobs(ctx, []scheduler.Job{agentcrypto.New()}, true)
 	}
 
-	eventManager := events.New()
+	eventManager := events.Get()
 	if err := eventManager.AddDefaultWatchers(ctx); err != nil {
 		logger.Errorf("Error initializing event manager: %v", err)
 		return
