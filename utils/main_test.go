@@ -137,7 +137,7 @@ func TestSaferWriteFile(t *testing.T) {
 	f := filepath.Join(t.TempDir(), "file")
 	want := "test-data"
 
-	if err := SaferWriteFile([]byte(want), f); err != nil {
+	if err := SaferWriteFile([]byte(want), f, 0644); err != nil {
 		t.Errorf("SaferWriteFile(%s, %s) failed unexpectedly with err: %+v", "test-data", f, err)
 	}
 
@@ -147,6 +147,15 @@ func TestSaferWriteFile(t *testing.T) {
 	}
 	if string(got) != want {
 		t.Errorf("os.ReadFile(%s) = %s, want %s", f, string(got), want)
+	}
+
+	i, err := os.Stat(f)
+	if err != nil {
+		t.Errorf("os.Stat(%s) failed unexpectedly with err: %+v", f, err)
+	}
+
+	if i.Mode().Perm() != 0o644 {
+		t.Errorf("SaferWriteFile(%s) set incorrect permissions, os.Stat(%s) = %o, want %o", f, f, i.Mode().Perm(), 0o644)
 	}
 }
 
@@ -158,7 +167,7 @@ func TestCopyFile(t *testing.T) {
 	if err := os.WriteFile(src, []byte(want), 0777); err != nil {
 		t.Fatalf("failed to write test source file: %v", err)
 	}
-	if err := CopyFile(src, dst); err != nil {
+	if err := CopyFile(src, dst, 0644); err != nil {
 		t.Errorf("CopyFile(%s, %s) failed unexpectedly with error: %v", src, dst, err)
 	}
 
@@ -169,6 +178,15 @@ func TestCopyFile(t *testing.T) {
 	if string(got) != want {
 		t.Errorf("CopyFile(%s, %s) copied %q, expected %q", src, dst, string(got), want)
 	}
+
+	i, err := os.Stat(dst)
+	if err != nil {
+		t.Errorf("os.Stat(%s) failed unexpectedly with err: %+v", dst, err)
+	}
+
+	if i.Mode().Perm() != 0o644 {
+		t.Errorf("SaferWriteFile(%s) set incorrect permissions, os.Stat(%s) = %o, want %o", dst, dst, i.Mode().Perm(), 0o644)
+	}
 }
 
 func TestCopyFileError(t *testing.T) {
@@ -176,7 +194,7 @@ func TestCopyFileError(t *testing.T) {
 	dst := filepath.Join(tmp, "dst")
 	src := filepath.Join(tmp, "src")
 
-	if err := CopyFile(src, dst); err == nil {
+	if err := CopyFile(src, dst, 0644); err == nil {
 		t.Errorf("CopyFile(%s, %s) succeeded for non-existent file, want error", src, dst)
 	}
 }
