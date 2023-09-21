@@ -18,9 +18,10 @@ import (
 	"context"
 	"encoding/json"
 	"reflect"
-	"strconv"
+	"runtime"
 	"sync/atomic"
 
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/run"
 	"github.com/GoogleCloudPlatform/guest-agent/utils"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
@@ -42,20 +43,28 @@ type diagnosticsEntry struct {
 	Trace     bool
 }
 
-type diagnosticsMgr struct{}
-
-func (d *diagnosticsMgr) diff() bool {
-	return !reflect.DeepEqual(newMetadata.Instance.Attributes.Diagnostics, oldMetadata.Instance.Attributes.Diagnostics)
+type diagnosticsMgr struct {
+	// fakeWindows forces Disabled to run as if it was running in a windows system.
+	// mostly target for unit tests.
+	fakeWindows bool
 }
 
-func (d *diagnosticsMgr) timeout() bool {
-	return false
+func (d *diagnosticsMgr) Diff(ctx context.Context) (bool, error) {
+	return !reflect.DeepEqual(newMetadata.Instance.Attributes.Diagnostics, oldMetadata.Instance.Attributes.Diagnostics), nil
 }
 
-func (d *diagnosticsMgr) disabled(os string) (disabled bool) {
-	if os != "windows" {
-		return true
+func (d *diagnosticsMgr) Timeout(ctx context.Context) (bool, error) {
+	return false, nil
+}
+
+func (d *diagnosticsMgr) Disabled(ctx context.Context) (bool, error) {
+	var disabled bool
+	config := cfg.Get()
+
+	if !d.fakeWindows && runtime.GOOS != "windows" {
+		return true, nil
 	}
+
 	defer func() {
 		if disabled != diagnosticsDisabled {
 			diagnosticsDisabled = disabled
@@ -64,24 +73,20 @@ func (d *diagnosticsMgr) disabled(os string) (disabled bool) {
 	}()
 
 	// Diagnostics are opt-in and enabled by default.
-	var err error
-	var enabled bool
-	enabled, err = strconv.ParseBool(config.Section("diagnostics").Key("enable").String())
-	if err == nil {
-		return !enabled
+	if config.Diagnostics != nil {
+		return !config.Diagnostics.Enable, nil
 	}
+
 	if newMetadata.Instance.Attributes.EnableDiagnostics != nil {
-		enabled = *newMetadata.Instance.Attributes.EnableDiagnostics
-		return !enabled
+		return !*newMetadata.Instance.Attributes.EnableDiagnostics, nil
 	}
 	if newMetadata.Project.Attributes.EnableDiagnostics != nil {
-		enabled = *newMetadata.Project.Attributes.EnableDiagnostics
-		return !enabled
+		return !*newMetadata.Project.Attributes.EnableDiagnostics, nil
 	}
-	return diagnosticsDisabled
+	return diagnosticsDisabled, nil
 }
 
-func (d *diagnosticsMgr) set(ctx context.Context) error {
+func (d *diagnosticsMgr) Set(ctx context.Context) error {
 	logger.Infof("Diagnostics: logs export requested.")
 	diagnosticsEntries, err := readRegMultiString(regKeyBase, diagnosticsRegKey)
 	if err != nil && err != errRegNotExist {

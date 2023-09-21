@@ -24,7 +24,6 @@ import (
 	"testing"
 
 	"github.com/GoogleCloudPlatform/guest-agent/metadata"
-	"github.com/go-ini/ini"
 )
 
 func setEnableWSFC(md metadata.Descriptor, enabled *bool) *metadata.Descriptor {
@@ -62,12 +61,14 @@ func TestNewWsfcManager(t *testing.T) {
 		{"wsfc addrs is set", args{setWSFCAddresses(testMetadata, "0.0.0.0")}, &wsfcManager{agentNewState: running, agentNewPort: wsfcDefaultAgentPort, agent: testAgent}},
 		{"wsfc port is set", args{setWSFCAgentPort(testMetadata, "1818")}, &wsfcManager{agentNewState: stopped, agentNewPort: "1818", agent: testAgent}},
 	}
-	config = ini.Empty()
+
 	for _, tt := range tests {
-		newMetadata = tt.args.newMetadata
-		if got := newWsfcManager(); !reflect.DeepEqual(got, tt.want) {
-			t.Errorf("test case %q: newWsfcManager() = %v, want %v", tt.name, got, tt.want)
-		}
+		t.Run(tt.name, func(t *testing.T) {
+			newMetadata = tt.args.newMetadata
+			if got := newWsfcManager(); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("newWsfcManager() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
 
@@ -83,11 +84,19 @@ func TestWsfcManagerDiff(t *testing.T) {
 		{"state does not change both running", &wsfcManager{agentNewState: running, agent: &wsfcAgent{listener: testListener}}, false},
 		{"state does not change both stopped", &wsfcManager{agentNewState: stopped, agent: &wsfcAgent{listener: nil}}, false},
 	}
-	for _, tt := range tests {
-		if got := tt.m.diff(); got != tt.want {
-			t.Errorf("test case %q: wsfcManager.diff() = %v, want %v", tt.name, got, tt.want)
-		}
 
+	ctx := context.Background()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := tt.m.Diff(ctx)
+			if err != nil {
+				t.Errorf("Failed to run wsfcManager's Diff() call: %+v", err)
+			}
+
+			if got != tt.want {
+				t.Errorf("test case %q: wsfcManager.diff() = %v, want %v", tt.name, got, tt.want)
+			}
+		})
 	}
 }
 
@@ -150,23 +159,28 @@ func TestWsfcManagerSet(t *testing.T) {
 		{"set restart agent start error", &wsfcManager{agentNewState: running, agentNewPort: "1", agent: &mockAgent{state: running, port: "0", runError: true}}, true, true, true},
 		{"set do nothing", &wsfcManager{agentNewState: stopped, agentNewPort: "1", agent: &mockAgent{state: stopped, port: "0"}}, false, false, false},
 	}
+
+	ctx := context.Background()
+
 	for _, tt := range tests {
-		if err := tt.m.set(context.Background()); (err != nil) != tt.wantErr {
-			t.Errorf("wsfcManager.set() error = %v, wantErr %v", err, tt.wantErr)
-		}
+		t.Run(tt.name, func(t *testing.T) {
+			if err := tt.m.Set(ctx); (err != nil) != tt.wantErr {
+				t.Errorf("wsfcManager.set() error = %v, wantErr %v", err, tt.wantErr)
+			}
 
-		mAgent := tt.m.agent.(*mockAgent)
-		if gotRunInvoked := mAgent.runInvoked; gotRunInvoked != tt.runInvoked {
-			t.Errorf("wsfcManager.set() runInvoked = %v, want %v", gotRunInvoked, tt.runInvoked)
-		}
+			mAgent := tt.m.agent.(*mockAgent)
+			if gotRunInvoked := mAgent.runInvoked; gotRunInvoked != tt.runInvoked {
+				t.Errorf("wsfcManager.set() runInvoked = %v, want %v", gotRunInvoked, tt.runInvoked)
+			}
 
-		if gotStopInvoked := mAgent.stopInvoked; gotStopInvoked != tt.stopInvoked {
-			t.Errorf("wsfcManager.set() stopInvoked = %v, want %v", gotStopInvoked, tt.stopInvoked)
-		}
+			if gotStopInvoked := mAgent.stopInvoked; gotStopInvoked != tt.stopInvoked {
+				t.Errorf("wsfcManager.set() stopInvoked = %v, want %v", gotStopInvoked, tt.stopInvoked)
+			}
 
-		if tt.m.agentNewPort != mAgent.port {
-			t.Errorf("wsfcManager.set() does not set prot, agent port = %v, want %v", mAgent.port, tt.m.agentNewPort)
-		}
+			if tt.m.agentNewPort != mAgent.port {
+				t.Errorf("wsfcManager.set() does not set prot, agent port = %v, want %v", mAgent.port, tt.m.agentNewPort)
+			}
+		})
 	}
 }
 
@@ -183,9 +197,17 @@ func getHealthCheckResponce(request string, agent healthAgent) (string, error) {
 }
 
 func TestWsfcRunAgentE2E(t *testing.T) {
+	ctx := context.Background()
 
-	wsfcMgr := &wsfcManager{agentNewState: running, agentNewPort: wsfcDefaultAgentPort, agent: getWsfcAgentInstance()}
-	wsfcMgr.set(context.Background())
+	wsfcMgr := &wsfcManager{
+		agentNewState: running,
+		agentNewPort:  wsfcDefaultAgentPort,
+		agent:         getWsfcAgentInstance(),
+	}
+
+	if err := wsfcMgr.Set(ctx); err != nil {
+		t.Errorf("Failed to run wsfcManager's Set() call: %+v", err)
+	}
 
 	// make sure the agent is cleaned up.
 	defer wsfcMgr.agent.stop()
@@ -222,8 +244,15 @@ func TestWsfcRunAgentE2E(t *testing.T) {
 	}
 
 	// test stop agent
-	wsfcMgrStop := &wsfcManager{agentNewState: stopped, agent: getWsfcAgentInstance()}
-	wsfcMgrStop.set(context.Background())
+	wsfcMgrStop := &wsfcManager{
+		agentNewState: stopped,
+		agent:         getWsfcAgentInstance(),
+	}
+
+	if err := wsfcMgrStop.Set(ctx); err != nil {
+		t.Errorf("Failed to run wsfcMgr's Set() call: %+v", err)
+	}
+
 	if _, err := getHealthCheckResponce(existIP, wsfcMgr.agent); err == nil {
 		t.Errorf("health check still running after calling stop")
 	}

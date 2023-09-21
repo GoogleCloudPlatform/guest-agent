@@ -23,6 +23,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events/sshtrustedca"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/run"
 	"github.com/GoogleCloudPlatform/guest-agent/metadata"
@@ -64,35 +65,36 @@ func getOSLoginEnabled(md *metadata.Descriptor) (bool, bool, bool) {
 	return enable, twofactor, skey
 }
 
-func (o *osloginMgr) diff() bool {
+func (o *osloginMgr) Diff(ctx context.Context) (bool, error) {
 	oldEnable, oldTwoFactor, oldSkey := getOSLoginEnabled(oldMetadata)
 	enable, twofactor, skey := getOSLoginEnabled(newMetadata)
 	return oldMetadata.Project.ProjectID == "" ||
 		// True on first run or if any value has changed.
 		(oldTwoFactor != twofactor) ||
 		(oldEnable != enable) ||
-		(oldSkey != skey)
+		(oldSkey != skey), nil
 }
 
-func (o *osloginMgr) timeout() bool {
-	return false
+func (o *osloginMgr) Timeout(ctx context.Context) (bool, error) {
+	return false, nil
 }
 
-func (o *osloginMgr) disabled(os string) bool {
-	return os == "windows"
+func (o *osloginMgr) Disabled(ctx context.Context) (bool, error) {
+	return runtime.GOOS == "windows", nil
 }
 
-func (o *osloginMgr) set(ctx context.Context) error {
+func (o *osloginMgr) Set(ctx context.Context) error {
 	// We need to know if it was previously enabled for the clearing of
 	// metadata-based SSH keys.
 	oldEnable, _, _ := getOSLoginEnabled(oldMetadata)
 	enable, twofactor, skey := getOSLoginEnabled(newMetadata)
+	config := cfg.Get()
 
 	if enable && !oldEnable {
 		logger.Infof("Enabling OS Login")
 		newMetadata.Instance.Attributes.SSHKeys = nil
 		newMetadata.Project.Attributes.SSHKeys = nil
-		(&accountsMgr{}).set(ctx)
+		(&accountsMgr{}).Set(ctx)
 	}
 
 	if !enable && oldEnable {
@@ -102,7 +104,7 @@ func (o *osloginMgr) set(ctx context.Context) error {
 	// [Unstable] configuration section has no long term stability or support guarantees/promises.
 	// Configurations defined in the Unstable section will be by default disabled and is intended to
 	// isolate under development features.
-	pamlessAuthStack := config.Section("Unstable").Key("pamless_auth_stack").MustBool(false)
+	pamlessAuthStack := config.Unstable.PAMLessAuthStack
 
 	if err := writeSSHConfig(enable, twofactor, pamlessAuthStack, skey); err != nil {
 		logger.Errorf("Error updating SSH config: %v.", err)

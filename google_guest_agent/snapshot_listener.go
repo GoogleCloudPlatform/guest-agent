@@ -39,10 +39,9 @@ type snapshotConfig struct {
 	timeout time.Duration // seconds
 }
 
-func getSnapshotConfig() (snapshotConfig, error) {
+func getSnapshotConfig(timeoutInSeconds int) (snapshotConfig, error) {
 	var conf snapshotConfig
-	conf.timeout = time.Duration(config.Section("Snapshots").Key("timeout_in_seconds").MustInt(60)) * time.Second
-
+	conf.timeout = time.Duration(timeoutInSeconds) * time.Second
 	return conf, nil
 }
 
@@ -99,7 +98,7 @@ func listenForSnapshotRequests(ctx context.Context, address string, requestChan 
 	}
 }
 
-func getSnapshotResponse(ctx context.Context, guestMessage *sspb.GuestMessage) *sspb.SnapshotResponse {
+func getSnapshotResponse(ctx context.Context, timeoutInSeconds int, guestMessage *sspb.GuestMessage) *sspb.SnapshotResponse {
 	switch {
 	case guestMessage.GetSnapshotRequest() != nil:
 		request := guestMessage.GetSnapshotRequest()
@@ -108,7 +107,7 @@ func getSnapshotResponse(ctx context.Context, guestMessage *sspb.GuestMessage) *
 			Type:        request.GetType(),
 		}
 
-		config, err := getSnapshotConfig()
+		config, err := getSnapshotConfig(timeoutInSeconds)
 		if err != nil {
 			response.AgentReturnCode = sspb.AgentErrorCode_INVALID_CONFIG
 			return response
@@ -150,7 +149,7 @@ func getSnapshotResponse(ctx context.Context, guestMessage *sspb.GuestMessage) *
 	return nil
 }
 
-func handleSnapshotRequests(ctx context.Context, address string, requestChan <-chan *sspb.GuestMessage) {
+func handleSnapshotRequests(ctx context.Context, timeoutInSeconds int, address string, requestChan <-chan *sspb.GuestMessage) {
 	for {
 		conn, err := grpc.Dial(address, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
 		if err != nil {
@@ -160,7 +159,7 @@ func handleSnapshotRequests(ctx context.Context, address string, requestChan <-c
 		for {
 			// Listen on channel and respond
 			guestMessage := <-requestChan
-			response := getSnapshotResponse(ctx, guestMessage)
+			response := getSnapshotResponse(ctx, timeoutInSeconds, guestMessage)
 
 			// We either got a duplicated pre/post or an invalid request
 			// in both cases we want to ignore it.
@@ -189,7 +188,7 @@ func handleSnapshotRequests(ctx context.Context, address string, requestChan <-c
 	}
 }
 
-func startSnapshotListener(ctx context.Context, snapshotServiceIP string, snapshotServicePort int) {
+func startSnapshotListener(ctx context.Context, snapshotServiceIP string, snapshotServicePort int, timeoutInSeconds int) {
 	requestChan := make(chan *sspb.GuestMessage)
 	address := fmt.Sprintf("%s:%d", snapshotServiceIP, snapshotServicePort)
 
@@ -201,5 +200,5 @@ func startSnapshotListener(ctx context.Context, snapshotServiceIP string, snapsh
 	}
 
 	go listenForSnapshotRequests(ctx, address, requestChan)
-	go handleSnapshotRequests(ctx, address, requestChan)
+	go handleSnapshotRequests(ctx, timeoutInSeconds, address, requestChan)
 }

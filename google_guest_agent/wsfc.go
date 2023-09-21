@@ -21,6 +21,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 )
 
@@ -51,14 +52,11 @@ type wsfcManager struct {
 // - WSFCAddresses is set (As an advanced setting, it will always override EnableWSFC flag)
 func newWsfcManager() *wsfcManager {
 	newState := stopped
+	config := cfg.Get()
 
 	if func() bool {
-		enabled, err := config.Section("wsfc").Key("enable").Bool()
-		if err == nil {
-			return enabled
-		}
-		if config.Section("wsfc").Key("addresses").String() != "" {
-			return true
+		if config.WSFC != nil && config.WSFC.Enable && config.WSFC.Addresses != "" {
+			return config.WSFC.Enable
 		}
 		if newMetadata.Instance.Attributes.EnableWSFC != nil {
 			return *newMetadata.Instance.Attributes.EnableWSFC
@@ -78,9 +76,8 @@ func newWsfcManager() *wsfcManager {
 	}
 
 	newPort := wsfcDefaultAgentPort
-	port := config.Section("wsfc").Key("port").String()
-	if port != "" {
-		newPort = port
+	if config.WSFC != nil && config.WSFC.Port != "" {
+		newPort = config.WSFC.Port
 	} else if newMetadata.Instance.Attributes.WSFCAgentPort != "" {
 		newPort = newMetadata.Instance.Attributes.WSFCAgentPort
 	} else if newMetadata.Project.Attributes.WSFCAgentPort != "" {
@@ -91,25 +88,25 @@ func newWsfcManager() *wsfcManager {
 }
 
 // Implement manager.diff()
-func (m *wsfcManager) diff() bool {
-	return m.agentNewState != m.agent.getState() || m.agentNewPort != m.agent.getPort()
+func (m *wsfcManager) Diff(ctx context.Context) (bool, error) {
+	return m.agentNewState != m.agent.getState() || m.agentNewPort != m.agent.getPort(), nil
 }
 
 // Implement manager.disabled().
 // wsfc manager is always enabled. The manager is just a broker which manages the state of wsfcAgent. User
 // can disable the wsfc feature by setting the metadata. If the manager is disabled, the agent will stop.
-func (m *wsfcManager) disabled(os string) bool {
-	return false
+func (m *wsfcManager) Disabled(ctx context.Context) (bool, error) {
+	return false, nil
 }
 
-func (m *wsfcManager) timeout() bool {
-	return false
+func (m *wsfcManager) Timeout(ctx context.Context) (bool, error) {
+	return false, nil
 }
 
 // Diff will always be called before set. So in set, only two cases are possible:
 // - state changed: start or stop the wsfc agent accordingly
 // - port changed: restart the agent if it is running
-func (m *wsfcManager) set(ctx context.Context) error {
+func (m *wsfcManager) Set(ctx context.Context) error {
 	m.agent.setPort(m.agentNewPort)
 
 	// if state changes

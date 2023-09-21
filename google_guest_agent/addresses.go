@@ -25,6 +25,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/run"
 	"github.com/GoogleCloudPlatform/guest-agent/metadata"
 	"github.com/GoogleCloudPlatform/guest-agent/utils"
@@ -37,16 +38,13 @@ var (
 	oldWSFCEnable     bool
 	interfacesEnabled bool
 	interfaces        []net.Interface
-
-	defaultProtoID = "66"
 )
 
 type addressMgr struct{}
 
-func (a *addressMgr) parseWSFCAddresses() string {
-	wsfcAddresses := config.Section("wsfc").Key("addresses").String()
-	if wsfcAddresses != "" {
-		return wsfcAddresses
+func (a *addressMgr) parseWSFCAddresses(config *cfg.Sections) string {
+	if config.WSFC != nil && config.WSFC.Addresses != "" {
+		return config.WSFC.Addresses
 	}
 	if newMetadata.Instance.Attributes.WSFCAddresses != "" {
 		return newMetadata.Instance.Attributes.WSFCAddresses
@@ -58,11 +56,11 @@ func (a *addressMgr) parseWSFCAddresses() string {
 	return ""
 }
 
-func (a *addressMgr) parseWSFCEnable() bool {
-	wsfcEnable, err := config.Section("wsfc").Key("enable").Bool()
-	if err == nil {
-		return wsfcEnable
+func (a *addressMgr) parseWSFCEnable(config *cfg.Sections) bool {
+	if config.WSFC != nil {
+		return config.WSFC.Enable
 	}
+
 	if newMetadata.Instance.Attributes.EnableWSFC != nil {
 		return *newMetadata.Instance.Attributes.EnableWSFC
 	}
@@ -130,12 +128,12 @@ type ipForwardEntry struct {
 }
 
 // TODO: getLocalRoutes and getIPForwardEntries should be merged.
-func getLocalRoutes(ctx context.Context, ifname string) ([]string, error) {
+func getLocalRoutes(ctx context.Context, config *cfg.Sections, ifname string) ([]string, error) {
 	if runtime.GOOS == "windows" {
 		return nil, errors.New("getLocalRoutes unimplemented on Windows")
 	}
 
-	protoID := config.Section("IpForwarding").Key("ethernet_proto_id").MustString(defaultProtoID)
+	protoID := config.IPForwarding.EthernetProtoID
 	args := fmt.Sprintf("route list table local type local scope host dev %s proto %s", ifname, protoID)
 	out := run.WithOutput(ctx, "ip", strings.Split(args, " ")...)
 	if out.ExitCode != 0 {
@@ -168,7 +166,7 @@ func getLocalRoutes(ctx context.Context, ifname string) ([]string, error) {
 }
 
 // TODO: addLocalRoute and addRoute should be merged with the addition of ipForwardType to ipForwardEntry.
-func addLocalRoute(ctx context.Context, ip, ifname string) error {
+func addLocalRoute(ctx context.Context, config *cfg.Sections, ip, ifname string) error {
 	if runtime.GOOS == "windows" {
 		return errors.New("addLocalRoute unimplemented on Windows")
 	}
@@ -177,13 +175,13 @@ func addLocalRoute(ctx context.Context, ip, ifname string) error {
 	if !strings.Contains(ip, "/") {
 		ip = ip + "/32"
 	}
-	protoID := config.Section("IpForwarding").Key("ethernet_proto_id").MustString(defaultProtoID)
+	protoID := config.IPForwarding.EthernetProtoID
 	args := fmt.Sprintf("route add to local %s scope host dev %s proto %s", ip, ifname, protoID)
 	return run.Quiet(ctx, "ip", strings.Split(args, " ")...)
 }
 
 // TODO: removeLocalRoute should be changed to removeIPForwardEntry and match getIPForwardEntries.
-func removeLocalRoute(ctx context.Context, ip, ifname string) error {
+func removeLocalRoute(ctx context.Context, config *cfg.Sections, ip, ifname string) error {
 	if runtime.GOOS == "windows" {
 		return errors.New("removeLocalRoute unimplemented on Windows")
 	}
@@ -192,7 +190,7 @@ func removeLocalRoute(ctx context.Context, ip, ifname string) error {
 	if !strings.Contains(ip, "/") {
 		ip = ip + "/32"
 	}
-	protoID := config.Section("IpForwarding").Key("ethernet_proto_id").MustString(defaultProtoID)
+	protoID := config.IPForwarding.EthernetProtoID
 	args := fmt.Sprintf("route delete to local %s scope host dev %s proto %s", ip, ifname, protoID)
 	return run.Quiet(ctx, "ip", strings.Split(args, " ")...)
 }
@@ -201,8 +199,8 @@ func removeLocalRoute(ctx context.Context, ip, ifname string) error {
 // If only EnableWSFC is set, all ips in the ForwardedIps and TargetInstanceIps will be ignored.
 // If WSFCAddresses is set (with or without EnableWSFC), only ips in the list will be filtered out.
 // TODO return a filtered list rather than modifying the metadata object. liamh@15-11-19
-func (a *addressMgr) applyWSFCFilter() {
-	wsfcAddresses := a.parseWSFCAddresses()
+func (a *addressMgr) applyWSFCFilter(config *cfg.Sections) {
+	wsfcAddresses := a.parseWSFCAddresses(config)
 
 	var wsfcAddrs []string
 	for _, wsfcAddr := range strings.Split(wsfcAddresses, ",") {
@@ -238,7 +236,7 @@ func (a *addressMgr) applyWSFCFilter() {
 			interfaces[idx].TargetInstanceIps = filteredTargetInstanceIps
 		}
 	} else {
-		wsfcEnable := a.parseWSFCEnable()
+		wsfcEnable := a.parseWSFCEnable(config)
 		if wsfcEnable {
 			for idx := range newMetadata.Instance.NetworkInterfaces {
 				newMetadata.Instance.NetworkInterfaces[idx].ForwardedIps = nil
@@ -248,45 +246,48 @@ func (a *addressMgr) applyWSFCFilter() {
 	}
 }
 
-func (a *addressMgr) diff() bool {
-	wsfcAddresses := a.parseWSFCAddresses()
-	wsfcEnable := a.parseWSFCEnable()
+func (a *addressMgr) Diff(ctx context.Context) (bool, error) {
+	config := cfg.Get()
+	wsfcAddresses := a.parseWSFCAddresses(config)
+	wsfcEnable := a.parseWSFCEnable(config)
 
 	diff := !reflect.DeepEqual(newMetadata.Instance.NetworkInterfaces, oldMetadata.Instance.NetworkInterfaces) ||
 		wsfcEnable != oldWSFCEnable || wsfcAddresses != oldWSFCAddresses
 
 	oldWSFCAddresses = wsfcAddresses
 	oldWSFCEnable = wsfcEnable
-	return diff
+	return diff, nil
 }
 
-func (a *addressMgr) timeout() bool {
-	return false
+func (a *addressMgr) Timeout(ctx context.Context) (bool, error) {
+	return false, nil
 }
 
-func (a *addressMgr) disabled(os string) (disabled bool) {
-	disabled, err := config.Section("addressManager").Key("disable").Bool()
-	if err == nil {
-		// This is the windows config key. On windows, finding a key in
-		// the config file takes priority over metadata.
-		return disabled
+func (a *addressMgr) Disabled(ctx context.Context) (bool, error) {
+	config := cfg.Get()
+
+	// Local configuration takes precedence over metadata's configuration.
+	if config.AddressManager != nil {
+		return config.AddressManager.Disable, nil
 	}
 
 	if newMetadata.Instance.Attributes.DisableAddressManager != nil {
-		return *newMetadata.Instance.Attributes.DisableAddressManager
+		return *newMetadata.Instance.Attributes.DisableAddressManager, nil
 	}
 	if newMetadata.Project.Attributes.DisableAddressManager != nil {
-		return *newMetadata.Project.Attributes.DisableAddressManager
+		return *newMetadata.Project.Attributes.DisableAddressManager, nil
 	}
 
 	// This is the linux config key, defaulting to true. On Linux, the
 	// config file has lower priority since we ship a file with defaults.
-	return !config.Section("Daemons").Key("network_daemon").MustBool(true)
+	return !config.Daemons.NetworkDaemon, nil
 }
 
-func (a *addressMgr) set(ctx context.Context) error {
+func (a *addressMgr) Set(ctx context.Context) error {
+	config := cfg.Get()
+
 	if runtime.GOOS == "windows" {
-		a.applyWSFCFilter()
+		a.applyWSFCFilter(config)
 	}
 
 	var err error
@@ -295,7 +296,7 @@ func (a *addressMgr) set(ctx context.Context) error {
 		return fmt.Errorf("error populating interfaces: %v", err)
 	}
 
-	if config.Section("NetworkInterfaces").Key("setup").MustBool(true) {
+	if config.NetworkInterfaces.Setup {
 		if runtime.GOOS != "windows" {
 			logger.Debugf("Configure IPv6")
 			if err := configureIPv6(ctx); err != nil {
@@ -306,14 +307,14 @@ func (a *addressMgr) set(ctx context.Context) error {
 
 		if runtime.GOOS != "windows" && !interfacesEnabled {
 			logger.Debugf("Enable network interfaces")
-			if err := enableNetworkInterfaces(ctx); err != nil {
+			if err := enableNetworkInterfaces(ctx, config); err != nil {
 				return err
 			}
 			interfacesEnabled = true
 		}
 	}
 
-	if !config.Section("NetworkInterfaces").Key("ip_forwarding").MustBool(true) {
+	if !config.NetworkInterfaces.IPForwarding {
 		return nil
 	}
 
@@ -330,11 +331,11 @@ func (a *addressMgr) set(ctx context.Context) error {
 		}
 		wantIPs := ni.ForwardedIps
 		wantIPs = append(wantIPs, ni.ForwardedIpv6s...)
-		if config.Section("IpForwarding").Key("target_instance_ips").MustBool(true) {
+		if config.IPForwarding.TargetInstanceIPs {
 			wantIPs = append(wantIPs, ni.TargetInstanceIps...)
 		}
 		// IP Aliases are not supported on windows.
-		if runtime.GOOS != "windows" && config.Section("IpForwarding").Key("ip_aliases").MustBool(true) {
+		if runtime.GOOS != "windows" && config.IPForwarding.IPAliases {
 			wantIPs = append(wantIPs, ni.IPAliases...)
 		}
 
@@ -360,7 +361,7 @@ func (a *addressMgr) set(ctx context.Context) error {
 				}
 			}
 		} else {
-			forwardedIPs, err = getLocalRoutes(ctx, iface.Name)
+			forwardedIPs, err = getLocalRoutes(ctx, config, iface.Name)
 			if err != nil {
 				logger.Errorf("Error getting routes: %v", err)
 				continue
@@ -409,7 +410,7 @@ func (a *addressMgr) set(ctx context.Context) error {
 					err = addAddress(net.ParseIP(ip), net.IPv4Mask(255, 255, 255, 255), uint32(iface.Index))
 				}
 			} else {
-				err = addLocalRoute(ctx, ip, iface.Name)
+				err = addLocalRoute(ctx, config, ip, iface.Name)
 			}
 			if err == nil {
 				registryEntries = append(registryEntries, ip)
@@ -426,7 +427,7 @@ func (a *addressMgr) set(ctx context.Context) error {
 				}
 				err = removeAddress(net.ParseIP(ip), uint32(iface.Index))
 			} else {
-				err = removeLocalRoute(ctx, ip, iface.Name)
+				err = removeLocalRoute(ctx, config, ip, iface.Name)
 			}
 			if err != nil {
 				logger.Errorf("error removing route: %v", err)
@@ -504,7 +505,7 @@ func configureIPv6(ctx context.Context) error {
 // and `dhclient -6 eth1 eth2 ... ethN`.
 // On RHEL7, it also calls disableNM for each interface.
 // On SLES, it calls enableSLESInterfaces instead of dhclient.
-func enableNetworkInterfaces(ctx context.Context) error {
+func enableNetworkInterfaces(ctx context.Context, config *cfg.Sections) error {
 	if len(newMetadata.Instance.NetworkInterfaces) < 2 {
 		return nil
 	}
@@ -551,7 +552,7 @@ func enableNetworkInterfaces(ctx context.Context) error {
 		}
 		fallthrough
 	default:
-		dhcpCommand := config.Section("NetworkInterfaces").Key("dhcp_command").String()
+		dhcpCommand := config.NetworkInterfaces.DHCPCommand
 		if dhcpCommand != "" {
 			tokens := strings.Split(dhcpCommand, " ")
 			return run.Quiet(ctx, tokens[0], tokens[1:]...)

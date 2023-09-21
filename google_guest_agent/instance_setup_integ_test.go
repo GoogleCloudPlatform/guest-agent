@@ -20,40 +20,57 @@ package main
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
 )
 
 const (
 	botoCfg = "/etc/boto.cfg"
 )
 
-// TestInstanceSetupSSHKeys validates SSH keys are generated on first boot and not changed afterward.
-func TestInstanceSetupSSHKeys(t *testing.T) {
-	cfg, err := parseConfig("") // get empty config
-	if err != nil {
-		t.Fatal("failed to init config object")
-	}
-	config = cfg                    // set the global
-	defer func() { config = nil }() // unset at end of test
+func getConfig(t *testing.T) (*cfg.Sections, string) {
+	t.Helper()
 
-	tempdir, err := os.MkdirTemp("/tmp", "test_instance_setup")
+	if err := cfg.Load(nil); err != nil {
+		t.Fatalf("Failed to load configuration: %+v", err)
+	}
+
+	config, err := cfg.Get()
 	if err != nil {
-		t.Fatal("failed to create working dir")
+		t.Fatalf("Failed to get config: %+v", err)
+	}
+
+	if config == nil {
+		t.Fatal("cfg.Get() returned a nil config")
+	}
+
+	tempDir := filepath.Join(t.TempDir(), "test_instance_setup")
+	err := os.Mkdir(tempDir, 0755)
+	if err != nil {
+		t.Fatalf("Failed to create working dir: %+v", err)
 	}
 
 	// Configure a non-standard instance ID dir for us to play with.
-	config.Section("Instance").Key("instance_id_dir").SetValue(tempdir)
-	config.Section("InstanceSetup").Key("host_key_dir").SetValue(tempdir)
+	config.Instance.InstanceIDDir = tempDir
+	config.InstanceSetup.HostKeyDir = tempDir
 
+	return config, tempDir
+}
+
+// TestInstanceSetupSSHKeys validates SSH keys are generated on first boot and not changed afterward.
+func TestInstanceSetupSSHKeys(t *testing.T) {
+	config, tempDir := getConfig(t)
 	ctx := context.Background()
 	agentInit(ctx)
 
-	if _, err := os.Stat(tempdir + "/google_instance_id"); err != nil {
+	if _, err := os.Stat(tempDir + "/google_instance_id"); err != nil {
 		t.Fatal("instance ID File was not created by agentInit")
 	}
 
-	dir, err := os.Open(tempdir)
+	dir, err := os.Open(tempDir)
 	if err != nil {
 		t.Fatal("failed to open working dir")
 	}
@@ -77,7 +94,7 @@ func TestInstanceSetupSSHKeys(t *testing.T) {
 
 	// Remove one key file and run again to confirm SSH keys have not
 	// changed because the instance ID file has not changed.
-	if err := os.Remove(tempdir + "/" + keys[0]); err != nil {
+	if err := os.Remove(tempDir + "/" + keys[0]); err != nil {
 		t.Fatal("failed to remove key file")
 	}
 
@@ -109,29 +126,15 @@ func TestInstanceSetupSSHKeys(t *testing.T) {
 // TestInstanceSetupSSHKeysDisabled validates the config option to disable host
 // key generation is respected.
 func TestInstanceSetupSSHKeysDisabled(t *testing.T) {
-	cfg, err := parseConfig("") // get empty config
-	if err != nil {
-		t.Fatal("failed to init config object")
-	}
-	config = cfg                    // set the global
-	defer func() { config = nil }() // unset at end of test
-
-	tempdir, err := os.MkdirTemp("/tmp", "test_instance_setup")
-	if err != nil {
-		t.Fatal("failed to create working dir")
-	}
-
-	// Configure a non-standard instance ID dir for us to play with.
-	config.Section("Instance").Key("instance_id_dir").SetValue(tempdir)
-	config.Section("InstanceSetup").Key("host_key_dir").SetValue(tempdir)
+	config, tempDir := getConfig(t)
 
 	// Disable SSH host key generation.
-	config.Section("InstanceSetup").Key("set_host_keys").SetValue("false")
+	config.InstanceSetup.SetHostKeys = false
 
 	ctx := context.Background()
 	agentInit(ctx)
 
-	dir, err := os.Open(tempdir)
+	dir, err := os.Open(tempDir)
 	if err != nil {
 		t.Fatal("failed to open working dir")
 	}
@@ -150,22 +153,7 @@ func TestInstanceSetupSSHKeysDisabled(t *testing.T) {
 }
 
 func TestInstanceSetupBotoConfig(t *testing.T) {
-	cfg, err := parseConfig("") // get empty config
-	if err != nil {
-		t.Fatal("failed to init config object")
-	}
-	config = cfg                    // set the global
-	defer func() { config = nil }() // unset at end of test
-
-	tempdir, err := os.MkdirTemp("/tmp", "test_instance_setup")
-	if err != nil {
-		t.Fatal("failed to create working dir")
-	}
-
-	// Configure a non-standard instance ID dir for us to play with.
-	config.Section("Instance").Key("instance_id_dir").SetValue(tempdir)
-	config.Section("InstanceSetup").Key("host_key_dir").SetValue(tempdir)
-
+	config, tempDir := getConfig(t)
 	ctx := context.Background()
 
 	if err := os.Rename(botoCfg, botoCfg+".bak"); err != nil {
@@ -196,22 +184,7 @@ func TestInstanceSetupBotoConfig(t *testing.T) {
 }
 
 func TestInstanceSetupBotoConfigDisabled(t *testing.T) {
-	cfg, err := parseConfig("") // get empty config
-	if err != nil {
-		t.Fatal("failed to init config object")
-	}
-	config = cfg                    // set the global
-	defer func() { config = nil }() // unset at end of test
-
-	tempdir, err := os.MkdirTemp("/tmp", "test_instance_setup")
-	if err != nil {
-		t.Fatal("failed to create working dir")
-	}
-
-	// Configure a non-standard instance ID dir for us to play with.
-	config.Section("Instance").Key("instance_id_dir").SetValue(tempdir)
-	config.Section("InstanceSetup").Key("host_key_dir").SetValue(tempdir)
-
+	config, _ := getConfig(t, tempDir)
 	ctx := context.Background()
 
 	if err := os.Rename(botoCfg, botoCfg+".bak"); err != nil {

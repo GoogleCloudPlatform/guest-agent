@@ -15,12 +15,12 @@
 package main
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	"github.com/GoogleCloudPlatform/guest-agent/metadata"
 	"github.com/GoogleCloudPlatform/guest-agent/utils"
-	"github.com/go-ini/ini"
 )
 
 func TestDiagnosticsEntryExpired(t *testing.T) {
@@ -61,20 +61,24 @@ func TestDiagnosticsDisabled(t *testing.T) {
 		{"disabled in project metadata only", []byte(""), &metadata.Descriptor{Project: metadata.Project{Attributes: metadata.Attributes{EnableDiagnostics: mkptr(false)}}}, true},
 	}
 
+	ctx := context.Background()
 	for _, tt := range tests {
-		cfg, err := ini.InsensitiveLoad(tt.data)
-		if err != nil {
-			t.Errorf("test case %q: error parsing config: %v", tt.name, err)
-			continue
-		}
-		if cfg == nil {
-			cfg = &ini.File{}
-		}
-		newMetadata = tt.md
-		config = cfg
-		got := (&diagnosticsMgr{}).disabled("windows")
-		if got != tt.want {
-			t.Errorf("test case %q, diagnostics.disabled() got: %t, want: %t", tt.name, got, tt.want)
-		}
+		t.Run(tt.name, func(t *testing.T) {
+			reloadConfig(t, tt.data)
+
+			newMetadata = tt.md
+			mgr := diagnosticsMgr{
+				fakeWindows: true,
+			}
+
+			got, err := mgr.Disabled(ctx)
+			if err != nil {
+				t.Errorf("Failed to run diagnosticsMgr's Disable() call: %+v", err)
+			}
+
+			if got != tt.want {
+				t.Errorf("test case %q, diagnostics.disabled() got: %t, want: %t", tt.name, got, tt.want)
+			}
+		})
 	}
 }

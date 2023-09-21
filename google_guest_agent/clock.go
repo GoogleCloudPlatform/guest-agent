@@ -18,26 +18,27 @@ import (
 	"context"
 	"runtime"
 
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/run"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 )
 
 type clockskewMgr struct{}
 
-func (a *clockskewMgr) diff() bool {
-	return oldMetadata.Instance.VirtualClock.DriftToken != newMetadata.Instance.VirtualClock.DriftToken
+func (a *clockskewMgr) Diff(ctx context.Context) (bool, error) {
+	return oldMetadata.Instance.VirtualClock.DriftToken != newMetadata.Instance.VirtualClock.DriftToken, nil
 }
 
-func (a *clockskewMgr) timeout() bool {
-	return false
+func (a *clockskewMgr) Timeout(ctx context.Context) (bool, error) {
+	return false, nil
 }
 
-func (a *clockskewMgr) disabled(os string) (disabled bool) {
-	enabled := config.Section("Daemons").Key("clock_skew_daemon").MustBool(true)
-	return os == "windows" || !enabled
+func (a *clockskewMgr) Disabled(ctx context.Context) (bool, error) {
+	enabled := cfg.Get().Daemons.ClockSkewDaemon
+	return runtime.GOOS == "windows" || !enabled, nil
 }
 
-func (a *clockskewMgr) set(ctx context.Context) error {
+func (a *clockskewMgr) Set(ctx context.Context) error {
 	if runtime.GOOS == "freebsd" {
 		err := run.Quiet(ctx, "service", "ntpd", "status")
 		if err == nil {
