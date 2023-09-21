@@ -140,7 +140,7 @@ type Sections struct {
 	NetworkInterfaces *NetworkInterfaces `ini:"NetworkInsterfaces,omitempty"`
 
 	// Snpashots defines the snapshot listener configuration and behavior i.e. the server address and port.
-	Snapshots *Snapshots `ini:"Snpashots,omitempty"`
+	Snapshots *Snapshots `ini:"Snapshots,omitempty"`
 
 	// Unstable is a "under development feature flags" section. No stability or long term support is
 	// guaranteed for any keys under this section. No application, script or utility should rely on it.
@@ -276,7 +276,7 @@ func defaultDataSources(extraDefaults []byte) []interface{} {
 		[]byte(defaultConfig),
 		configFile,
 		configFile + ".distro",
-		configFile + ",template",
+		configFile + ".template",
 	}...)
 }
 
