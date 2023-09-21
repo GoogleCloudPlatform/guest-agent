@@ -137,7 +137,7 @@ type Sections struct {
 
 	// NetworkInterfaces defines if the network interfaces should be managed/configured by guest-agent
 	// as well as the commands definitions for network configuration.
-	NetworkInterfaces *NetworkInterfaces `ini:"NetworkInsterfaces,omitempty"`
+	NetworkInterfaces *NetworkInterfaces `ini:"NetworkInterfaces,omitempty"`
 
 	// Snpashots defines the snapshot listener configuration and behavior i.e. the server address and port.
 	Snapshots *Snapshots `ini:"Snapshots,omitempty"`
