@@ -87,18 +87,23 @@ func closeFile(c io.Closer) {
 }
 
 func availableManagers() []manager {
+	managers := []manager{
+		&addressMgr{},
+	}
+
 	if runtime.GOOS == "windows" {
-		return []manager{
+		return append(managers,
 			newWsfcManager(),
 			&winAccountsMgr{},
 			&diagnosticsMgr{},
-		}
+		)
 	}
-	return []manager{
+
+	return append(managers,
 		&clockskewMgr{},
 		&osloginMgr{},
 		&accountsMgr{},
-	}
+	)
 }
 
 func runUpdate(ctx context.Context) {
