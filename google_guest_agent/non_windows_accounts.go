@@ -202,6 +202,7 @@ var badSSHKeys []string
 // user:ssh-rsa [KEY_VALUE] [USERNAME]
 // user:ssh-rsa [KEY_VALUE]
 // user:ssh-rsa [KEY_VALUE] google-ssh {"userName":"[USERNAME]","expireOn":"[EXPIRE_TIME]"}
+// user:[KEY_OPTIONS] ssh-rsa [KEY_VALUE]
 func getUserKeys(mdkeys []string) map[string][]string {
 	mdKeyMap := make(map[string][]string)
 	for i := 0; i < len(mdkeys); i++ {
