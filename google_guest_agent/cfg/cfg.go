@@ -84,6 +84,9 @@ dhcp_command =
 ip_forwarding = true
 setup = true
 
+[OSLogin]
+cert_authentication = true
+
 [Snapshots]
 enabled = false
 snapshot_service_ip = 169.254.169.254
@@ -138,6 +141,9 @@ type Sections struct {
 	// NetworkInterfaces defines if the network interfaces should be managed/configured by guest-agent
 	// as well as the commands definitions for network configuration.
 	NetworkInterfaces *NetworkInterfaces `ini:"NetworkInterfaces,omitempty"`
+
+	// OSLogin defines the OS Login configuration options.
+	OSLogin *OSLogin `ini:"OSLogin,omitempty"`
 
 	// Snpashots defines the snapshot listener configuration and behavior i.e. the server address and port.
 	Snapshots *Snapshots `ini:"Snapshots,omitempty"`
@@ -225,6 +231,11 @@ type MetadataScripts struct {
 	Startup           bool   `ini:"startup,omitempty"`
 	StartupWindows    bool   `ini:"startup-windows,omitempty"`
 	SysprepSpecialize bool   `ini:"sysprep_specialize,omitempty"`
+}
+
+// OSLogin contains the configurations of OSLogin section.
+type OSLogin struct {
+	CertAuthentication bool `ini:"cert_authentication,omitempty"`
 }
 
 // NetworkInterfaces contains the configurations of NetworkInterfaces section.
