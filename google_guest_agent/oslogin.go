@@ -208,10 +208,10 @@ func updateSSHConfig(sshConfig string, enable, twofactor, pamlessAuthStack, skey
 		}
 	}
 	authorizedKeysUser := "AuthorizedKeysCommandUser root"
+
+	// Certificate based authentication.
 	authorizedPrincipalsCommand := "AuthorizedPrincipalsCommand /usr/bin/google_authorized_principals %u %k"
 	authorizedPrincipalsUser := "AuthorizedPrincipalsCommandUser root"
-
-	// TODO: only enable this key configuration if certs mechanism is enabled
 	trustedUserCAKeys := "TrustedUserCAKeys " + sshtrustedca.DefaultPipePath
 
 	twoFactorAuthMethods := "AuthenticationMethods publickey,keyboard-interactive"
@@ -225,8 +225,13 @@ func updateSSHConfig(sshConfig string, enable, twofactor, pamlessAuthStack, skey
 	filtered := filterGoogleLines(string(sshConfig))
 
 	if enable {
-		osLoginBlock := []string{googleBlockStart, authorizedKeysCommand, authorizedKeysUser, trustedUserCAKeys}
-		if pamlessAuthStack {
+		osLoginBlock := []string{googleBlockStart, authorizedKeysCommand, authorizedKeysUser}
+
+		if cfg.Get().OSLogin.CertAuthentication {
+			osLoginBlock = append(osLoginBlock, trustedUserCAKeys)
+		}
+
+		if pamlessAuthStack && cfg.Get().OSLogin.CertAuthentication {
 			osLoginBlock = append(osLoginBlock, authorizedPrincipalsCommand, authorizedPrincipalsUser)
 		}
 

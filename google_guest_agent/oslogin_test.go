@@ -20,6 +20,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events/sshtrustedca"
 	"github.com/GoogleCloudPlatform/guest-agent/metadata"
 )
@@ -308,6 +309,10 @@ func TestUpdateSSHConfig(t *testing.T) {
 			twofactor: false,
 			skey:      true,
 		},
+	}
+
+	if err := cfg.Load(nil); err != nil {
+		t.Fatalf("Failed to initialize configuration manager: %+v", err)
 	}
 
 	for idx, tt := range tests {
