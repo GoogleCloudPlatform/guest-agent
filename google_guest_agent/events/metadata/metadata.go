@@ -19,7 +19,6 @@ import (
 	"context"
 	"net"
 	"net/url"
-	"time"
 
 	"github.com/GoogleCloudPlatform/guest-agent/metadata"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
@@ -30,11 +29,6 @@ const (
 	WatcherID = "metadata-watcher"
 	// LongpollEvent is the metadata's longpoll event type ID.
 	LongpollEvent = "metadata-watcher,longpoll"
-)
-
-var (
-	// arbitrarily defined wait duration(keeps behavioral backward compatibility).
-	retryWaitDuration = 5 * time.Second
 )
 
 // Watcher is the metadata event watcher implementation.

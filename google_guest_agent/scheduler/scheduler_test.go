@@ -189,23 +189,23 @@ func (j *testLongJob) ShouldEnable(_ context.Context) bool {
 
 func TestScheduleJobsWait(t *testing.T) {
 	ctx := context.Background()
-	start := time.Now().Second()
+	start := time.Now()
 	ScheduleJobs(ctx, []Job{&testLongJob{id: "job1", sleepFor: time.Second}}, true)
-	end := time.Now().Second()
+	end := time.Now()
 	want := 1
 
-	if got := end - start; got < want {
-		t.Errorf("ScheduleJobs(ctx, job1, true) returned after %d seconds, expected to wait for %d", got, want)
+	if got := end.Sub(start); int(got.Seconds()) < want {
+		t.Errorf("ScheduleJobs(ctx, job1, true) returned after %d seconds, expected to wait for %d", int(got.Seconds()), want)
 	}
 }
 
 func TestScheduleJobsNoWait(t *testing.T) {
 	ctx := context.Background()
-	start := time.Now().Second()
+	start := time.Now()
 	ScheduleJobs(ctx, []Job{&testLongJob{id: "job1", sleepFor: time.Second}}, false)
-	end := time.Now().Second()
+	end := time.Now()
 
-	if got := end - start; got >= 1 {
-		t.Errorf("ScheduleJobs(ctx, job1, true) returned after %d seconds, expected no wait", got)
+	if got := end.Sub(start); got.Seconds() >= 1 {
+		t.Errorf("ScheduleJobs(ctx, job1, true) returned after %f seconds, expected no wait", got.Seconds())
 	}
 }

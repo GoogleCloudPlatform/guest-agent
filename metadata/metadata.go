@@ -53,6 +53,7 @@ var (
 type MDSClientInterface interface {
 	Get(context.Context) (*Descriptor, error)
 	GetKey(context.Context, string, map[string]string) (string, error)
+	GetKeyRecursive(context.Context, string) (string, error)
 	Watch(context.Context) (*Descriptor, error)
 	WriteGuestAttributes(context.Context, string, string) error
 }
@@ -327,6 +328,21 @@ func (c *Client) GetKey(ctx context.Context, key string, headers map[string]stri
 	cfg := requestConfig{
 		baseURL: reqURL,
 		headers: headers,
+	}
+	return c.retry(ctx, cfg)
+}
+
+// GetKeyRecursive gets a specific metadata key recursively and returns JSON output.
+func (c *Client) GetKeyRecursive(ctx context.Context, key string) (string, error) {
+	reqURL, err := url.JoinPath(c.metadataURL, key)
+	if err != nil {
+		return "", fmt.Errorf("failed to form metadata url: %+v", err)
+	}
+
+	cfg := requestConfig{
+		baseURL:    reqURL,
+		jsonOutput: true,
+		recursive:  true,
 	}
 	return c.retry(ctx, cfg)
 }

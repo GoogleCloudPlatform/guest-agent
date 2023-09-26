@@ -15,14 +15,14 @@
 package main
 
 import (
+	"context"
 	"fmt"
-	"net/http"
-	"net/http/httptest"
 	"reflect"
 	"strconv"
 	"strings"
 	"testing"
-	"time"
+
+	"github.com/GoogleCloudPlatform/guest-agent/metadata"
 )
 
 func stringSliceEqual(a, b []string) bool {
@@ -174,53 +174,38 @@ func TestGetUserKeysNew(t *testing.T) {
 
 func TestGetMetadataAttributes(t *testing.T) {
 	tests := []struct {
-		metadata  string
 		att       *attributes
 		expectErr bool
 	}{
 		{
-			metadata:  `{"enable-windows-ssh":"true","ssh-keys":"name:ssh-rsa [KEY] instance1\nothername:ssh-rsa [KEY] instance2","block-project-ssh-keys":"false","other-metadata":"foo"}`,
 			att:       &attributes{EnableWindowsSSH: truebool, SSHKeys: []string{"name:ssh-rsa [KEY] instance1", "othername:ssh-rsa [KEY] instance2"}, BlockProjectSSHKeys: false},
 			expectErr: false,
 		},
 		{
-			metadata:  `{"enable-windows-ssh":"true","ssh-keys":"name:ssh-rsa [KEY] instance1\nothername:ssh-rsa [KEY] instance2","block-project-ssh-keys":"true","other-metadata":"foo"}`,
 			att:       &attributes{EnableWindowsSSH: truebool, SSHKeys: []string{"name:ssh-rsa [KEY] instance1", "othername:ssh-rsa [KEY] instance2"}, BlockProjectSSHKeys: true},
 			expectErr: false,
 		},
 		{
-			metadata:  `{"ssh-keys":"name:ssh-rsa [KEY] instance1\nothername:ssh-rsa [KEY] instance2","block-project-ssh-keys":"false","other-metadata":"foo"}`,
 			att:       &attributes{EnableWindowsSSH: nil, SSHKeys: []string{"name:ssh-rsa [KEY] instance1", "othername:ssh-rsa [KEY] instance2"}, BlockProjectSSHKeys: false},
 			expectErr: false,
 		},
 		{
-			metadata:  `{"enable-windows-ssh":"false","ssh-keys":"name:ssh-rsa [KEY] instance1\nothername:ssh-rsa [KEY] instance2","other-metadata":"foo"}`,
 			att:       &attributes{EnableWindowsSSH: falsebool, SSHKeys: []string{"name:ssh-rsa [KEY] instance1", "othername:ssh-rsa [KEY] instance2"}, BlockProjectSSHKeys: false},
 			expectErr: false,
 		},
 		{
-			metadata:  `BADJSON`,
 			att:       nil,
 			expectErr: true,
 		},
 	}
 
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Get test number from request path
-		tnum, _ := strconv.Atoi(strings.Split(r.URL.Path, "/")[2])
-		fmt.Fprintf(w, tests[tnum].metadata)
-	}))
-
-	defer ts.Close()
-
-	metadataURL = ts.URL
-	defaultTimeout = 1 * time.Second
+	client = &mdsClient{}
 
 	for count, tt := range tests {
 		want := tt.att
 		hasErr := false
 		reqStr := fmt.Sprintf("/attributes/%d", count)
-		got, err := getMetadataAttributes(reqStr)
+		got, err := getMetadataAttributes(context.Background(), reqStr)
 		if err != nil {
 			hasErr = true
 		}
@@ -229,4 +214,44 @@ func TestGetMetadataAttributes(t *testing.T) {
 			t.Errorf("Failed: Got: %v, Want: %v, Error: %v", got, want, err)
 		}
 	}
+}
+
+type mdsClient struct{}
+
+func (mds *mdsClient) Get(ctx context.Context) (*metadata.Descriptor, error) {
+	return nil, fmt.Errorf("Get() not yet implemented")
+}
+
+func (mds *mdsClient) GetKey(ctx context.Context, key string, headers map[string]string) (string, error) {
+	return "", fmt.Errorf("GetKey() not yet implemented")
+}
+
+func (mds *mdsClient) GetKeyRecursive(ctx context.Context, key string) (string, error) {
+	i, err := strconv.Atoi(key[strings.LastIndex(key, "/")+1:])
+	if err != nil {
+		return "", err
+	}
+
+	switch i {
+	case 0:
+		return `{"enable-windows-ssh":"true","ssh-keys":"name:ssh-rsa [KEY] instance1\nothername:ssh-rsa [KEY] instance2","block-project-ssh-keys":"false","other-metadata":"foo"}`, nil
+	case 1:
+		return `{"enable-windows-ssh":"true","ssh-keys":"name:ssh-rsa [KEY] instance1\nothername:ssh-rsa [KEY] instance2","block-project-ssh-keys":"true","other-metadata":"foo"}`, nil
+	case 2:
+		return `{"ssh-keys":"name:ssh-rsa [KEY] instance1\nothername:ssh-rsa [KEY] instance2","block-project-ssh-keys":"false","other-metadata":"foo"}`, nil
+	case 3:
+		return `{"enable-windows-ssh":"false","ssh-keys":"name:ssh-rsa [KEY] instance1\nothername:ssh-rsa [KEY] instance2","other-metadata":"foo"}`, nil
+	case 4:
+		return "BADJSON", nil
+	default:
+		return "", fmt.Errorf("unknown key %q", key)
+	}
+}
+
+func (mds *mdsClient) Watch(ctx context.Context) (*metadata.Descriptor, error) {
+	return nil, fmt.Errorf("Watch() not yet implemented")
+}
+
+func (mds *mdsClient) WriteGuestAttributes(ctx context.Context, key string, value string) error {
+	return fmt.Errorf("WriteGuestattributes() not yet implemented")
 }
