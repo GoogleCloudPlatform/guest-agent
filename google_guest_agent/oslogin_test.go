@@ -208,9 +208,9 @@ func TestUpdateSSHConfig(t *testing.T) {
 			},
 			want: []string{
 				googleBlockStart,
+				trustedUserCAKeys,
 				authorizedKeysCommand,
 				authorizedKeysUser,
-				trustedUserCAKeys,
 				twoFactorAuthMethods,
 				challengeResponseEnable,
 				googleBlockEnd,
@@ -234,9 +234,9 @@ func TestUpdateSSHConfig(t *testing.T) {
 			},
 			want: []string{
 				googleBlockStart,
+				trustedUserCAKeys,
 				authorizedKeysCommand,
 				authorizedKeysUser,
-				trustedUserCAKeys,
 				twoFactorAuthMethods,
 				challengeResponseEnable,
 				googleBlockEnd,
@@ -259,9 +259,9 @@ func TestUpdateSSHConfig(t *testing.T) {
 			},
 			want: []string{
 				googleBlockStart,
+				trustedUserCAKeys,
 				authorizedKeysCommand,
 				authorizedKeysUser,
-				trustedUserCAKeys,
 				googleBlockEnd,
 				"line1",
 				"line2",
@@ -298,9 +298,9 @@ func TestUpdateSSHConfig(t *testing.T) {
 			},
 			want: []string{
 				googleBlockStart,
+				trustedUserCAKeys,
 				authorizedKeysCommandSk,
 				authorizedKeysUser,
-				trustedUserCAKeys,
 				googleBlockEnd,
 				"line1",
 				"line2",

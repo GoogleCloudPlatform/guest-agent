@@ -225,7 +225,7 @@ func updateSSHConfig(sshConfig string, enable, twofactor, pamlessAuthStack, skey
 	filtered := filterGoogleLines(string(sshConfig))
 
 	if enable {
-		osLoginBlock := []string{googleBlockStart, authorizedKeysCommand, authorizedKeysUser}
+		osLoginBlock := []string{googleBlockStart}
 
 		if cfg.Get().OSLogin.CertAuthentication {
 			osLoginBlock = append(osLoginBlock, trustedUserCAKeys)
@@ -234,6 +234,8 @@ func updateSSHConfig(sshConfig string, enable, twofactor, pamlessAuthStack, skey
 		if pamlessAuthStack && cfg.Get().OSLogin.CertAuthentication {
 			osLoginBlock = append(osLoginBlock, authorizedPrincipalsCommand, authorizedPrincipalsUser)
 		}
+
+		osLoginBlock = append(osLoginBlock, authorizedKeysCommand, authorizedKeysUser)
 
 		if twofactor {
 			osLoginBlock = append(osLoginBlock, twoFactorAuthMethods, challengeResponseEnable)
