@@ -137,11 +137,6 @@ func agentInit(ctx context.Context) {
 		// boot. If this changes, we will hook these to an explicit
 		// on-boot signal.
 
-		logger.Debugf("set IO scheduler config")
-		if err := setIOScheduler(); err != nil {
-			logger.Warningf("Failed to set IO scheduler: %v", err)
-		}
-
 		// Allow users to opt out of below instance setup actions.
 		if !config.InstanceSetup.NetworkEnabled {
 			logger.Infof("InstanceSetup.network_enabled is false, skipping setup actions that require metadata")
@@ -155,6 +150,13 @@ func agentInit(ctx context.Context) {
 		for newMetadata == nil {
 			logger.Debugf("populate first time metadata...")
 			newMetadata, _ = mdsClient.Get(ctx)
+		}
+
+		if !newMetadata.Instance.Attributes.DisableIOScheduler {
+			logger.Debugf("set IO scheduler config")
+			if err := setIOScheduler(); err != nil {
+				logger.Warningf("Failed to set IO scheduler: %v", err)
+			}
 		}
 
 		// Disable overcommit accounting; e2 instances only.
