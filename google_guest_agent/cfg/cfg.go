@@ -94,7 +94,6 @@ snapshot_service_port = 8081
 timeout_in_seconds = 60
 
 [Unstable]
-pamless_auth_stack = false
 mds_mtls = false
 `
 )
@@ -257,8 +256,7 @@ type Snapshots struct {
 // is guaranteed for configurations defined in the Unstable section. By default all flags defined
 // in this section is disabled and is intended to isolate under development features.
 type Unstable struct {
-	PAMLessAuthStack bool `ini:"pamless_auth_stack,omitempty"`
-	MDSMTLS          bool `ini:"mds_mtls,omitempty"`
+	MDSMTLS bool `ini:"mds_mtls,omitempty"`
 }
 
 // WSFC contains the configurations of WSFC section.
