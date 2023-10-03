@@ -23,6 +23,7 @@ Summary: Google Compute Engine guest agent.
 License: ASL 2.0
 Url: https://cloud.google.com/compute/docs/images/guest-environment
 Source0: %{name}_%{version}.orig.tar.gz
+Requires: google-compute-engine-oslogin >= 20231003.00
 
 BuildArch: %{_arch}
 %if ! 0%{?el6}
