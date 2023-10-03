@@ -30,6 +30,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -37,31 +38,32 @@ import (
 	"time"
 
 	"cloud.google.com/go/storage"
+	"github.com/GoogleCloudPlatform/guest-agent/metadata"
 	"github.com/GoogleCloudPlatform/guest-agent/utils"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 	"github.com/go-ini/ini"
 )
 
-var (
-	programName    = "GCEMetadataScripts"
+const (
+	winConfigPath  = `C:\Program Files\Google\Compute Engine\instance_configs.cfg`
+	configPath     = "/etc/default/instance_configs.cfg"
+	storageURL     = "storage.googleapis.com"
+	bucket         = "([a-z0-9][-_.a-z0-9]*)"
+	object         = "(.+)"
 	version        = "dev"
-	metadataURL    = "http://169.254.169.254/computeMetadata/v1"
-	metadataHang   = "/?recursive=true&alt=json&timeout_sec=10&last_etag=NONE"
 	defaultTimeout = 20 * time.Second
+)
+
+var (
+	programName    = path.Base(os.Args[0])
 	powerShellArgs = []string{"-NoProfile", "-NoLogo", "-ExecutionPolicy", "Unrestricted", "-File"}
 	errUsage       = fmt.Errorf("no valid arguments specified. Specify one of \"startup\", \"shutdown\" or \"specialize\"")
 	config         *ini.File
 
-	storageURL = "storage.googleapis.com"
-
-	bucket = `([a-z0-9][-_.a-z0-9]*)`
-	object = `(.+)`
-
 	// Many of the Google Storage URLs are supported below.
 	// It is preferred that customers specify their object using
 	// its gs://<bucket>/<object> URL.
-	bucketRegex = regexp.MustCompile(fmt.Sprintf(`^gs://%s/?$`, bucket))
-	gsRegex     = regexp.MustCompile(fmt.Sprintf(`^gs://%s/%s$`, bucket, object))
+	gsRegex = regexp.MustCompile(fmt.Sprintf(`^gs://%s/%s$`, bucket, object))
 
 	// Check for the Google Storage URLs:
 	// http://<bucket>.storage.googleapis.com/<object>
@@ -82,12 +84,13 @@ var (
 	gsHTTPRegex3 = regexp.MustCompile(fmt.Sprintf(`^http[s]?://(?:commondata)?storage\.googleapis\.com/%s/%s$`, bucket, object))
 
 	testStorageClient *storage.Client
+
+	client metadata.MDSClientInterface
 )
 
-const (
-	winConfigPath = `C:\Program Files\Google\Compute Engine\instance_configs.cfg`
-	configPath    = `/etc/default/instance_configs.cfg`
-)
+func init() {
+	client = metadata.New()
+}
 
 func newStorageClient(ctx context.Context) (*storage.Client, error) {
 	if testStorageClient != nil {
@@ -182,16 +185,16 @@ func parseGCS(path string) (string, string) {
 	return "", ""
 }
 
-func getMetadataKey(key string) (string, error) {
-	md, err := getMetadata(key, false)
+func getMetadataKey(ctx context.Context, key string) (string, error) {
+	md, err := getMetadata(ctx, key, false)
 	if err != nil {
 		return "", err
 	}
 	return string(md), nil
 }
 
-func getMetadataAttributes(key string) (map[string]string, error) {
-	md, err := getMetadata(key, true)
+func getMetadataAttributes(ctx context.Context, key string) (map[string]string, error) {
+	md, err := getMetadata(ctx, key, true)
 	if err != nil {
 		return nil, err
 	}
@@ -199,43 +202,21 @@ func getMetadataAttributes(key string) (map[string]string, error) {
 	return att, json.Unmarshal(md, &att)
 }
 
-func getMetadata(key string, recurse bool) ([]byte, error) {
-	client := &http.Client{
-		Timeout: defaultTimeout,
-	}
+func getMetadata(ctx context.Context, key string, recurse bool) ([]byte, error) {
+	var resp string
+	var err error
 
-	url := metadataURL + key
 	if recurse {
-		url += metadataHang
+		resp, err = client.GetKeyRecursive(ctx, key)
+	} else {
+		resp, err = client.GetKey(ctx, key, nil)
 	}
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Add("Metadata-Flavor", "Google")
 
-	var res *http.Response
-	// Retry forever, increase sleep between retries (up to 5 times) in order
-	// to wait for slow network initialization.
-	var rt time.Duration
-	for i := 1; ; i++ {
-		res, err = client.Do(req)
-		if err == nil {
-			break
-		}
-		if i < 6 {
-			rt = time.Duration(3*i) * time.Second
-		}
-		logger.Errorf("error connecting to metadata server, retrying in %s, error: %v", rt, err)
-		time.Sleep(rt)
-	}
-	defer res.Body.Close()
-
-	md, err := io.ReadAll(res.Body)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unable to get %q from MDS, with recursive flag set to %t: %w", key, recurse, err)
 	}
-	return md, nil
+
+	return []byte(resp), nil
 }
 
 func normalizeFilePathForWindows(filePath string, metadataKey string, gcsScriptURL *url.URL) string {
@@ -401,9 +382,9 @@ func parseMetadata(md map[string]string, wanted []string) map[string]string {
 }
 
 // getExistingKeys returns the wanted keys that are set in metadata.
-func getExistingKeys(wanted []string) (map[string]string, error) {
+func getExistingKeys(ctx context.Context, wanted []string) (map[string]string, error) {
 	for _, attrs := range []string{"/instance/attributes", "/project/attributes"} {
-		md, err := getMetadataAttributes(attrs)
+		md, err := getMetadataAttributes(ctx, attrs)
 		if err != nil {
 			return nil, err
 		}
@@ -459,7 +440,7 @@ func main() {
 		os.Exit(2)
 	}
 
-	projectID, err := getMetadataKey("/project/project-id")
+	projectID, err := getMetadataKey(ctx, "/project/project-id")
 	if err == nil {
 		opts.ProjectName = projectID
 	}
@@ -468,7 +449,7 @@ func main() {
 
 	logger.Infof("Starting %s scripts (version %s).", os.Args[1], version)
 
-	scripts, err := getExistingKeys(wantedKeys)
+	scripts, err := getExistingKeys(ctx, wantedKeys)
 	if err != nil {
 		logger.Fatalf(err.Error())
 	}
