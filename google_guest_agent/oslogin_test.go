@@ -189,14 +189,16 @@ func TestUpdateSSHConfig(t *testing.T) {
 	authorizedKeysCommand := "AuthorizedKeysCommand /usr/bin/google_authorized_keys"
 	authorizedKeysCommandSk := "AuthorizedKeysCommand /usr/bin/google_authorized_keys_sk"
 	authorizedKeysUser := "AuthorizedKeysCommandUser root"
+	authorizedPrincipalsCommand := "AuthorizedPrincipalsCommand /usr/bin/google_authorized_principals %u %k"
+	authorizedPrincipalsUser := "AuthorizedPrincipalsCommandUser root"
 	trustedUserCAKeys := "TrustedUserCAKeys " + sshtrustedca.DefaultPipePath
 	twoFactorAuthMethods := "AuthenticationMethods publickey,keyboard-interactive"
 	matchblock1 := `Match User sa_*`
 	matchblock2 := `       AuthenticationMethods publickey`
 
 	var tests = []struct {
-		contents, want          []string
-		enable, twofactor, skey bool
+		contents, want                []string
+		enable, twofactor, skey, cert bool
 	}{
 		{
 			// Full block is created, any others removed.
@@ -209,6 +211,8 @@ func TestUpdateSSHConfig(t *testing.T) {
 			want: []string{
 				googleBlockStart,
 				trustedUserCAKeys,
+				authorizedPrincipalsCommand,
+				authorizedPrincipalsUser,
 				authorizedKeysCommand,
 				authorizedKeysUser,
 				twoFactorAuthMethods,
@@ -223,6 +227,33 @@ func TestUpdateSSHConfig(t *testing.T) {
 			enable:    true,
 			twofactor: true,
 			skey:      false,
+			cert:      true,
+		},
+		{
+			// Full block is created, any others removed.
+			contents: []string{
+				"line1",
+				googleBlockStart,
+				"line2",
+				googleBlockEnd,
+			},
+			want: []string{
+				googleBlockStart,
+				authorizedKeysCommand,
+				authorizedKeysUser,
+				twoFactorAuthMethods,
+				challengeResponseEnable,
+				googleBlockEnd,
+				"line1",
+				googleBlockStart,
+				matchblock1,
+				matchblock2,
+				googleBlockEnd,
+			},
+			enable:    true,
+			twofactor: true,
+			skey:      false,
+			cert:      false,
 		},
 		{
 			// Full block is created, google comments removed.
@@ -235,6 +266,8 @@ func TestUpdateSSHConfig(t *testing.T) {
 			want: []string{
 				googleBlockStart,
 				trustedUserCAKeys,
+				authorizedPrincipalsCommand,
+				authorizedPrincipalsUser,
 				authorizedKeysCommand,
 				authorizedKeysUser,
 				twoFactorAuthMethods,
@@ -250,6 +283,34 @@ func TestUpdateSSHConfig(t *testing.T) {
 			enable:    true,
 			twofactor: true,
 			skey:      false,
+			cert:      true,
+		},
+		{
+			// Full block is created, google comments removed.
+			contents: []string{
+				"line1",
+				googleComment,
+				"line2",
+				"line3",
+			},
+			want: []string{
+				googleBlockStart,
+				authorizedKeysCommand,
+				authorizedKeysUser,
+				twoFactorAuthMethods,
+				challengeResponseEnable,
+				googleBlockEnd,
+				"line1",
+				"line3",
+				googleBlockStart,
+				matchblock1,
+				matchblock2,
+				googleBlockEnd,
+			},
+			enable:    true,
+			twofactor: true,
+			skey:      false,
+			cert:      false,
 		},
 		{
 			// Block is created without two-factor options.
@@ -260,6 +321,8 @@ func TestUpdateSSHConfig(t *testing.T) {
 			want: []string{
 				googleBlockStart,
 				trustedUserCAKeys,
+				authorizedPrincipalsCommand,
+				authorizedPrincipalsUser,
 				authorizedKeysCommand,
 				authorizedKeysUser,
 				googleBlockEnd,
@@ -269,6 +332,26 @@ func TestUpdateSSHConfig(t *testing.T) {
 			enable:    true,
 			twofactor: false,
 			skey:      false,
+			cert:      true,
+		},
+		{
+			// Block is created without two-factor options.
+			contents: []string{
+				"line1",
+				"line2",
+			},
+			want: []string{
+				googleBlockStart,
+				authorizedKeysCommand,
+				authorizedKeysUser,
+				googleBlockEnd,
+				"line1",
+				"line2",
+			},
+			enable:    true,
+			twofactor: false,
+			skey:      false,
+			cert:      false,
 		},
 		{
 			// Existing block is removed.
@@ -286,6 +369,25 @@ func TestUpdateSSHConfig(t *testing.T) {
 			enable:    false,
 			twofactor: true,
 			skey:      false,
+			cert:      true,
+		},
+		{
+			// Existing block is removed.
+			contents: []string{
+				"line1",
+				"line2",
+				googleBlockStart,
+				"line3",
+				googleBlockEnd,
+			},
+			want: []string{
+				"line1",
+				"line2",
+			},
+			enable:    false,
+			twofactor: true,
+			skey:      false,
+			cert:      false,
 		},
 		{
 			// Skey binary is chosen instead.
@@ -299,6 +401,8 @@ func TestUpdateSSHConfig(t *testing.T) {
 			want: []string{
 				googleBlockStart,
 				trustedUserCAKeys,
+				authorizedPrincipalsCommand,
+				authorizedPrincipalsUser,
 				authorizedKeysCommandSk,
 				authorizedKeysUser,
 				googleBlockEnd,
@@ -308,6 +412,29 @@ func TestUpdateSSHConfig(t *testing.T) {
 			enable:    true,
 			twofactor: false,
 			skey:      true,
+			cert:      true,
+		},
+		{
+			// Skey binary is chosen instead.
+			contents: []string{
+				"line1",
+				"line2",
+				googleBlockStart,
+				"line3",
+				googleBlockEnd,
+			},
+			want: []string{
+				googleBlockStart,
+				authorizedKeysCommandSk,
+				authorizedKeysUser,
+				googleBlockEnd,
+				"line1",
+				"line2",
+			},
+			enable:    true,
+			twofactor: false,
+			skey:      true,
+			cert:      false,
 		},
 	}
 
@@ -315,94 +442,20 @@ func TestUpdateSSHConfig(t *testing.T) {
 		t.Fatalf("Failed to initialize configuration manager: %+v", err)
 	}
 
-	for idx, tt := range tests {
-		contents := strings.Join(tt.contents, "\n")
-		want := strings.Join(tt.want, "\n")
-
-		if res := updateSSHConfig(contents, tt.enable, tt.twofactor, false, tt.skey); res != want {
-			t.Errorf("test %v\nwant:\n%v\ngot:\n%v\n", idx, want, res)
-		}
-	}
-}
-
-func TestUpdatePAMsshd(t *testing.T) {
-	authOSLogin := "auth       [success=done perm_denied=die default=ignore] pam_oslogin_login.so"
-	authGroup := "auth       [default=ignore] pam_group.so"
-	accountOSLogin := "account    [success=ok ignore=ignore default=die] pam_oslogin_login.so"
-	accountOSLoginAdmin := "account    [success=ok default=ignore] pam_oslogin_admin.so"
-	sessionHomeDir := "session    [success=ok default=ignore] pam_mkhomedir.so"
-
-	var tests = []struct {
-		contents, want    []string
-		enable, twofactor bool
-	}{
-		{
-			contents: []string{
-				"line1",
-				"line2",
-			},
-			want: []string{
-				googleBlockStart,
-				authOSLogin,
-				authGroup,
-				googleBlockEnd,
-				"line1",
-				"line2",
-				googleBlockStart,
-				accountOSLogin,
-				accountOSLoginAdmin,
-				sessionHomeDir,
-				googleBlockEnd,
-			},
-			enable:    true,
-			twofactor: true,
-		},
-		{
-			contents: []string{
-				"line1",
-				"line2",
-			},
-			want: []string{
-				googleBlockStart,
-				authGroup,
-				googleBlockEnd,
-				"line1",
-				"line2",
-				googleBlockStart,
-				accountOSLogin,
-				accountOSLoginAdmin,
-				sessionHomeDir,
-				googleBlockEnd,
-			},
-			enable:    true,
-			twofactor: false,
-		},
-		{
-			contents: []string{
-				googleBlockStart,
-				"line1",
-				googleBlockEnd,
-				"line2",
-				googleBlockStart,
-				"line3",
-				googleBlockEnd,
-			},
-			want: []string{
-				"line2",
-			},
-			enable:    false,
-			twofactor: true,
-		},
-	}
+	config := cfg.Get()
+	defaultCertAuthConfig := config.OSLogin.CertAuthentication
 
 	for idx, tt := range tests {
 		contents := strings.Join(tt.contents, "\n")
 		want := strings.Join(tt.want, "\n")
+		config.OSLogin.CertAuthentication = tt.cert
 
-		if res := updatePAMsshd(contents, tt.enable, tt.twofactor); res != want {
+		if res := updateSSHConfig(contents, tt.enable, tt.twofactor, tt.skey); res != want {
 			t.Errorf("test %v\nwant:\n%v\ngot:\n%v\n", idx, want, res)
 		}
 	}
+
+	config.OSLogin.CertAuthentication = defaultCertAuthConfig
 }
 
 func TestUpdatePAMsshdPamless(t *testing.T) {
