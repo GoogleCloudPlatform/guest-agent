@@ -209,6 +209,7 @@ MetadataScripts   | shutdown               | `false` disables shutdown script ex
 NetworkInterfaces | setup                  | `false` skips network interface setup.
 NetworkInterfaces | ip\_forwarding         | `false` skips IP forwarding.
 NetworkInterfaces | dhcp\_command          | String path for alternate dhcp executable used to enable network interfaces.
+OSLogin           | cert_authentication    | `false` prevents guest-agent from setting up sshd's `TrustedUserCAKeys`, `AuthorizedPrincipalsCommand` and `AuthorizedPrincipalsCommandUser` configuration keys. Default value: `true`.
 
 Setting `network_enabled` to `false` will disable generating host keys and the
 `boto` config in the guest.

@@ -72,3 +72,4 @@ Below is a high level sequence diagram showing how the **Guest Agent**, **Manage
 |Watcher|Events|Desc|
 |-------|------|----|
 |metadata|metadata-watcher,longpoll|A new version of the metadata descriptor was detected.|
+|ssh-trusted-ca-pipe-watcher|ssh-trusted-ca-pipe-watcher,read|A read in the trusted-ca pipe was detected.|
