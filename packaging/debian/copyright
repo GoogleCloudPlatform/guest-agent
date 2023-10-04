@@ -3,11 +3,11 @@ Upstream-Name: google-compute-engine
 Upstream-Contact: gc-team@google.com
 
 Files: *
-Copyright: Copyright 2017 Google Inc.
+Copyright: Copyright 2017 Google LLC
 License: Apache-2.0
 
 Files: debian/*
-Copyright: Copyright 2017 Google Inc.
+Copyright: Copyright 2017 Google LLC
 License: Apache-2.0
 
 License: Apache-2.0

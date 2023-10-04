@@ -2,7 +2,7 @@
   "name": "google-compute-engine-windows",
   "version": "{{.version}}.0@1",
   "arch": "x86_64",
-  "authors": "Google Inc.",
+  "authors": "Google LLC",
   "license": "http://www.apache.org/licenses/LICENSE-2.0",
   "description": "Google Compute Engine Windows agent",
   "source": "https://github.com/GoogleCloudPlatform/guest-agent/",
