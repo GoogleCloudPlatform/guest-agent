@@ -25,8 +25,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/agentcrypto"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/run"
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/scheduler"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 	"github.com/go-ini/ini"
 )
@@ -203,6 +205,14 @@ func agentInit(ctx context.Context) {
 				}
 			}
 		}
+	}
+	// Schedules jobs that need to be started before notifying systemd Agent process has started.
+	// We want to generate MDS credentials as early as possible so that any process in the Guest can
+	// use them. Processes may depend on the Guest Agent at startup to ensure that the credentials are
+	// available for use. By generating the credentials before notifying the systemd, we ensure that
+	// they are generated for any process that depends on the Guest Agent.
+	if config.Unstable.MDSMTLS {
+		scheduler.ScheduleJobs(ctx, []scheduler.Job{agentcrypto.New()}, true)
 	}
 }
 
