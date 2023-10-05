@@ -37,6 +37,11 @@ func NewFakeMDSClient() *MDSClient {
 	return &MDSClient{}
 }
 
+// GetKeyRecursive implements fake GetKeyRecursive MDS method.
+func (s MDSClient) GetKeyRecursive(ctx context.Context, key string) (string, error) {
+	return "", fmt.Errorf("GetKeyRecursive() not yet implemented")
+}
+
 // GetKey implements fake GetKey MDS method.
 func (s MDSClient) GetKey(ctx context.Context, key string, headers map[string]string) (string, error) {
 	valid := `

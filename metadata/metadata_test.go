@@ -142,6 +142,36 @@ func TestGetKey(t *testing.T) {
 	}
 }
 
+func TestGetKeyRecursive(t *testing.T) {
+	var gotReqURI string
+	wantValue := `{"ssh-keys":"name:ssh-rsa [KEY] instance1\nothername:ssh-rsa [KEY] instance2","block-project-ssh-keys":"false","other-metadata":"foo"}`
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotReqURI = r.RequestURI
+		fmt.Fprint(w, wantValue)
+	})
+
+	testsrv := httptest.NewServer(handler)
+	defer testsrv.Close()
+
+	client := New()
+	client.metadataURL = testsrv.URL
+
+	key := "key"
+	wantURI := fmt.Sprintf("/%s?alt=json&recursive=true", key)
+	gotValue, err := client.GetKeyRecursive(context.Background(), key)
+	if err != nil {
+		t.Errorf("client.GetKeyRecursive(ctx, %s) failed unexpectedly with error: %v", key, err)
+	}
+
+	if wantValue != gotValue {
+		t.Errorf("client.GetKeyRecursive(ctx, %s) = %q, want: %q", key, gotValue, wantValue)
+	}
+	if gotReqURI != wantURI {
+		t.Errorf("did not get expected request uri, got :%q, want: %q", gotReqURI, wantURI)
+	}
+}
+
 func TestShouldRetry(t *testing.T) {
 
 	tests := []struct {
