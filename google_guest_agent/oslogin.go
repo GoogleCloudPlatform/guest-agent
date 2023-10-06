@@ -24,8 +24,10 @@ import (
 	"time"
 
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events/sshtrustedca"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/run"
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/sshca"
 	"github.com/GoogleCloudPlatform/guest-agent/metadata"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 )
@@ -34,6 +36,7 @@ var (
 	googleComment    = "# Added by Google Compute Engine OS Login."
 	googleBlockStart = "#### Google OS Login control. Do not edit this section. ####"
 	googleBlockEnd   = "#### End Google OS Login control section. ####"
+	trustedCAWatcher events.Watcher
 )
 
 type osloginMgr struct{}
@@ -63,6 +66,30 @@ func getOSLoginEnabled(md *metadata.Descriptor) (bool, bool, bool) {
 		skey = *md.Instance.Attributes.SecurityKey
 	}
 	return enable, twofactor, skey
+}
+
+func enableDisableOSLoginCertAuth(ctx context.Context) error {
+	eventManager := events.Get()
+	osLoginEnabled, _, _ := getOSLoginEnabled(newMetadata)
+	if osLoginEnabled {
+		if trustedCAWatcher == nil {
+			trustedCAWatcher = sshtrustedca.New(sshtrustedca.DefaultPipePath)
+			if err := eventManager.AddWatcher(ctx, trustedCAWatcher); err != nil {
+				return err
+			}
+			sshca.Init()
+		}
+	} else {
+		if trustedCAWatcher != nil {
+			if err := eventManager.RemoveWatcher(ctx, trustedCAWatcher); err != nil {
+				return err
+			}
+			sshca.Close()
+			trustedCAWatcher = nil
+		}
+	}
+
+	return nil
 }
 
 func (o *osloginMgr) Diff(ctx context.Context) (bool, error) {
