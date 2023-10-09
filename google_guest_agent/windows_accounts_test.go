@@ -22,9 +22,11 @@ import (
 	"crypto/sha256"
 	"crypto/sha512"
 	"encoding/base64"
+	"fmt"
 	"hash"
 	"math/big"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 	"unicode"
@@ -232,41 +234,43 @@ func TestCompareAccounts(t *testing.T) {
 }
 
 func TestGetUserKeys(t *testing.T) {
+	pubKey := utils.MakeRandRSAPubKey(t)
+
 	var tests = []struct {
 		key           string
 		expectedValid int
 	}{
-		{`user:ssh-rsa [KEY] google-ssh {"userName":"user@email.com", "expireOn":"2028-11-08T19:30:47+0000"}`,
+		{fmt.Sprintf(`user:ssh-rsa %s google-ssh {"userName":"user@email.com", "expireOn":"2028-11-08T19:30:47+0000"}`, pubKey),
 			1,
 		},
-		{`user:ssh-rsa [KEY] google-ssh {"userName":"user@email.com", "expireOn":"2028-11-08T19:30:47+0700"}`,
+		{fmt.Sprintf(`user:ssh-rsa %s google-ssh {"userName":"user@email.com", "expireOn":"2028-11-08T19:30:47+0700"}`, pubKey),
 			1,
 		},
-		{`user:ssh-rsa [KEY] google-ssh {"userName":"user@email.com", "expireOn":"2028-11-08T19:30:47+0700", "futureField": "UNUSED_FIELDS_IGNORED"}`,
+		{fmt.Sprintf(`user:ssh-rsa %s google-ssh {"userName":"user@email.com", "expireOn":"2028-11-08T19:30:47+0700", "futureField": "UNUSED_FIELDS_IGNORED"}`, pubKey),
 			1,
 		},
-		{`user:ssh-rsa [KEY] google-ssh {"userName":"user@email.com", "expireOn":"2018-11-08T19:30:46+0000"}`,
+		{fmt.Sprintf(`user:ssh-rsa %s google-ssh {"userName":"user@email.com", "expireOn":"2018-11-08T19:30:46+0000"}`, pubKey),
 			0,
 		},
-		{`user:ssh-rsa [KEY] google-ssh {"userName":"user@email.com", "expireOn":"2018-11-08T19:30:46+0700"}`,
+		{fmt.Sprintf(`user:ssh-rsa %s google-ssh {"userName":"user@email.com", "expireOn":"2018-11-08T19:30:46+0700"}`, pubKey),
 			0,
 		},
-		{`user:ssh-rsa [KEY] google-ssh {"userName":"user@email.com", "expireOn":"INVALID_TIMESTAMP"}`,
+		{fmt.Sprintf(`user:ssh-rsa %s google-ssh {"userName":"user@email.com", "expireOn":"INVALID_TIMESTAMP"}`, pubKey),
 			0,
 		},
-		{`user:ssh-rsa [KEY] google-ssh`,
+		{fmt.Sprintf(`user:ssh-rsa %s google-ssh`, pubKey),
 			0,
 		},
-		{`user:ssh-rsa [KEY] user`,
+		{fmt.Sprintf(`user:ssh-rsa %s user`, pubKey),
 			1,
 		},
-		{`user:ssh-rsa [KEY]`,
+		{fmt.Sprintf(`user:ssh-rsa %s`, pubKey),
 			1,
 		},
-		{`malformed-ssh-keys [KEY] google-ssh`,
+		{fmt.Sprintf(`malformed-ssh-keys %s google-ssh`, pubKey),
 			0,
 		},
-		{`:malformed-ssh-keys [KEY] google-ssh`,
+		{fmt.Sprintf(`:malformed-ssh-keys %s google-ssh`, pubKey),
 			0,
 		},
 	}
@@ -280,6 +284,8 @@ func TestGetUserKeys(t *testing.T) {
 }
 
 func TestRemoveExpiredKeys(t *testing.T) {
+	randKey := utils.MakeRandRSAPubKey(t)
+
 	var tests = []struct {
 		key   string
 		valid bool
@@ -307,14 +313,15 @@ func TestRemoveExpiredKeys(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		ret := removeExpiredKeys([]string{tt.key})
+		currentKey := strings.Replace(tt.key, "[KEY]", randKey, 1)
+		ret := removeExpiredKeys([]string{currentKey})
 		if tt.valid {
-			if len(ret) == 0 || ret[0] != tt.key {
-				t.Errorf("valid key was removed: %q", tt.key)
+			if len(ret) == 0 || ret[0] != currentKey {
+				t.Errorf("valid key was removed: %q", currentKey)
 			}
 		}
 		if !tt.valid && len(ret) == 1 {
-			t.Errorf("invalid key was kept: %q", tt.key)
+			t.Errorf("invalid key was kept: %q", currentKey)
 		}
 	}
 }

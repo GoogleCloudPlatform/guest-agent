@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/tarm/serial"
+	"golang.org/x/crypto/ssh"
 )
 
 // ContainsString checks for the presence of a string in a slice.
@@ -52,34 +53,31 @@ func CheckExpiredKey(key string) error {
 	if trimmedKey == "" {
 		return errors.New("invalid ssh key entry - empty key")
 	}
-	fields := strings.SplitN(trimmedKey, " ", 4)
-	if len(fields) < 3 {
+	_, comment, _, _, err := ssh.ParseAuthorizedKey([]byte(trimmedKey))
+	if err != nil {
+		return err
+	}
+	if !strings.HasPrefix(comment, "google-ssh") {
 		// Non-expiring key.
 		return nil
 	}
-	if len(fields) == 3 && fields[2] == "google-ssh" {
+	fields := strings.SplitN(comment, " ", 2)
+	if len(fields) < 2 {
 		// expiring key without expiration format.
 		return errors.New("invalid ssh key entry - expiration missing")
 	}
-	if len(fields) >= 3 && fields[2] != "google-ssh" {
-		// Non-expiring key with an arbitrary comment part
-		return nil
+	lkey := &sshExpiration{}
+	if err := json.Unmarshal([]byte(fields[1]), lkey); err != nil {
+		// invalid expiration format.
+		return err
 	}
-	if len(fields) > 3 {
-		lkey := sshExpiration{}
-		if err := json.Unmarshal([]byte(fields[3]), &lkey); err != nil {
-			// invalid expiration format.
-			return err
-		}
-		expired, err := CheckExpired(lkey.ExpireOn)
-		if err != nil {
-			return err
-		}
-		if expired {
-			return errors.New("invalid ssh key entry - expired key")
-		}
+	expired, err := CheckExpired(lkey.ExpireOn)
+	if err != nil {
+		return err
 	}
-
+	if expired {
+		return errors.New("invalid ssh key entry - expired key")
+	}
 	return nil
 }
 
