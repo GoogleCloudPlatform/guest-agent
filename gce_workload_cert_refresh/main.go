@@ -16,11 +16,13 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"time"
 
 	"github.com/GoogleCloudPlatform/guest-agent/metadata"
@@ -28,15 +30,20 @@ import (
 )
 
 const (
-	contentDirPrefix  = "/run/secrets/workload-spiffe-contents"
+	// enableWorkloadCertsKey is set to true as custom metadata to enable automatic provisioning of credentials.
+	enableWorkloadCertsKey = "instance/attributes/enable-workload-certificate"
+	// contentDirPrefix is used as prefx to create certificate directories on refresh as contentDirPrefix-<time>.
+	contentDirPrefix = "/run/secrets/workload-spiffe-contents"
+	// tempSymlinkPrefix is used as prefix to create temporary symlinks on refresh as tempSymlinkPrefix-<time> to content directories.
 	tempSymlinkPrefix = "/run/secrets/workload-spiffe-symlink"
-	symlink           = "/run/secrets/workload-spiffe-credentials"
-	programName       = "gce_workload_certs_refresh"
+	// symlink points to the directory with current GCE workload certificates and is always expected to be present.
+	symlink = "/run/secrets/workload-spiffe-credentials"
 )
 
 var (
 	// mdsClient is the client used to query Metadata server.
-	mdsClient *metadata.Client
+	mdsClient   *metadata.Client
+	programName = path.Base(os.Args[0])
 )
 
 func init() {
@@ -48,13 +55,24 @@ func logFormat(e logger.LogEntry) string {
 	return fmt.Sprintf("%s: %s", now, e.Message)
 }
 
+// isEnabled returns true only if enable-workload-certificate metadata attribute is present and set to true.
+func isEnabled(ctx context.Context) bool {
+	resp, err := getMetadata(ctx, enableWorkloadCertsKey)
+	if err != nil {
+		logger.Debugf("Failed to get %q from MDS with error: %v", enableWorkloadCertsKey, err)
+		return false
+	}
+
+	return bytes.EqualFold(resp, []byte("true"))
+}
+
 func getMetadata(ctx context.Context, key string) ([]byte, error) {
 	// GCE Workload Certificate endpoints return 412 Precondition failed if the VM was
 	// never configured with valid config values at least once. Without valid config
 	// values GCE cannot provision the workload certificates.
 	resp, err := mdsClient.GetKey(ctx, key, nil)
 	if err != nil {
-		return []byte{}, fmt.Errorf("failed to GET %q from MDS with error: %w", key, err)
+		return nil, fmt.Errorf("failed to GET %q from MDS with error: %w", key, err)
 	}
 	return []byte(resp), nil
 }
@@ -196,7 +214,11 @@ func main() {
 	logger.Init(ctx, opts)
 	defer logger.Infof("Done")
 
-	// TODO: prune old dirs
+	if !isEnabled(ctx) {
+		logger.Debugf("GCE Workload Certificate refresh is not enabled, skipping cert generation.")
+		return
+	}
+
 	if err := refreshCreds(ctx); err != nil {
 		logger.Fatalf("Error refreshCreds: %v", err.Error())
 	}
@@ -236,7 +258,7 @@ func refreshCreds(ctx context.Context) error {
 	}
 
 	// Handles the edge case where the config values provided for the first time may be invalid. This ensures
-	// that the symlink directory alwasys exists and contains the config_status to surface config errors to the VM.
+	// that the symlink directory always exists and contains the config_status to surface config errors to the VM.
 	if _, err := os.Stat(symlink); os.IsNotExist(err) {
 		logger.Infof("Creating new symlink %s", symlink)
 
