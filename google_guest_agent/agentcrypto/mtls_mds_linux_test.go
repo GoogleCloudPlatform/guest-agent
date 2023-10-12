@@ -132,17 +132,24 @@ func TestShouldEnableError(t *testing.T) {
 }
 
 func TestCertificateDirFromUpdater(t *testing.T) {
+	updater1Dir := t.TempDir()
+	updater2Dir := t.TempDir()
+	certUpdaters = map[string][]string{
+		"updater1": {updater1Dir},
+		"updater2": {"/does/not/exist", updater2Dir},
+	}
+
 	tests := []struct {
 		updater string
 		want    string
 	}{
 		{
-			updater: "update-ca-certificates",
-			want:    "/usr/local/share/ca-certificates/",
+			updater: "updater1",
+			want:    updater1Dir,
 		},
 		{
-			updater: "update-ca-trust",
-			want:    "/etc/pki/ca-trust/source/anchors/",
+			updater: "updater2",
+			want:    updater2Dir,
 		},
 	}
 
@@ -160,8 +167,18 @@ func TestCertificateDirFromUpdater(t *testing.T) {
 }
 
 func TestCertificateDirFromUpdaterError(t *testing.T) {
+	// Fail for unknown updater.
 	_, err := certificateDirFromUpdater("unknown")
 	if err == nil {
 		t.Errorf("certificateDirFromUpdater(unknown) succeeded for unknown updater, want error")
+	}
+
+	// Fail for missing known cert dir.
+	certUpdaters = map[string][]string{
+		"updater1": {"/no/dir/exist"},
+	}
+	_, err = certificateDirFromUpdater("updater1")
+	if err == nil {
+		t.Errorf("certificateDirFromUpdater(unknown) succeeded for missing cert dir, want error")
 	}
 }
