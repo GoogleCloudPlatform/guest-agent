@@ -23,6 +23,8 @@ import (
 	"io"
 	"os"
 	"path"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/GoogleCloudPlatform/guest-agent/metadata"
@@ -30,6 +32,12 @@ import (
 )
 
 const (
+	// trustAnchorsKey endpoint contains a set of trusted certificates for peer X.509 certificate chain validation.
+	trustAnchorsKey = "instance/gce-workload-certificates/trust-anchors"
+	// workloadIdentitiesKey endpoint contains identities managed by the GCE control plane. This contains the X.509 certificate and the private key for the VM's trust domain.
+	workloadIdentitiesKey = "instance/gce-workload-certificates/workload-identities"
+	// configStatusKey contains status and any errors in the config values provided via the VM metadata.
+	configStatusKey = "instance/gce-workload-certificates/config-status"
 	// enableWorkloadCertsKey is set to true as custom metadata to enable automatic provisioning of credentials.
 	enableWorkloadCertsKey = "instance/attributes/enable-workload-certificate"
 	// contentDirPrefix is used as prefx to create certificate directories on refresh as contentDirPrefix-<time>.
@@ -42,8 +50,10 @@ const (
 
 var (
 	// mdsClient is the client used to query Metadata server.
-	mdsClient   *metadata.Client
+	mdsClient   metadata.MDSClientInterface
 	programName = path.Base(os.Args[0])
+	// timeNow returns current time, defining as variable allows the time to be stubbed during testing.
+	timeNow = func() string { return time.Now().Format(time.RFC3339) }
 )
 
 func init() {
@@ -79,125 +89,62 @@ func getMetadata(ctx context.Context, key string) ([]byte, error) {
 
 /*
 metadata key instance/gce-workload-certificates/workload-identities
+MANAGED_WORKLOAD_IDENTITY_SPIFFE is of the format:
+spiffe://POOL_ID.global.PROJECT_NUMBER.workload.id.goog/ns/NAMESPACE_ID/sa/MANAGED_IDENTITY_ID
 
-	{
-	 "status": "OK",
-	 "workloadCredentials": {
-	  "PROJECT_ID.svc.id.goog": {
-	   "metadata": {
-	    "workload_creds_dir_path": "/var/run/secrets/workload-spiffe-credentials"
-	   },
-	   "certificatePem": "-----BEGIN CERTIFICATE-----datahere-----END CERTIFICATE-----",
-	   "privateKeyPem": "-----BEGIN PRIVATE KEY-----datahere-----END PRIVATE KEY-----"
-	  }
-	 }
-	}
-*/
-
-// WorkloadIdentities represents Workload Identities in metadata.
-type WorkloadIdentities struct {
-	Status              string
-	WorkloadCredentials map[string]WorkloadCredential
-}
-
-// UnmarshalJSON is a custom JSON unmarshaller for WorkloadIdentities.
-func (wi *WorkloadIdentities) UnmarshalJSON(b []byte) error {
-	tmp := map[string]json.RawMessage{}
-	err := json.Unmarshal(b, &tmp)
-	if err != nil {
-		return err
-	}
-
-	if err := json.Unmarshal(tmp["status"], &wi.Status); err != nil {
-		return err
-	}
-
-	wi.WorkloadCredentials = map[string]WorkloadCredential{}
-	wcs := map[string]json.RawMessage{}
-	if err := json.Unmarshal(tmp["workloadCredentials"], &wcs); err != nil {
-		return err
-	}
-
-	for domain, value := range wcs {
-		wc := WorkloadCredential{}
-		err := json.Unmarshal(value, &wc)
-		if err != nil {
-			return err
+{
+	"status": "OK", // Status of the response,
+	"workloadCredentials": { // Credentials for the VM's trust domains
+		"MANAGED_WORKLOAD_IDENTITY_SPIFFE": {
+			"certificatePem": "-----BEGIN CERTIFICATE-----datahere-----END CERTIFICATE-----",
+			"privateKeyPem": "-----BEGIN PRIVATE KEY-----datahere-----END PRIVATE KEY-----"
 		}
-		wi.WorkloadCredentials[domain] = wc
 	}
-
-	return nil
 }
+*/
 
 // WorkloadCredential represents Workload Credentials in metadata.
 type WorkloadCredential struct {
-	Metadata       Metadata
-	CertificatePem string
-	PrivateKeyPem  string
+	CertificatePem string `json:"certificatePem"`
+	PrivateKeyPem  string `json:"privateKeyPem"`
+}
+
+// WorkloadIdentities represents Workload Identities in metadata.
+type WorkloadIdentities struct {
+	Status              string                        `json:"status"`
+	WorkloadCredentials map[string]WorkloadCredential `json:"workloadCredentials"`
 }
 
 /*
-metadata key instance/gce-workload-certificates/root-certs
+metadata key instance/gce-workload-certificates/trust-anchors
 
-	{
-	 "status": "OK",
-	 "rootCertificates": {
-	  "PROJECT.svc.id.goog": {
-	   "metadata": {
-	    "workload_creds_dir_path": "/var/run/secrets/workload-spiffe-credentials"
-	   },
-	   "rootCertificatesPem": "-----BEGIN CERTIFICATE-----datahere-----END CERTIFICATE-----"
-	  }
-	 }
-	}
+{
+    "status":  "<status string>" // Status of the response,
+    "trustAnchors": {  // Trust bundle for the VM's trust domains
+        "PEER_SPIFFE_TRUST_DOMAIN_1": {
+            "trustAnchorsPem" : "<Trust bundle containing the X.509 roots certificates>",
+		},
+        "PEER_SPIFFE_TRUST_DOMAIN_2": {
+            "trustAnchorsPem" : "<Trust bundle containing the X.509 roots certificates>",
+        }
+    }
+}
 */
 
-// WorkloadTrustedRootCerts represents Workload Trusted Root Certs in metadata.
-type WorkloadTrustedRootCerts struct {
-	Status           string
-	RootCertificates map[string]RootCertificate
+// TrustAnchor represents one or more certificates in an arbitrary order in the metadata.
+type TrustAnchor struct {
+	TrustAnchorsPem string `json:"trustAnchorsPem"`
 }
 
-// UnmarshalJSON is a custom JSON unmarshaller for WorkloadTrustedRootCerts
-func (wtrc *WorkloadTrustedRootCerts) UnmarshalJSON(b []byte) error {
-	tmp := map[string]json.RawMessage{}
-	err := json.Unmarshal(b, &tmp)
-	if err != nil {
-		return err
-	}
-
-	if err := json.Unmarshal(tmp["status"], &wtrc.Status); err != nil {
-		return err
-	}
-
-	wtrc.RootCertificates = map[string]RootCertificate{}
-	rcs := map[string]json.RawMessage{}
-	if err := json.Unmarshal(tmp["rootCertificates"], &rcs); err != nil {
-		return err
-	}
-
-	for domain, value := range rcs {
-		rc := RootCertificate{}
-		err := json.Unmarshal(value, &rc)
-		if err != nil {
-			return err
-		}
-		wtrc.RootCertificates[domain] = rc
-	}
-
-	return nil
+// WorkloadTrustedAnchors represents Workload Trusted Root Certs in metadata.
+type WorkloadTrustedAnchors struct {
+	Status       string                 `json:"status"`
+	TrustAnchors map[string]TrustAnchor `json:"trustAnchors"`
 }
 
-// RootCertificate represents a Root Certificate in metadata
-type RootCertificate struct {
-	Metadata            Metadata
-	RootCertificatesPem string
-}
-
-// Metadata represents Metadata in metadata
-type Metadata struct {
-	WorkloadCredsDirPath string
+// outputOpts is a struct for output directory name and symlink templates.
+type outputOpts struct {
+	contentDirPrefix, tempSymlinkPrefix, symlink string
 }
 
 func main() {
@@ -211,7 +158,12 @@ func main() {
 	}
 
 	opts.Writers = []io.Writer{os.Stderr}
-	logger.Init(ctx, opts)
+
+	if err := logger.Init(ctx, opts); err != nil {
+		fmt.Printf("Error initializing logger: %v", err)
+		os.Exit(1)
+	}
+
 	defer logger.Infof("Done")
 
 	if !isEnabled(ctx) {
@@ -219,32 +171,88 @@ func main() {
 		return
 	}
 
-	if err := refreshCreds(ctx); err != nil {
+	out := outputOpts{contentDirPrefix, tempSymlinkPrefix, symlink}
+	if err := refreshCreds(ctx, out); err != nil {
 		logger.Fatalf("Error refreshCreds: %v", err.Error())
 	}
 
 }
 
-func refreshCreds(ctx context.Context) error {
-	project, err := getMetadata(ctx, "project/project-id")
-	if err != nil {
-		return fmt.Errorf("error getting project ID: %v", err)
+// findDomain finds the anchor matching with the domain from spiffeID.
+// spiffeID is of the form -
+// spiffe://POOL_ID.global.PROJECT_NUMBER.workload.id.goog/ns/NAMESPACE_ID/sa/MANAGED_IDENTITY_ID
+// where domain is POOL_ID.global.PROJECT_NUMBER.workload.id.goog
+// anchors is a map of various domains and their corresponding trust PEMs.
+// However, if anchor map contains single entry it returns that without any check.
+func findDomain(anchors map[string]TrustAnchor, spiffeID string) (string, error) {
+	c := len(anchors)
+	for k := range anchors {
+		if c == 1 {
+			return k, nil
+		}
+		if strings.Contains(spiffeID, k) {
+			return k, nil
+		}
 	}
 
+	return "", fmt.Errorf("no matching trust anchor found")
+}
+
+// writeTrustAnchors parses the input data, finds the domain from spiffeID and writes ca_certificate.pem
+// in the destDir for that domain.
+func writeTrustAnchors(wtrcsMd []byte, destDir, spiffeID string) error {
+	wtrcs := WorkloadTrustedAnchors{}
+	if err := json.Unmarshal(wtrcsMd, &wtrcs); err != nil {
+		return fmt.Errorf("error unmarshaling workload trusted root certs: %v", err)
+	}
+
+	// Currently there's only one trust anchor but there could be multipe trust anchors in future.
+	// In either case we want the trust anchor with domain matching with the one in SPIFFE ID.
+	domain, err := findDomain(wtrcs.TrustAnchors, spiffeID)
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(fmt.Sprintf("%s/ca_certificates.pem", destDir), []byte(wtrcs.TrustAnchors[domain].TrustAnchorsPem), 0644)
+}
+
+// writeWorkloadIdentities parses the input data, writes the certificates.pem, private_key.pem files in the
+// destDir, and returns the SPIFFE ID for which it wrote the certificates.
+func writeWorkloadIdentities(destDir string, wisMd []byte) (string, error) {
+	var spiffeID string
+	wis := WorkloadIdentities{}
+	if err := json.Unmarshal(wisMd, &wis); err != nil {
+		return "", fmt.Errorf("error unmarshaling workload identities response: %w", err)
+	}
+
+	// Its guaranteed to have single entry in workload credentials map.
+	for k := range wis.WorkloadCredentials {
+		spiffeID = k
+		break
+	}
+
+	if err := os.WriteFile(filepath.Join(destDir, "certificates.pem"), []byte(wis.WorkloadCredentials[spiffeID].CertificatePem), 0644); err != nil {
+		return "", fmt.Errorf("error writing certificates.pem: %w", err)
+	}
+
+	if err := os.WriteFile(filepath.Join(destDir, "private_key.pem"), []byte(wis.WorkloadCredentials[spiffeID].PrivateKeyPem), 0644); err != nil {
+		return "", fmt.Errorf("error writing private_key.pem: %w", err)
+	}
+	return spiffeID, nil
+}
+
+func refreshCreds(ctx context.Context, opts outputOpts) error {
+	now := timeNow()
+	contentDir := fmt.Sprintf("%s-%s", opts.contentDirPrefix, now)
+	tempSymlink := fmt.Sprintf("%s-%s", opts.tempSymlinkPrefix, now)
+
 	// Get status first so it can be written even when other endpoints are empty.
-	certConfigStatus, err := getMetadata(ctx, "instance/gce-workload-certificates/config-status")
+	certConfigStatus, err := getMetadata(ctx, configStatusKey)
 	if err != nil {
 		// Return success when certs are not configured to avoid unnecessary systemd failed units.
 		logger.Infof("Error getting config status, workload certificates may not be configured: %v", err)
 		return nil
 	}
-
-	domain := fmt.Sprintf("%s.svc.id.goog", project)
-	logger.Infof("Rotating workload credentials for trust domain %s", domain)
-
-	now := time.Now().Format(time.RFC3339)
-	contentDir := fmt.Sprintf("%s-%s", contentDirPrefix, now)
-	tempSymlink := fmt.Sprintf("%s-%s", tempSymlinkPrefix, now)
 
 	logger.Infof("Creating timestamp contents dir %s", contentDir)
 
@@ -253,72 +261,59 @@ func refreshCreds(ctx context.Context) error {
 	}
 
 	// Write config_status first even if remaining endpoints are empty.
-	if err := os.WriteFile(fmt.Sprintf("%s/config_status", contentDir), certConfigStatus, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(contentDir, "config_status"), certConfigStatus, 0644); err != nil {
 		return fmt.Errorf("error writing config_status: %v", err)
 	}
 
 	// Handles the edge case where the config values provided for the first time may be invalid. This ensures
 	// that the symlink directory always exists and contains the config_status to surface config errors to the VM.
-	if _, err := os.Stat(symlink); os.IsNotExist(err) {
+	if _, err := os.Stat(opts.symlink); os.IsNotExist(err) {
 		logger.Infof("Creating new symlink %s", symlink)
 
-		if err := os.Symlink(contentDir, symlink); err != nil {
+		if err := os.Symlink(contentDir, opts.symlink); err != nil {
 			return fmt.Errorf("error creating symlink: %v", err)
 		}
 	}
 
 	// Now get the rest of the content.
-	wisMd, err := getMetadata(ctx, "instance/gce-workload-certificates/workload-identities")
+	wisMd, err := getMetadata(ctx, workloadIdentitiesKey)
 	if err != nil {
 		return fmt.Errorf("error getting workload-identities: %v", err)
 	}
 
-	wtrcsMd, err := getMetadata(ctx, "instance/gce-workload-certificates/root-certs")
+	spiffeID, err := writeWorkloadIdentities(contentDir, wisMd)
 	if err != nil {
-		return fmt.Errorf("error getting workload-trusted-root-certs: %v", err)
+		return fmt.Errorf("failed to write workload identities with error: %w", err)
 	}
 
-	wis := WorkloadIdentities{}
-	if err := json.Unmarshal(wisMd, &wis); err != nil {
-		return fmt.Errorf("error unmarshaling workload identities response: %v", err)
+	wtrcsMd, err := getMetadata(ctx, trustAnchorsKey)
+	if err != nil {
+		return fmt.Errorf("error getting workload-trust-anchors: %v", err)
 	}
 
-	wtrcs := WorkloadTrustedRootCerts{}
-	if err := json.Unmarshal(wtrcsMd, &wtrcs); err != nil {
-		return fmt.Errorf("error unmarshaling workload trusted root certs: %v", err)
-	}
-
-	if err := os.WriteFile(fmt.Sprintf("%s/certificates.pem", contentDir), []byte(wis.WorkloadCredentials[domain].CertificatePem), 0644); err != nil {
-		return fmt.Errorf("error writing certificates.pem: %v", err)
-	}
-
-	if err := os.WriteFile(fmt.Sprintf("%s/private_key.pem", contentDir), []byte(wis.WorkloadCredentials[domain].PrivateKeyPem), 0644); err != nil {
-		return fmt.Errorf("error writing private_key.pem: %v", err)
-	}
-
-	if err := os.WriteFile(fmt.Sprintf("%s/ca_certificates.pem", contentDir), []byte(wtrcs.RootCertificates[domain].RootCertificatesPem), 0644); err != nil {
-		return fmt.Errorf("error writing ca_certificates.pem: %v", err)
+	if err := writeTrustAnchors(wtrcsMd, contentDir, spiffeID); err != nil {
+		return fmt.Errorf("failed to write trust anchors: %w", err)
 	}
 
 	if err := os.Symlink(contentDir, tempSymlink); err != nil {
 		return fmt.Errorf("error creating temporary link: %v", err)
 	}
 
-	oldTarget, err := os.Readlink(symlink)
+	oldTarget, err := os.Readlink(opts.symlink)
 	if err != nil {
 		logger.Infof("Error reading existing symlink: %v\n", err)
 		oldTarget = ""
 	}
 
 	// Only rotate on success of all steps above.
-	logger.Infof("Rotating symlink %s", symlink)
+	logger.Infof("Rotating symlink %s", opts.symlink)
 
-	if err := os.Rename(tempSymlink, symlink); err != nil {
+	if err := os.Rename(tempSymlink, opts.symlink); err != nil {
 		return fmt.Errorf("error rotating target link: %v", err)
 	}
 
 	// Clean up previous contents dir.
-	newTarget, err := os.Readlink(symlink)
+	newTarget, err := os.Readlink(opts.symlink)
 	if err != nil {
 		return fmt.Errorf("error reading new symlink: %v, unable to remove old symlink target", err)
 	}
