@@ -150,13 +150,14 @@ func agentInit(ctx context.Context) {
 			return
 		}
 
-		// The below actions require metadata to be set, so if it
-		// hasn't yet been set, wait on it here. In instances without
-		// network access, this will become an indefinite wait.
-		// TODO: split agentInit into needs-network and no-network functions.
-		for newMetadata == nil {
-			logger.Debugf("populate first time metadata...")
-			newMetadata, _ = mdsClient.Get(ctx)
+		if newMetadata == nil {
+			var err error
+			logger.Debugf("populate metadata for the first time...")
+			newMetadata, err = mdsClient.Get(ctx)
+			if err != nil {
+				logger.Errorf("Failed to reach MDS(all retries exhausted): %+v", err)
+				os.Exit(1)
+			}
 		}
 
 		// Disable overcommit accounting; e2 instances only.
