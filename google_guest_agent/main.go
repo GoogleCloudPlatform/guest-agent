@@ -25,7 +25,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/agentcrypto"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events"
 	mdsEvent "github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events/metadata"
@@ -179,7 +178,7 @@ func runAgent(ctx context.Context) {
 	// Previous request to metadata *may* not have worked becasue routes don't get added until agentInit.
 	var err error
 	if newMetadata == nil {
-		/// Error here doesn't matter, if we cant get metadata, we cant record telemetry.
+		// Error here doesn't matter, if we cant get metadata, we cant record telemetry.
 		newMetadata, err = mdsClient.Get(ctx)
 		if err != nil {
 			logger.Debugf("Error getting metdata: %v", err)
@@ -198,11 +197,6 @@ func runAgent(ctx context.Context) {
 	// knownJobs is list of default jobs that run on a pre-defined schedule.
 	knownJobs := []scheduler.Job{telemetry.New(mdsClient, programName, version)}
 	scheduler.ScheduleJobs(ctx, knownJobs, false)
-
-	// Schedules jobs that need to be started before notifying systemd Agent process has started.
-	if cfg.Get().Unstable.MDSMTLS {
-		scheduler.ScheduleJobs(ctx, []scheduler.Job{agentcrypto.New()}, true)
-	}
 
 	eventManager := events.Get()
 	if err := eventManager.AddDefaultWatchers(ctx); err != nil {
