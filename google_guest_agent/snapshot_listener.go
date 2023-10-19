@@ -16,6 +16,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -65,7 +66,7 @@ func runScript(ctx context.Context, path, disks string, config snapshotConfig) (
 }
 
 func listenForSnapshotRequests(ctx context.Context, address string, requestChan chan<- *sspb.GuestMessage) {
-	for {
+	for leaving := false; !leaving; {
 		// Start hanging connection on server that feeds to channel
 		logger.Infof("Attempting to connect to snapshot service at %s.", address)
 		conn, err := grpc.Dial(address, grpc.WithInsecure())
@@ -82,6 +83,7 @@ func listenForSnapshotRequests(ctx context.Context, address string, requestChan 
 		r, err := c.CreateConnection(ctx, &guestReady)
 		if err != nil {
 			logger.Errorf("Error creating connection: %v.", err)
+			leaving = errors.Is(err, context.Canceled)
 			cancel()
 			continue
 		}
