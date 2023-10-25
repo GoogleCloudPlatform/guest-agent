@@ -19,7 +19,7 @@ require (
 	github.com/tarm/serial v0.0.0-20180830185346-98f6abe2eb07
 	golang.org/x/crypto v0.11.0
 	golang.org/x/sys v0.11.0
-	google.golang.org/grpc v1.57.0
+	google.golang.org/grpc v1.57.1
 	google.golang.org/protobuf v1.31.0
 	software.sslmate.com/src/go-pkcs12 v0.2.1
 )
