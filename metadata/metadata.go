@@ -136,6 +136,7 @@ type virtualClock struct {
 type Instance struct {
 	ID                json.Number
 	MachineType       string
+	Hostname          string
 	Attributes        Attributes
 	NetworkInterfaces []NetworkInterfaces
 	VirtualClock      virtualClock

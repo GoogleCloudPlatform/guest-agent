@@ -99,6 +99,8 @@ interfaces in the guest by performing the following tasks:
     *   Google routes are configured, by default, with the routing protocol ID
         `66`. This ID is a namespace for daemon configured IP addresses. It can
         be changed with the config file, see below.
+*  Manage a section of the hosts file to configure the FQDN to resolve for on all GCE IP addresses. User defined aliases can be added to these entries.
+*  Set the hostname to the first part of the configured FQDN (the instance name, unless a custom domain name is configured). Optionally, the full FQDN can be used instead. (Linux only)
 
 #### Windows Failover Cluster Support
 
@@ -137,7 +139,7 @@ The guest agent will perform some actions one time only, on the first VM boot:
 #### Telemetry
 
 The guest agent will record some basic system telemetry information at start and
-then once every 24 hours. 
+then once every 24 hours.
 
 *   Guest agent version and architecture
 *   Operating system name and version
@@ -209,6 +211,10 @@ MetadataScripts   | shutdown               | `false` disables shutdown script ex
 NetworkInterfaces | setup                  | `false` skips network interface setup.
 NetworkInterfaces | ip\_forwarding         | `false` skips IP forwarding.
 NetworkInterfaces | dhcp\_command          | String path for alternate dhcp executable used to enable network interfaces.
+NetworkInterfaces | set\_hostname          | `false` disables setting the hostname.
+NetworkInterfaces | fqdn\_as\_hostname     | Toggle setting the hostname to the FQDN, instead of the first section.
+NetworkInterfaces | set\_fqdn              | `false` disables managing the hosts file to make FQDNs resolve to the assigned GCE IP addresses.
+NetworkInterfaces | additional\_aliases    | Comma separated list of aliases to append to the GCE entries in the hosts file.
 OSLogin           | cert_authentication    | `false` prevents guest-agent from setting up sshd's `TrustedUserCAKeys`, `AuthorizedPrincipalsCommand` and `AuthorizedPrincipalsCommandUser` configuration keys. Default value: `true`.
 
 Setting `network_enabled` to `false` will disable generating host keys and the

@@ -80,6 +80,10 @@ startup-windows = true
 sysprep-specialize = true
 
 [NetworkInterfaces]
+set_fqdn = true
+set_hostname = true
+fqdn_as_hostname = false
+additional_aliases =
 dhcp_command =
 ip_forwarding = true
 setup = true
@@ -239,9 +243,13 @@ type OSLogin struct {
 
 // NetworkInterfaces contains the configurations of NetworkInterfaces section.
 type NetworkInterfaces struct {
-	DHCPCommand  string `ini:"dhcp_command,omitempty"`
-	IPForwarding bool   `ini:"ip_forwarding,omitempty"`
-	Setup        bool   `ini:"setup,omitempty"`
+	DHCPCommand       string `ini:"dhcp_command,omitempty"`
+	IPForwarding      bool   `ini:"ip_forwarding,omitempty"`
+	Setup             bool   `ini:"setup,omitempty"`
+	SetFqdn           bool   `ini:"set_fqdn,omitempty"`
+	SetHostname       bool   `ini:"set_hostname,omitempty"`
+	AdditionalAliases string `ini:"additional_aliases,omitempty"`
+	FqdnAsHostname    bool   `ini:"fqdn_as_hostname,omitempty"`
 }
 
 // Snapshots contains the configurations of Snapshots section.
@@ -283,9 +291,9 @@ func defaultDataSources(extraDefaults []byte) []interface{} {
 
 	return append(res, []interface{}{
 		[]byte(defaultConfig),
-		configFile,
 		configFile + ".distro",
 		configFile + ".template",
+		configFile,
 	}...)
 }
 

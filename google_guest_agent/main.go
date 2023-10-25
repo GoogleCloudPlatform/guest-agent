@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"reflect"
 	"runtime"
 	"strings"
 	"sync"
@@ -28,6 +29,7 @@ import (
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events"
 	mdsEvent "github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events/metadata"
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/hostname"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/osinfo"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/scheduler"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/telemetry"
@@ -204,6 +206,7 @@ func runAgent(ctx context.Context) {
 		return
 	}
 
+	hostname.Init(ctx, eventManager)
 	if err := enableDisableOSLoginCertAuth(ctx); err != nil {
 		logger.Errorf("Failed to enable sshtrustedca watcher: %+v", err)
 		return
@@ -268,6 +271,14 @@ func closer(c io.Closer) {
 	}
 }
 
+func traverseCfg(v reflect.Value, s string) string {
+	key, remainder, cont := strings.Cut(s, ".")
+	if !cont {
+		return fmt.Sprintf("%v", reflect.Indirect(v).FieldByName(key))
+	}
+	return traverseCfg(reflect.Indirect(v).FieldByName(key), remainder)
+}
+
 func main() {
 	ctx := context.Background()
 
@@ -283,8 +294,12 @@ func main() {
 		action = os.Args[1]
 	}
 
-	if action == "noservice" {
+	switch action {
+	case "noservice":
 		runAgent(ctx)
+		os.Exit(0)
+	case "get_config_option":
+		fmt.Println(traverseCfg(reflect.ValueOf(cfg.Get()), os.Args[2]))
 		os.Exit(0)
 	}
 
