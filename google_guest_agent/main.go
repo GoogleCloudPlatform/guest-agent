@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"reflect"
 	"runtime"
 	"strings"
 	"sync"
@@ -271,14 +270,6 @@ func closer(c io.Closer) {
 	}
 }
 
-func traverseCfg(v reflect.Value, s string) string {
-	key, remainder, cont := strings.Cut(s, ".")
-	if !cont {
-		return fmt.Sprintf("%v", reflect.Indirect(v).FieldByName(key))
-	}
-	return traverseCfg(reflect.Indirect(v).FieldByName(key), remainder)
-}
-
 func main() {
 	ctx := context.Background()
 
@@ -294,12 +285,8 @@ func main() {
 		action = os.Args[1]
 	}
 
-	switch action {
-	case "noservice":
+	if action == "noservice" {
 		runAgent(ctx)
-		os.Exit(0)
-	case "get_config_option":
-		fmt.Println(traverseCfg(reflect.ValueOf(cfg.Get()), os.Args[2]))
 		os.Exit(0)
 	}
 
