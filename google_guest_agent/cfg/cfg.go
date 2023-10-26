@@ -274,7 +274,7 @@ func defaultConfigFile(osName string) string {
 }
 
 func defaultDataSources(extraDefaults []byte) []interface{} {
-	var res []interface{}
+	var res = []interface{}{[]byte(defaultConfig)}
 	configFile := defaultConfigFile(runtime.GOOS)
 
 	if len(extraDefaults) > 0 {
@@ -282,10 +282,9 @@ func defaultDataSources(extraDefaults []byte) []interface{} {
 	}
 
 	return append(res, []interface{}{
-		[]byte(defaultConfig),
-		configFile,
 		configFile + ".distro",
 		configFile + ".template",
+		configFile,
 	}...)
 }
 
