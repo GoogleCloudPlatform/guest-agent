@@ -132,9 +132,17 @@ func hostnameReconfigure(ctx context.Context, evType string, data interface{}, e
 }
 
 func setFqdn(fqdn string) error {
-	hostname, err := os.Hostname()
-	if err != nil {
-		return err
+	var hostname string
+	var err error
+	if runtime.GOOS == "windows" {
+		// Windows truncates hostnames to 15 characters when they are set so we cannot rely on the OS to report to full hostname from os.Hostname()
+		// Use what we got from the MDS, even though this may differ from the actual system hostname.
+		hostname = lastHostname
+	} else {
+		hostname, err = os.Hostname()
+		if err != nil {
+			return err
+		}
 	}
 	addrs, err := net.InterfaceAddrs()
 	if err != nil {
