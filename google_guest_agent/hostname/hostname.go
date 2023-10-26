@@ -35,7 +35,7 @@ import (
 var (
 	lastHostname string //As retrieved from MDS
 	lastFqdn     string //As retrieved from MDS
-	config    	 *cfg.Sections
+	config       *cfg.Sections
 	pipePath     string //Path to dial when triggering events
 )
 

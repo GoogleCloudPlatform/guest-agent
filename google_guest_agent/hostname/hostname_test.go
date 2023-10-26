@@ -62,7 +62,7 @@ func TestFetchHostnameFromMds(t *testing.T) {
 			mdsResponse: "tc1.example.com",
 			hostname:    "tc1.example.com",
 			fqdn:        "tc1.example.com",
-			cfg:         &cfg.Sections{Unstable: cfg.Unstable{FqdnAsHostname: true}},
+			cfg:         &cfg.Sections{Unstable: &cfg.Unstable{FqdnAsHostname: true}},
 		},
 	}
 	for _, tc := range testcases {
@@ -127,7 +127,7 @@ func TestCheckMdsHostname(t *testing.T) {
 		{
 			name: "hostname changed",
 			cfg: &cfg.Sections{
-					Unstable: &cfg.Unstable{
+				Unstable: &cfg.Unstable{
 					FqdnAsHostname: false,
 					SetHostname:    true,
 					SetFqdn:        false,
@@ -141,7 +141,7 @@ func TestCheckMdsHostname(t *testing.T) {
 		{
 			name: "fqdn changed",
 			cfg: &cfg.Sections{
-					Unstable: &cfg.Unstable{
+				Unstable: &cfg.Unstable{
 					FqdnAsHostname: false,
 					SetHostname:    false,
 					SetFqdn:        true,
@@ -155,7 +155,7 @@ func TestCheckMdsHostname(t *testing.T) {
 		{
 			name: "no change",
 			cfg: &cfg.Sections{
-					Unstable: &cfg.Unstable{
+				Unstable: &cfg.Unstable{
 					FqdnAsHostname: false,
 					SetHostname:    true,
 					SetFqdn:        true,
@@ -169,7 +169,7 @@ func TestCheckMdsHostname(t *testing.T) {
 		{
 			name: "ignore changes",
 			cfg: &cfg.Sections{
-					Unstable: &cfg.Unstable{
+				Unstable: &cfg.Unstable{
 					FqdnAsHostname: false,
 					SetHostname:    false,
 					SetFqdn:        false,
@@ -183,7 +183,7 @@ func TestCheckMdsHostname(t *testing.T) {
 		{
 			name: "fqnashostname changed",
 			cfg: &cfg.Sections{
-					Unstable: &cfg.Unstable{
+				Unstable: &cfg.Unstable{
 					FqdnAsHostname: true,
 					SetHostname:    true,
 					SetFqdn:        false,

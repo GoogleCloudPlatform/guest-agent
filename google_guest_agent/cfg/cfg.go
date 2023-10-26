@@ -243,9 +243,9 @@ type OSLogin struct {
 
 // NetworkInterfaces contains the configurations of NetworkInterfaces section.
 type NetworkInterfaces struct {
-	DHCPCommand       string `ini:"dhcp_command,omitempty"`
-	IPForwarding      bool   `ini:"ip_forwarding,omitempty"`
-	Setup             bool   `ini:"setup,omitempty"`
+	DHCPCommand  string `ini:"dhcp_command,omitempty"`
+	IPForwarding bool   `ini:"ip_forwarding,omitempty"`
+	Setup        bool   `ini:"setup,omitempty"`
 }
 
 // Snapshots contains the configurations of Snapshots section.
@@ -260,7 +260,7 @@ type Snapshots struct {
 // is guaranteed for configurations defined in the Unstable section. By default all flags defined
 // in this section is disabled and is intended to isolate under development features.
 type Unstable struct {
-	MDSMTLS bool `ini:"mds_mtls,omitempty"`
+	MDSMTLS           bool   `ini:"mds_mtls,omitempty"`
 	SetFqdn           bool   `ini:"set_fqdn,omitempty"`
 	SetHostname       bool   `ini:"set_hostname,omitempty"`
 	AdditionalAliases string `ini:"additional_aliases,omitempty"`
