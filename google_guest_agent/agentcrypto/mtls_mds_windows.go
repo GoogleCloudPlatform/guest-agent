@@ -59,6 +59,12 @@ var (
 
 // writeRootCACert writes Root CA cert from UEFI variable to output file.
 func (j *CredsJob) writeRootCACert(_ context.Context, cacert []byte, outputFile string) error {
+	// Try to fetch previous certificate's serial number before it gets overwritten.
+	num, err := serialNumber(outputFile)
+	if err != nil {
+		logger.Debugf("No previous MDS root certificate was found, will skip cleanup: %v", err)
+	}
+
 	if err := utils.SaferWriteFile(cacert, outputFile, 0644); err != nil {
 		return err
 	}
@@ -82,6 +88,25 @@ func (j *CredsJob) writeRootCACert(_ context.Context, cacert []byte, outputFile 
 	// Adds certificate to Root Trusted certificates.
 	if err := addCtxToLocalSystemStore(root, certContext, uint32(windows.CERT_STORE_ADD_REPLACE_EXISTING)); err != nil {
 		return fmt.Errorf("failed to store root cert ctx in store: %w", err)
+	}
+
+	// MDS root cert was not refreshed or there's no previous cert, nothing to do, return.
+	if num == "" || fmt.Sprintf("%x", x509Cert.SerialNumber) == num {
+		return nil
+	}
+
+	// Certificate is refreshed. Best effort to find the certcontext and delete it.
+	// Don't throw error here, it would skip client credential generation which
+	// may be about to expire.
+	oldCtx, err := findCert(root, certificateIssuer, num)
+	if err != nil {
+		logger.Warningf("Failed to find previous MDS root certificate with error: %v", err)
+		return nil
+	}
+
+	if err := deleteCert(oldCtx, root); err != nil {
+		logger.Warningf("Failed to delete previous MDS root certificate(%s) with error: %v", num, err)
+		return nil
 	}
 
 	return nil
