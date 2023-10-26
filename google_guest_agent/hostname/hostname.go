@@ -35,15 +35,15 @@ import (
 var (
 	lastHostname string //As retrieved from MDS
 	lastFqdn     string //As retrieved from MDS
-	netconfig    *cfg.NetworkInterfaces
+	config    	 *cfg.Sections
 	pipePath     string //Path to dial when triggering events
 )
 
 // Init subscribes to the interface up and hostname reconfigure events if the user has enabled network interface setup and either hostname of fqdn management, and sends an initial event to trigger hostame and fqdn configuration.
 func Init(ctx context.Context, eventManager *events.Manager) {
 	pipePath = network.DefaultPipePath
-	netconfig = cfg.Get().NetworkInterfaces
-	if netconfig.Setup && (netconfig.SetFqdn || netconfig.SetHostname) {
+	config = cfg.Get()
+	if config.NetworkInterfaces.Setup && (config.Unstable.SetFqdn || config.Unstable.SetHostname) {
 		eventManager.AddWatcher(ctx, network.NewNetworkWatcher(network.DefaultPipePath))
 		eventManager.Subscribe(network.IfaceUpEvent, nil, handleIfaceUp)
 		eventManager.Subscribe(network.HostnameReconfigureEvent, nil, hostnameReconfigure)
@@ -60,7 +60,7 @@ func fetchHostnameFromMds(ctx context.Context, mdsclient mds.MDSClientInterface)
 		return
 	}
 	fqdn = mdshostname
-	if netconfig.FqdnAsHostname {
+	if config.Unstable.FqdnAsHostname {
 		hostname = fqdn
 	} else {
 		var ok bool
@@ -86,7 +86,7 @@ func checkMdsHostname(ctx context.Context, evType string, data interface{}, evDa
 	}
 	var hostname, fqdn string
 	fqdn = descriptor.Instance.Hostname
-	if netconfig.FqdnAsHostname {
+	if config.Unstable.FqdnAsHostname {
 		hostname = fqdn
 	} else {
 		var ok bool
@@ -96,7 +96,7 @@ func checkMdsHostname(ctx context.Context, evType string, data interface{}, evDa
 			return true
 		}
 	}
-	if (hostname != lastHostname && netconfig.SetHostname) || (fqdn != lastFqdn && netconfig.SetFqdn) {
+	if (hostname != lastHostname && config.Unstable.SetHostname) || (fqdn != lastFqdn && config.Unstable.SetFqdn) {
 		logger.Infof("hostname or fqdn changed in MDS and this change is managed by guest agent")
 		logger.Debugf("old hostname: %s new hostname: %s", lastHostname, hostname)
 		logger.Debugf("old fqdn: %s new fqdn: %s", lastFqdn, fqdn)
@@ -117,13 +117,13 @@ func hostnameReconfigure(ctx context.Context, evType string, data interface{}, e
 	}
 	lastHostname = h
 	lastFqdn = f
-	if netconfig.SetHostname {
+	if config.Unstable.SetHostname {
 		err := setHostname(ctx, h)
 		if err != nil {
 			logger.Errorf("could not set hostname: %v", err)
 		}
 	}
-	if netconfig.SetFqdn {
+	if config.Unstable.SetFqdn {
 		err := setFqdn(f)
 		if err != nil {
 			logger.Errorf("could not set fqdn: %v", err)
@@ -154,7 +154,7 @@ func setFqdn(fqdn string) error {
 
 func writeHosts(hostname, fqdn, hostsFile string, addrs []net.Addr) error {
 	var gcehosts, aliases strings.Builder
-	for _, a := range strings.Split(netconfig.AdditionalAliases, ",") {
+	for _, a := range strings.Split(config.Unstable.AdditionalAliases, ",") {
 		aliases.WriteString(a + " ")
 	}
 	gcehosts.WriteString("#google-guest-agent-hosts-begin" + newline + "# Changes in this section will be overwritten" + newline + "# See https://cloud.google.com/compute/docs/images/guest-environment for information on configuring the guest environment" + newline + "169.254.169.254 metadata.google.internal" + newline)

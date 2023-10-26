@@ -46,7 +46,7 @@ func TestFetchHostnameFromMds(t *testing.T) {
 	testcases := []struct {
 		name        string
 		mdsResponse string
-		cfg         *cfg.NetworkInterfaces
+		cfg         *cfg.Sections
 		hostname    string
 		fqdn        string
 	}{
@@ -55,19 +55,19 @@ func TestFetchHostnameFromMds(t *testing.T) {
 			mdsResponse: "tc1.example.com",
 			hostname:    "tc1",
 			fqdn:        "tc1.example.com",
-			cfg:         cfg.Get().NetworkInterfaces,
+			cfg:         cfg.Get(),
 		},
 		{
 			name:        "hostname as fqdn",
 			mdsResponse: "tc1.example.com",
 			hostname:    "tc1.example.com",
 			fqdn:        "tc1.example.com",
-			cfg:         &cfg.NetworkInterfaces{FqdnAsHostname: true},
+			cfg:         &cfg.Sections{Unstable: cfg.Unstable{FqdnAsHostname: true}},
 		},
 	}
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			netconfig = tc.cfg
+			config = tc.cfg
 			fake := &fakeMDSClient{key: tc.mdsResponse}
 			h, f, err := fetchHostnameFromMds(context.Background(), fake)
 			if err != nil {
@@ -88,17 +88,17 @@ func TestFetchHostnameFromMdsError(t *testing.T) {
 	testcases := []struct {
 		name        string
 		mdsResponse string
-		cfg         *cfg.NetworkInterfaces
+		cfg         *cfg.Sections
 	}{
 		{
 			name:        "non fqdn",
 			mdsResponse: "tc1",
-			cfg:         cfg.Get().NetworkInterfaces,
+			cfg:         cfg.Get(),
 		},
 	}
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			netconfig = tc.cfg
+			config = tc.cfg
 			fake := &fakeMDSClient{key: tc.mdsResponse}
 			_, _, err := fetchHostnameFromMds(context.Background(), fake)
 			if err == nil {
@@ -118,7 +118,7 @@ func TestCheckMdsHostname(t *testing.T) {
 	cfg.Load(nil)
 	testcases := []struct {
 		name               string
-		cfg                *cfg.NetworkInterfaces
+		cfg                *cfg.Sections
 		lastHostname       string
 		lastFqdn           string
 		descriptor         mds.Descriptor
@@ -126,10 +126,12 @@ func TestCheckMdsHostname(t *testing.T) {
 	}{
 		{
 			name: "hostname changed",
-			cfg: &cfg.NetworkInterfaces{
-				FqdnAsHostname: false,
-				SetHostname:    true,
-				SetFqdn:        false,
+			cfg: &cfg.Sections{
+					Unstable: &cfg.Unstable{
+					FqdnAsHostname: false,
+					SetHostname:    true,
+					SetFqdn:        false,
+				},
 			},
 			lastHostname:       "host1",
 			lastFqdn:           "host1.example.com",
@@ -138,10 +140,12 @@ func TestCheckMdsHostname(t *testing.T) {
 		},
 		{
 			name: "fqdn changed",
-			cfg: &cfg.NetworkInterfaces{
-				FqdnAsHostname: false,
-				SetHostname:    false,
-				SetFqdn:        true,
+			cfg: &cfg.Sections{
+					Unstable: &cfg.Unstable{
+					FqdnAsHostname: false,
+					SetHostname:    false,
+					SetFqdn:        true,
+				},
 			},
 			lastHostname:       "host1",
 			lastFqdn:           "host1.example.net",
@@ -150,10 +154,12 @@ func TestCheckMdsHostname(t *testing.T) {
 		},
 		{
 			name: "no change",
-			cfg: &cfg.NetworkInterfaces{
-				FqdnAsHostname: false,
-				SetHostname:    true,
-				SetFqdn:        true,
+			cfg: &cfg.Sections{
+					Unstable: &cfg.Unstable{
+					FqdnAsHostname: false,
+					SetHostname:    true,
+					SetFqdn:        true,
+				},
 			},
 			lastHostname:       "host1",
 			lastFqdn:           "host1.example.com",
@@ -162,10 +168,12 @@ func TestCheckMdsHostname(t *testing.T) {
 		},
 		{
 			name: "ignore changes",
-			cfg: &cfg.NetworkInterfaces{
-				FqdnAsHostname: false,
-				SetHostname:    false,
-				SetFqdn:        false,
+			cfg: &cfg.Sections{
+					Unstable: &cfg.Unstable{
+					FqdnAsHostname: false,
+					SetHostname:    false,
+					SetFqdn:        false,
+				},
 			},
 			lastHostname:       "host1",
 			lastFqdn:           "host1.example.net",
@@ -174,10 +182,12 @@ func TestCheckMdsHostname(t *testing.T) {
 		},
 		{
 			name: "fqnashostname changed",
-			cfg: &cfg.NetworkInterfaces{
-				FqdnAsHostname: true,
-				SetHostname:    true,
-				SetFqdn:        false,
+			cfg: &cfg.Sections{
+					Unstable: &cfg.Unstable{
+					FqdnAsHostname: true,
+					SetHostname:    true,
+					SetFqdn:        false,
+				},
 			},
 			lastHostname:       "host1",
 			lastFqdn:           "host1.example.net",
@@ -189,7 +199,7 @@ func TestCheckMdsHostname(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Duration(300)*time.Millisecond)
 			defer cancel()
-			netconfig = tc.cfg
+			config = tc.cfg
 			lastHostname = tc.lastHostname
 			lastFqdn = tc.lastFqdn
 			var wg sync.WaitGroup
@@ -228,7 +238,7 @@ func TestWriteHosts(t *testing.T) {
 	cfg.Load(nil)
 	testcases := []struct {
 		name          string
-		cfg           *cfg.NetworkInterfaces
+		cfg           *cfg.Sections
 		inputhosts    string
 		inputhostname string
 		inputfqdn     string
@@ -237,7 +247,7 @@ func TestWriteHosts(t *testing.T) {
 	}{
 		{
 			name:          "empty hosts",
-			cfg:           cfg.Get().NetworkInterfaces,
+			cfg:           cfg.Get(),
 			inputhosts:    "",
 			inputhostname: "tc1",
 			inputfqdn:     "tc1.example.com",
@@ -246,7 +256,7 @@ func TestWriteHosts(t *testing.T) {
 		},
 		{
 			name:          "loopback addresses",
-			cfg:           cfg.Get().NetworkInterfaces,
+			cfg:           cfg.Get(),
 			inputhosts:    "",
 			inputhostname: "tc1",
 			inputfqdn:     "tc1.example.com",
@@ -255,7 +265,7 @@ func TestWriteHosts(t *testing.T) {
 		},
 		{
 			name:          "two addresses",
-			cfg:           cfg.Get().NetworkInterfaces,
+			cfg:           cfg.Get(),
 			inputhosts:    "",
 			inputhostname: "tc1",
 			inputfqdn:     "tc1.example.com",
@@ -264,7 +274,7 @@ func TestWriteHosts(t *testing.T) {
 		},
 		{
 			name:          "two aliases",
-			cfg:           &cfg.NetworkInterfaces{AdditionalAliases: "tc2,tc3"},
+			cfg:           &cfg.Sections{Unstable: &cfg.Unstable{AdditionalAliases: "tc2,tc3"}},
 			inputhosts:    "",
 			inputhostname: "tc1",
 			inputfqdn:     "tc1.example.com",
@@ -273,7 +283,7 @@ func TestWriteHosts(t *testing.T) {
 		},
 		{
 			name:          "existing hosts at beginning",
-			cfg:           cfg.Get().NetworkInterfaces,
+			cfg:           cfg.Get(),
 			inputhosts:    "127.0.0.1 pre-existing.host.com" + newline + "#google-guest-agent-hosts-begin" + newline + "#google-guest-agent-hosts-end" + newline + "",
 			inputhostname: "tc1",
 			inputfqdn:     "tc1.example.com",
@@ -282,7 +292,7 @@ func TestWriteHosts(t *testing.T) {
 		},
 		{
 			name:          "existing hosts at end",
-			cfg:           cfg.Get().NetworkInterfaces,
+			cfg:           cfg.Get(),
 			inputhosts:    "#google-guest-agent-hosts-begin" + newline + "#google-guest-agent-hosts-end" + newline + "127.0.0.1 pre-existing.host.com" + newline + "",
 			inputhostname: "tc1",
 			inputfqdn:     "tc1.example.com",
@@ -291,7 +301,7 @@ func TestWriteHosts(t *testing.T) {
 		},
 		{
 			name:          "two gce hosts blocks",
-			cfg:           cfg.Get().NetworkInterfaces,
+			cfg:           cfg.Get(),
 			inputhosts:    "#google-guest-agent-hosts-begin" + newline + "#google-guest-agent-hosts-end" + newline + "#google-guest-agent-hosts-begin" + newline + "127.0.0.1 pre-existing.host.com" + newline + "#google-guest-agent-hosts-end" + newline + "",
 			inputhostname: "tc1",
 			inputfqdn:     "tc1.example.com",
@@ -300,7 +310,7 @@ func TestWriteHosts(t *testing.T) {
 		},
 		{
 			name:          "unterminated gce hosts block",
-			cfg:           cfg.Get().NetworkInterfaces,
+			cfg:           cfg.Get(),
 			inputhosts:    "#google-guest-agent-hosts-begin" + newline + "127.0.0.1 pre-existing.host.com" + newline + "",
 			inputhostname: "tc1",
 			inputfqdn:     "tc1.example.com",
@@ -310,7 +320,7 @@ func TestWriteHosts(t *testing.T) {
 	}
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			netconfig = tc.cfg
+			config = tc.cfg
 			testfile, err := os.CreateTemp(os.TempDir(), "test-writehosts-"+strings.ReplaceAll(tc.name, " ", "-"))
 			if err != nil {
 				t.Fatal(err)

@@ -80,10 +80,6 @@ startup-windows = true
 sysprep-specialize = true
 
 [NetworkInterfaces]
-set_fqdn = true
-set_hostname = true
-fqdn_as_hostname = false
-additional_aliases =
 dhcp_command =
 ip_forwarding = true
 setup = true
@@ -99,6 +95,10 @@ timeout_in_seconds = 60
 
 [Unstable]
 mds_mtls = false
+set_fqdn = false
+set_hostname = false
+fqdn_as_hostname = false
+additional_aliases =
 `
 )
 
@@ -246,10 +246,6 @@ type NetworkInterfaces struct {
 	DHCPCommand       string `ini:"dhcp_command,omitempty"`
 	IPForwarding      bool   `ini:"ip_forwarding,omitempty"`
 	Setup             bool   `ini:"setup,omitempty"`
-	SetFqdn           bool   `ini:"set_fqdn,omitempty"`
-	SetHostname       bool   `ini:"set_hostname,omitempty"`
-	AdditionalAliases string `ini:"additional_aliases,omitempty"`
-	FqdnAsHostname    bool   `ini:"fqdn_as_hostname,omitempty"`
 }
 
 // Snapshots contains the configurations of Snapshots section.
@@ -265,6 +261,10 @@ type Snapshots struct {
 // in this section is disabled and is intended to isolate under development features.
 type Unstable struct {
 	MDSMTLS bool `ini:"mds_mtls,omitempty"`
+	SetFqdn           bool   `ini:"set_fqdn,omitempty"`
+	SetHostname       bool   `ini:"set_hostname,omitempty"`
+	AdditionalAliases string `ini:"additional_aliases,omitempty"`
+	FqdnAsHostname    bool   `ini:"fqdn_as_hostname,omitempty"`
 }
 
 // WSFC contains the configurations of WSFC section.
