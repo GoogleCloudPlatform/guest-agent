@@ -21,6 +21,7 @@ import (
 	"net"
 	"os"
 	"regexp"
+	"runtime"
 	"strings"
 
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
