@@ -21,14 +21,12 @@ import (
 	"sync"
 
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events/metadata"
-	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events/network"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 )
 
 var (
 	defaultWatchers = []Watcher{
 		metadata.New(),
-		network.NewNetworkWatcher(network.DefaultPipePath),
 	}
 	instance *Manager
 )

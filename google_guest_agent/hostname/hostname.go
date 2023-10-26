@@ -43,6 +43,7 @@ func Init(ctx context.Context, eventManager *events.Manager) {
 	pipePath = network.DefaultPipePath
 	netconfig = cfg.Get().NetworkInterfaces
 	if netconfig.Setup && (netconfig.SetFqdn || netconfig.SetHostname) {
+		eventManager.AddWatcher(ctx, network.NewNetworkWatcher(network.DefaultPipePath))
 		eventManager.Subscribe(network.IfaceUpEvent, nil, handleIfaceUp)
 		eventManager.Subscribe(network.HostnameReconfigureEvent, nil, hostnameReconfigure)
 		eventManager.Subscribe(metadata.LongpollEvent, nil, checkMdsHostname)
