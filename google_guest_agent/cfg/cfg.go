@@ -27,6 +27,10 @@ var (
 	// should always return it.
 	instance *Sections
 
+	// configFile is a pointer to a function which takes the current OS name and returns
+	// an appropriate config file name. Replaceable by unit tests.
+	configFile = defaultConfigFile
+
 	// dataSource is a pointer to a data source loading/defining function, unit tests will
 	// want to change this pointer to whatever makes sense to its implementation.
 	dataSources = defaultDataSources
@@ -284,18 +288,17 @@ func defaultConfigFile(osName string) string {
 }
 
 func defaultDataSources(extraDefaults []byte) []interface{} {
-	var res []interface{}
-	configFile := defaultConfigFile(runtime.GOOS)
+	var res = []interface{}{[]byte(defaultConfig)}
+	config := configFile(runtime.GOOS)
 
 	if len(extraDefaults) > 0 {
 		res = append(res, extraDefaults)
 	}
 
 	return append(res, []interface{}{
-		[]byte(defaultConfig),
-		configFile,
-		configFile + ".distro",
-		configFile + ".template",
+		config + ".distro",
+		config + ".template",
+		config,
 	}...)
 }
 
