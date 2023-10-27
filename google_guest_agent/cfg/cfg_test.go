@@ -142,7 +142,7 @@ func TestConfigLoadOrder(t *testing.T) {
 			output:         false,
 		},
 		{
-			// If this fails, integration test results are not valid
+			// If this fails, other test case results are not valid
 			name:           "default is true",
 			extraDefault:   "",
 			distroConfig:   "",
