@@ -69,6 +69,7 @@ func Get() *Scheduler {
 // getFunc generates a wrapper function for cron scheduler.
 func (s *Scheduler) getFunc(ctx context.Context, job Job) func() {
 	f := func() {
+		logger.Infof("Invoking job %q", job.ID())
 		schedule, err := job.Run(ctx)
 		if !schedule {
 			s.UnscheduleJob(job.ID())

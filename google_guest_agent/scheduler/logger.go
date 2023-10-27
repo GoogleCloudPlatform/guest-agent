@@ -21,9 +21,9 @@ import (
 type cronLogger struct{}
 
 func (cl *cronLogger) Info(msg string, keysAndValues ...any) {
-	logger.Infof("%s: %+v", msg, keysAndValues)
+	logger.Infof("Scheduler - %s: %+v", msg, keysAndValues)
 }
 
 func (cl *cronLogger) Error(err error, msg string, keysAndValues ...any) {
-	logger.Infof("%s: %+v", msg, keysAndValues)
+	logger.Infof("Scheduler - %s: %+v", msg, keysAndValues)
 }
