@@ -100,6 +100,7 @@ func TestGetTwice(t *testing.T) {
 func TestConfigLoadOrder(t *testing.T) {
 	config := path.Join(t.TempDir(), "config.cfg")
 	configFile = func(string) string { return config }
+	t.Cleanup(func() { configFile = defaultConfigFile })
 	testcases := []struct {
 		name           string
 		extraDefault   string
