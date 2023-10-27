@@ -87,6 +87,9 @@ setup = true
 [OSLogin]
 cert_authentication = true
 
+[MDS]
+mtls_bootstrapping_enabled = true
+
 [Snapshots]
 enabled = false
 snapshot_service_ip = 169.254.169.254
@@ -94,7 +97,6 @@ snapshot_service_port = 8081
 timeout_in_seconds = 60
 
 [Unstable]
-mds_mtls = false
 `
 )
 
@@ -143,6 +145,9 @@ type Sections struct {
 
 	// OSLogin defines the OS Login configuration options.
 	OSLogin *OSLogin `ini:"OSLogin,omitempty"`
+
+	// MDS defines the MDS configuration options.
+	MDS *MDS `ini:"MDS,omitempty"`
 
 	// Snpashots defines the snapshot listener configuration and behavior i.e. the server address and port.
 	Snapshots *Snapshots `ini:"Snapshots,omitempty"`
@@ -237,6 +242,12 @@ type OSLogin struct {
 	CertAuthentication bool `ini:"cert_authentication,omitempty"`
 }
 
+// MDS contains the configurations for MDS section.
+type MDS struct {
+	// MTLSBootstrappingEnabled enables/disables the mTLS credential refresher.
+	MTLSBootstrappingEnabled bool `ini:"mtls_bootstrapping_enabled,omitempty"`
+}
+
 // NetworkInterfaces contains the configurations of NetworkInterfaces section.
 type NetworkInterfaces struct {
 	DHCPCommand  string `ini:"dhcp_command,omitempty"`
@@ -256,7 +267,6 @@ type Snapshots struct {
 // is guaranteed for configurations defined in the Unstable section. By default all flags defined
 // in this section is disabled and is intended to isolate under development features.
 type Unstable struct {
-	MDSMTLS bool `ini:"mds_mtls,omitempty"`
 }
 
 // WSFC contains the configurations of WSFC section.
