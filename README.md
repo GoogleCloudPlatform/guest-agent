@@ -99,8 +99,6 @@ interfaces in the guest by performing the following tasks:
     *   Google routes are configured, by default, with the routing protocol ID
         `66`. This ID is a namespace for daemon configured IP addresses. It can
         be changed with the config file, see below.
-*  Manage a section of the hosts file to configure the FQDN to resolve for on all GCE IP addresses. User defined aliases can be added to these entries.
-*  Set the hostname to the first part of the configured FQDN (the instance name, unless a custom domain name is configured). Optionally, the full FQDN can be used instead. (Linux only)
 
 #### Windows Failover Cluster Support
 
