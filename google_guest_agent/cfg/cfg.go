@@ -101,7 +101,6 @@ snapshot_service_port = 8081
 timeout_in_seconds = 60
 
 [Unstable]
-mds_mtls = false
 set_fqdn = false
 set_hostname = false
 fqdn_as_hostname = false
@@ -276,7 +275,6 @@ type Snapshots struct {
 // is guaranteed for configurations defined in the Unstable section. By default all flags defined
 // in this section is disabled and is intended to isolate under development features.
 type Unstable struct {
-	MDSMTLS           bool   `ini:"mds_mtls,omitempty"`
 	SetFqdn           bool   `ini:"set_fqdn,omitempty"`
 	SetHostname       bool   `ini:"set_hostname,omitempty"`
 	AdditionalAliases string `ini:"additional_aliases,omitempty"`
