@@ -212,7 +212,7 @@ func agentInit(ctx context.Context) {
 	// use them. Processes may depend on the Guest Agent at startup to ensure that the credentials are
 	// available for use. By generating the credentials before notifying the systemd, we ensure that
 	// they are generated for any process that depends on the Guest Agent.
-	if config.Unstable.MDSMTLS {
+	if config.MDS.MTLSBootstrappingEnabled {
 		scheduler.ScheduleJobs(ctx, []scheduler.Job{agentcrypto.New()}, true)
 	}
 }
