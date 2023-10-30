@@ -211,11 +211,11 @@ MetadataScripts   | shutdown               | `false` disables shutdown script ex
 NetworkInterfaces | setup                  | `false` skips network interface setup.
 NetworkInterfaces | ip\_forwarding         | `false` skips IP forwarding.
 NetworkInterfaces | dhcp\_command          | String path for alternate dhcp executable used to enable network interfaces.
-NetworkInterfaces | set\_hostname          | `false` disables setting the hostname.
-NetworkInterfaces | fqdn\_as\_hostname     | Toggle setting the hostname to the FQDN, instead of the first section.
-NetworkInterfaces | set\_fqdn              | `false` disables managing the hosts file to make FQDNs resolve to the assigned GCE IP addresses.
-NetworkInterfaces | additional\_aliases    | Comma separated list of aliases to append to the GCE entries in the hosts file.
 OSLogin           | cert_authentication    | `false` prevents guest-agent from setting up sshd's `TrustedUserCAKeys`, `AuthorizedPrincipalsCommand` and `AuthorizedPrincipalsCommandUser` configuration keys. Default value: `true`.
+Unstable          | set\_hostname          | `false` disables setting the hostname.
+Unstable          | fqdn\_as\_hostname     | Toggle setting the hostname to the FQDN, instead of the first section.
+Unstable          | set\_fqdn              | `false` disables managing the hosts file to make FQDNs resolve to the assigned GCE IP addresses.
+Unstable          | additional\_aliases    | Comma separated list of aliases to append to the GCE entries in the hosts file.
 
 Setting `network_enabled` to `false` will disable generating host keys and the
 `boto` config in the guest.
