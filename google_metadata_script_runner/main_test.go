@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -245,5 +246,43 @@ func TestNormalizeFilePathForWindows(t *testing.T) {
 			t.Errorf("Return didn't match expected output for inputs:\n fileName: %s, metadataKey: %s, gcsScriptUrl: %s\n Expected: %s\n Got: %s",
 				tmpFilePath, tc.metadataKey, tc.gcsScriptURLPath, tc.want, got)
 		}
+	}
+}
+
+func TestParseConfig(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "cfg")
+
+	s1 := `
+	[Section]
+	key = value1
+	`
+	s2 := `
+	[Section]
+	key = value2
+	`
+	s3 := `
+	[Section]
+	key = value3
+	`
+
+	if err := os.WriteFile(file, []byte(s1), 0644); err != nil {
+		t.Fatalf("os.WriteFile(%s) failed unexpectedly with error: %v", file, err)
+	}
+	if err := os.WriteFile(file+".distro", []byte(s2), 0644); err != nil {
+		t.Fatalf("os.WriteFile(%s) failed unexpectedly with error: %v", file+".distro", err)
+	}
+	if err := os.WriteFile(file+".template", []byte(s3), 0644); err != nil {
+		t.Fatalf("os.WriteFile(%s) failed unexpectedly with error: %v", file+".template", err)
+	}
+
+	i, err := parseConfig(file)
+	if err != nil {
+		t.Errorf("parseConfig(%s) failed unexpectedly with error: %v", file, err)
+	}
+
+	want := "value1"
+	if got := i.Section("Section").Key("key").String(); got != want {
+		t.Errorf("parseConfig(%s) = %s, want %s", file, got, want)
 	}
 }
