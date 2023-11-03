@@ -403,7 +403,7 @@ func logFormatWindows(e logger.LogEntry) string {
 
 func parseConfig(file string) (*ini.File, error) {
 	// Priority: file.cfg, file.cfg.distro, file.cfg.template
-	cfg, err := ini.LoadSources(ini.LoadOptions{Loose: true, Insensitive: true}, file, file+".distro", file+".template")
+	cfg, err := ini.LoadSources(ini.LoadOptions{Loose: true, Insensitive: true}, file+".template", file+".distro", file)
 	if err != nil {
 		return nil, err
 	}
