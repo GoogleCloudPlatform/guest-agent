@@ -35,7 +35,7 @@ import (
 const (
 	// UEFI variables are of format {VariableName}-{VendorGUID}
 	// googleGUID is Google's (vendors/variable owners) GUID used to prevent name collision with other vendors.
-	googleGUID = "8be4df61-93ca-11d2-aa0d-00e098032b8c"
+	googleGUID = "a2858e46-a37f-456a-8c79-0c1fe48b65ff"
 	// googleRootCACertEFIVarName is predefined string part of the UEFI variable name that holds Root CA cert.
 	googleRootCACertEFIVarName = "InstanceRootCACertificate"
 	// clientCertsKey is the metadata server key at which client identity certificate is exposed.
