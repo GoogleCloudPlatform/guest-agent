@@ -286,6 +286,9 @@ func main() {
 	if action == "noservice" {
 		runAgent(ctx)
 		os.Exit(0)
+	} else if action == "service" {
+		runAgent(ctx)
+		os.Exit(0)
 	}
 
 	if err := register(ctx, "GCEAgent", "GCEAgent", "", runAgent, action); err != nil {
