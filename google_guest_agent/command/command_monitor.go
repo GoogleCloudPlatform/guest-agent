@@ -49,7 +49,7 @@ func Init(ctx context.Context) *Server {
 	to, err := time.ParseDuration(cfg.Get().Unstable.CommandRequestTimeout)
 	if err != nil {
 		logger.Errorf("commmand request timeout configuration is not a valid duration string, falling back to 30s timeout")
-		to = time.Duration(30) * time.Second
+		to = time.Duration(10) * time.Second
 	}
 	var pipemode int64 = 0770
 	pipemode, err = strconv.ParseInt(cfg.Get().Unstable.CommandPipeMode, 8, 32)
