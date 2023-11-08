@@ -27,6 +27,7 @@ import (
 
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events"
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/command"
 	mdsEvent "github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events/metadata"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/osinfo"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/scheduler"
@@ -174,6 +175,9 @@ func runAgent(ctx context.Context) {
 	mdsClient = metadata.New()
 
 	agentInit(ctx)
+
+	cmdsrv := command.Init(ctx)
+	defer cmdsrv.Close()
 
 	// Previous request to metadata *may* not have worked becasue routes don't get added until agentInit.
 	var err error
