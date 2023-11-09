@@ -162,13 +162,13 @@ func TestListen(t *testing.T) {
 	resp := []byte(`{"Status":0,"StatusMessage":"OK"}`)
 	errresp := []byte(`{"Status":1,"StatusMessage":"ERR"}`)
 	req := []byte(`{"ArbitraryData":1234,"Command":"TestListen"}`)
-	h := func(b []byte) []byte {
+	h := func(b []byte) ([]byte, error) {
 		var r testRequest
 		err := json.Unmarshal(b, &r)
 		if err != nil || r.ArbitraryData != 1234 {
-			return errresp
+			return errresp, nil
 		}
-		return resp
+		return resp, nil
 	}
 	RegisterHandler("TestListen", h)
 
@@ -198,12 +198,18 @@ func TestListen(t *testing.T) {
 }
 
 func TestListenTimeout(t *testing.T) {
-	expect := timeoutError
+	expect, err := json.Marshal(TimeoutError)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if runtime.GOOS == "windows" {
 		// winio library does not surface timeouts from the underlying net.Conn as
 		// timeouts, but as generic errors. Timeouts still work they just can't be
 		// detected as timeouts, so they are generic connErrors here.
-		expect = connError
+		expect, err = json.Marshal(ConnError)
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 	ctx := testctx(t)
 	pipe := getTestPipePath(t)
@@ -229,7 +235,7 @@ func TestListenTimeout(t *testing.T) {
 
 func TestHandlerRegistration(t *testing.T) {
 	handlers = make(map[string]Handler)
-	noop := func([]byte) []byte { return nil }
+	noop := func([]byte) ([]byte, error) { return nil, nil }
 	ctx := testctx(t)
 	pipe := getTestPipePath(t)
 	cmdserver = NewCmdServer(pipe, 0770, "-1", time.Second)

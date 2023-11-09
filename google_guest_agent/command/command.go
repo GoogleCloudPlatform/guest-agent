@@ -27,8 +27,9 @@ import (
 // Handler functions are the business logic of commands. They must process json
 // encoded as a byte slice which contains a Command field and optional arbitrary
 // data, and return json which contains a Status, StatusMessage, and optional
-// arbitrary data (again encoded as a byte slice).
-type Handler func([]byte) []byte
+// arbitrary data (again encoded as a byte slice). Returned errors will be
+// passed onto the command requester.
+type Handler func([]byte) ([]byte, error)
 
 // Request is the basic request structure. Command determines which handler the
 // request is routed to. Callers may set additional arbitrary fields.
@@ -48,10 +49,34 @@ type Response struct {
 }
 
 var (
-	cmdNotFound  = []byte(`{"Status":101,"StatusMessage":"Command not found"}`)
-	badRequest   = []byte(`{"Status":102,"StatusMessage":"Could not parse valid JSON from request"}`)
-	connError    = []byte(`{"Status":103,"StatusMessage":"Connection error"}`)
-	timeoutError = []byte(`{"Status":104,"StatusMessage":"Connection timeout before reading valid request"}`)
+	// CmdNotFoundError is return when there is no handler for the request command
+	CmdNotFoundError = Response{
+		Status: 101,
+		StatusMessage: "Could not find a handler for the requested command",
+	}
+	// BadRequestError is returned for invalid or unparseable JSON
+	BadRequestError = Response{
+		Status: 102,
+		StatusMessage: "Could not parse valid JSON from request",
+	}
+	// ConnError is returned for errors from the underlying communication protocol
+	ConnError = Response{
+		Status: 103,
+		StatusMessage: "Connection error",
+	}
+	// ConnError is returned when the timeout period elapses before valid JSON is receieved
+ 	TimeoutError = Response{
+		Status: 104,
+		StatusMessage: "Connection timeout before reading valid request",
+	}
+	// HandlerError is returned when the handler function returns an non-nil error. The status message will be replaced with the returnd error string.
+	HandlerError = Response{
+		Status: 105,
+		StatusMessage: "The command handler encountered an error processing your request",
+	}
+	// InternalErrorCode is the error code for internal command server errors. Returned when failing to marshal a response.
+	InternalErrorCode = 106
+	internalError = []byte(`{"Status":106,"StatusMessage":"The command server encountered an internal error trying to respond to your request"}`)
 	handlersMu   = new(sync.RWMutex)
 	handlers     = make(map[string]Handler)
 )
@@ -101,15 +126,15 @@ func SendCommand(ctx context.Context, req []byte) []byte {
 func SendCmdPipe(ctx context.Context, pipe string, req []byte) []byte {
 	conn, err := dialPipe(ctx, pipe)
 	if err != nil {
-		return connError
+		return marshalOrInternalError(ConnError)
 	}
 	i, err := conn.Write(req)
 	if err != nil || i != len(req) {
-		return connError
+		return marshalOrInternalError(ConnError)
 	}
 	data, err := io.ReadAll(conn)
 	if err != nil {
-		return connError
+		return marshalOrInternalError(ConnError)
 	}
 	return data
 }

@@ -155,16 +155,16 @@ func (c *Server) listen(ctx context.Context) error {
 				}
 				for {
 					if time.Now().After(deadline) {
-						conn.Write(timeoutError)
+						conn.Write(marshalOrInternalError(TimeoutError))
 						return
 					}
 					rune, _, err := r.ReadRune()
 					if err != nil {
 						logger.Debugf("connection read error: %v", err)
 						if errors.Is(err, os.ErrDeadlineExceeded) {
-							conn.Write(timeoutError)
+							conn.Write(marshalOrInternalError(TimeoutError))
 						} else {
-							conn.Write(connError)
+							conn.Write(marshalOrInternalError(ConnError))
 						}
 						return
 					}
@@ -183,17 +183,21 @@ func (c *Server) listen(ctx context.Context) error {
 				var req Request
 				err := json.Unmarshal(b, &req)
 				if err != nil {
-					conn.Write(badRequest)
+					conn.Write(marshalOrInternalError(BadRequestError))
 					return
 				}
 				handlersMu.RLock()
 				defer handlersMu.RUnlock()
 				handler, ok := handlers[req.Command]
 				if !ok {
-					conn.Write(cmdNotFound)
+					conn.Write(marshalOrInternalError(CmdNotFoundError))
 					return
 				}
-				conn.Write(handler(b))
+				resp, err := handler(b)
+				if err != nil {
+					resp = marshalOrInternalError(Response{Status: HandlerError.Status, StatusMessage: err.Error()})
+				}
+				conn.Write(resp)
 			}(conn)
 		}
 	}()
@@ -245,4 +249,13 @@ func (c *Server) Wait(ctx context.Context) error {
 			}
 		}
 	}
+}
+
+func marshalOrInternalError(v any) []byte {
+	// Successfully marshal v into []byte encoded JSON, or return an internal server error as []byte encoded JSON
+	b, err := json.Marshal(v)
+	if err != nil {
+		return internalError
+	}
+	return b
 }
