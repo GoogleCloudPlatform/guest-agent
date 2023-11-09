@@ -35,9 +35,6 @@ const (
 
 func genSecurityDescriptor(filemode int, grp string) string {
 	// This function translates the intention of a unix file mode and owner group into an appropriate SDDL security descriptor for a windows named pipe.
-	// https://learn.microsoft.com/en-us/windows/win32/secauthz/security-descriptor-string-format
-	// https://learn.microsoft.com/en-us/windows/win32/secauthz/sid-strings
-	// https://devblogs.microsoft.com/oldnewthing/20220510-00/?p=106640
 	owner := creatorOwnerSID
 	group := creatorGroupSID
 
