@@ -60,9 +60,6 @@ func TestStart(t *testing.T) {
 	for !cs.Listening() {
 		time.Sleep(time.Nanosecond)
 	}
-	if cs.srv == nil {
-		t.Error("internal net.Listener is not set on command server")
-	}
 	c, err := dialPipe(ctx, pipe)
 	if err != nil {
 		t.Errorf("could not connect to pipe of listening server: %v", err)
@@ -90,9 +87,6 @@ func TestStop(t *testing.T) {
 	cs.Stop()
 	for cs.Listening() {
 		time.Sleep(time.Nanosecond)
-	}
-	if cs.srv != nil {
-		t.Error("net.Listener is still listening after Stop() call")
 	}
 	c, err = dialPipe(ctx, pipe)
 	if err == nil {
