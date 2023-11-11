@@ -19,15 +19,17 @@ import (
 	"fmt"
 	"net/url"
 	"os"
-	"path/filepath"
 	"reflect"
 	"testing"
 
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
 	"github.com/GoogleCloudPlatform/guest-agent/metadata"
 )
 
 func TestMain(m *testing.M) {
-	config, _ = parseConfig("")
+	if err := cfg.Load(nil); err != nil {
+		os.Exit(1)
+	}
 	os.Exit(m.Run())
 }
 
@@ -249,40 +251,49 @@ func TestNormalizeFilePathForWindows(t *testing.T) {
 	}
 }
 
-func TestParseConfig(t *testing.T) {
-	dir := t.TempDir()
-	file := filepath.Join(dir, "cfg")
+func TestGetWantedKeysError(t *testing.T) {
+	// Reset original value.
+	defer cfg.Load(nil)
 
-	s1 := `
-	[Section]
-	key = value1
-	`
-	s2 := `
-	[Section]
-	key = value2
-	`
-	s3 := `
-	[Section]
-	key = value3
-	`
+	tests := []struct {
+		cfg string
+		arg string
+		os  string
+	}{
+		{
+			cfg: `[MetadataScripts]
+			shutdown = false`,
+			arg: "shutdown",
+			os:  "linux",
+		},
+		{
+			cfg: `[MetadataScripts]
+			startup = false`,
+			arg: "startup",
+			os:  "linux",
+		},
+		{
+			cfg: `[MetadataScripts]
+			shutdown-windows = false`,
+			arg: "shutdown",
+			os:  "windows",
+		},
+		{
+			cfg: `[MetadataScripts]
+			startup-windows = false`,
+			arg: "startup",
+			os:  "windows",
+		},
+	}
 
-	if err := os.WriteFile(file, []byte(s1), 0644); err != nil {
-		t.Fatalf("os.WriteFile(%s) failed unexpectedly with error: %v", file, err)
-	}
-	if err := os.WriteFile(file+".distro", []byte(s2), 0644); err != nil {
-		t.Fatalf("os.WriteFile(%s) failed unexpectedly with error: %v", file+".distro", err)
-	}
-	if err := os.WriteFile(file+".template", []byte(s3), 0644); err != nil {
-		t.Fatalf("os.WriteFile(%s) failed unexpectedly with error: %v", file+".template", err)
-	}
-
-	i, err := parseConfig(file)
-	if err != nil {
-		t.Errorf("parseConfig(%s) failed unexpectedly with error: %v", file, err)
-	}
-
-	want := "value1"
-	if got := i.Section("Section").Key("key").String(); got != want {
-		t.Errorf("parseConfig(%s) = %s, want %s", file, got, want)
+	for _, test := range tests {
+		t.Run(test.os+"-"+test.arg, func(t *testing.T) {
+			if err := cfg.Load([]byte(test.cfg)); err != nil {
+				t.Errorf("cfg.Load(%s) failed unexpectedly with error: %v", test.cfg, err)
+			}
+			if _, err := getWantedKeys([]string{"", test.arg}, test.os); err == nil {
+				t.Errorf("getWantedKeys(%s, %s) succeeded for disabled config, want error", test.arg, test.os)
+			}
+		})
 	}
 }
