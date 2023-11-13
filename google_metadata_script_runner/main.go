@@ -38,15 +38,13 @@ import (
 	"time"
 
 	"cloud.google.com/go/storage"
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
 	"github.com/GoogleCloudPlatform/guest-agent/metadata"
 	"github.com/GoogleCloudPlatform/guest-agent/utils"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
-	"github.com/go-ini/ini"
 )
 
 const (
-	winConfigPath  = `C:\Program Files\Google\Compute Engine\instance_configs.cfg`
-	configPath     = "/etc/default/instance_configs.cfg"
 	storageURL     = "storage.googleapis.com"
 	bucket         = "([a-z0-9][-_.a-z0-9]*)"
 	object         = "(.+)"
@@ -58,7 +56,6 @@ var (
 	programName    = path.Base(os.Args[0])
 	powerShellArgs = []string{"-NoProfile", "-NoLogo", "-ExecutionPolicy", "Unrestricted", "-File"}
 	errUsage       = fmt.Errorf("no valid arguments specified. Specify one of \"startup\", \"shutdown\" or \"specialize\"")
-	config         *ini.File
 
 	// Many of the Google Storage URLs are supported below.
 	// It is preferred that customers specify their object using
@@ -268,7 +265,7 @@ func setupAndRunScript(ctx context.Context, metadataKey string, value string) er
 	}
 
 	// Make temp directory.
-	tmpDir, err := os.MkdirTemp(config.Section("MetadataScripts").Key("run_dir").String(), "metadata-scripts")
+	tmpDir, err := os.MkdirTemp(cfg.Get().MetadataScripts.RunDir, "metadata-scripts")
 	if err != nil {
 		return err
 	}
@@ -278,7 +275,10 @@ func setupAndRunScript(ctx context.Context, metadataKey string, value string) er
 	if runtime.GOOS == "windows" {
 		tmpFile = normalizeFilePathForWindows(tmpFile, metadataKey, gcsScriptURL)
 	}
-	writeScriptToFile(ctx, value, tmpFile, gcsScriptURL)
+
+	if err := writeScriptToFile(ctx, value, tmpFile, gcsScriptURL); err != nil {
+		return fmt.Errorf("unable to write script to file: %v", err)
+	}
 
 	return runScript(tmpFile, metadataKey)
 }
@@ -292,7 +292,7 @@ func runScript(filePath string, metadataKey string) error {
 		if runtime.GOOS == "windows" {
 			cmd = exec.Command(filePath)
 		} else {
-			cmd = exec.Command(config.Section("MetadataScripts").Key("default_shell").MustString("/bin/bash"), "-c", filePath)
+			cmd = exec.Command(cfg.Get().MetadataScripts.DefaultShell, "-c", filePath)
 		}
 	}
 	return runCmd(cmd, metadataKey)
@@ -341,12 +341,27 @@ func getWantedKeys(args []string, os string) ([]string, error) {
 	switch prefix {
 	case "specialize":
 		prefix = "sysprep-specialize"
-	case "startup", "shutdown":
+	case "startup":
 		if os == "windows" {
 			prefix = "windows-" + prefix
+			if !cfg.Get().MetadataScripts.StartupWindows {
+				return nil, fmt.Errorf("windows startup scripts disabled in instance config")
+			}
+		} else {
+			if !cfg.Get().MetadataScripts.Startup {
+				return nil, fmt.Errorf("startup scripts disabled in instance config")
+			}
 		}
-		if !config.Section("MetadataScripts").Key(prefix).MustBool(true) {
-			return nil, fmt.Errorf("%s scripts disabled in instance config", prefix)
+	case "shutdown":
+		if os == "windows" {
+			prefix = "windows-" + prefix
+			if !cfg.Get().MetadataScripts.ShutdownWindows {
+				return nil, fmt.Errorf("windows shutdown scripts disabled in instance config")
+			}
+		} else {
+			if !cfg.Get().MetadataScripts.Shutdown {
+				return nil, fmt.Errorf("shutdown scripts disabled in instance config")
+			}
 		}
 	default:
 		return nil, errUsage
@@ -401,23 +416,12 @@ func logFormatWindows(e logger.LogEntry) string {
 	return fmt.Sprintf("%s %s: %s", now, programName, e.Message)
 }
 
-func parseConfig(file string) (*ini.File, error) {
-	// Priority: file.cfg, file.cfg.distro, file.cfg.template
-	cfg, err := ini.LoadSources(ini.LoadOptions{Loose: true, Insensitive: true}, file, file+".distro", file+".template")
-	if err != nil {
-		return nil, err
-	}
-	return cfg, nil
-}
-
 func main() {
 	ctx := context.Background()
 
 	opts := logger.LogOpts{LoggerName: programName}
 
-	cfgfile := configPath
 	if runtime.GOOS == "windows" {
-		cfgfile = winConfigPath
 		opts.Writers = []io.Writer{&utils.SerialPort{Port: "COM1"}, os.Stdout}
 		opts.FormatFunction = logFormatWindows
 	} else {
@@ -428,9 +432,9 @@ func main() {
 	}
 
 	var err error
-	config, err = parseConfig(cfgfile)
-	if err != nil && !os.IsNotExist(err) {
-		fmt.Printf("Error parsing instance config %s: %s\n", cfgfile, err.Error())
+	if err := cfg.Load(nil); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to load instance configuration: %+v", err)
+		os.Exit(1)
 	}
 
 	// The keys to check vary based on the argument and the OS. Also functions to validate arguments.
@@ -466,7 +470,7 @@ func main() {
 		}
 		logger.Infof("Found %s in metadata.", wantedKey)
 		if err := setupAndRunScript(ctx, wantedKey, value); err != nil {
-			logger.Infof("%s %s", wantedKey, err)
+			logger.Warningf("Script %q failed with error: %v", wantedKey, err)
 			continue
 		}
 		logger.Infof("%s exit status 0", wantedKey)

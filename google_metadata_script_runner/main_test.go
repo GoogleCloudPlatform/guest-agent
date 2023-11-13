@@ -22,11 +22,14 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
 	"github.com/GoogleCloudPlatform/guest-agent/metadata"
 )
 
 func TestMain(m *testing.M) {
-	config, _ = parseConfig("")
+	if err := cfg.Load(nil); err != nil {
+		os.Exit(1)
+	}
 	os.Exit(m.Run())
 }
 
@@ -245,5 +248,52 @@ func TestNormalizeFilePathForWindows(t *testing.T) {
 			t.Errorf("Return didn't match expected output for inputs:\n fileName: %s, metadataKey: %s, gcsScriptUrl: %s\n Expected: %s\n Got: %s",
 				tmpFilePath, tc.metadataKey, tc.gcsScriptURLPath, tc.want, got)
 		}
+	}
+}
+
+func TestGetWantedKeysError(t *testing.T) {
+	// Reset original value.
+	defer cfg.Load(nil)
+
+	tests := []struct {
+		cfg string
+		arg string
+		os  string
+	}{
+		{
+			cfg: `[MetadataScripts]
+			shutdown = false`,
+			arg: "shutdown",
+			os:  "linux",
+		},
+		{
+			cfg: `[MetadataScripts]
+			startup = false`,
+			arg: "startup",
+			os:  "linux",
+		},
+		{
+			cfg: `[MetadataScripts]
+			shutdown-windows = false`,
+			arg: "shutdown",
+			os:  "windows",
+		},
+		{
+			cfg: `[MetadataScripts]
+			startup-windows = false`,
+			arg: "startup",
+			os:  "windows",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.os+"-"+test.arg, func(t *testing.T) {
+			if err := cfg.Load([]byte(test.cfg)); err != nil {
+				t.Errorf("cfg.Load(%s) failed unexpectedly with error: %v", test.cfg, err)
+			}
+			if _, err := getWantedKeys([]string{"", test.arg}, test.os); err == nil {
+				t.Errorf("getWantedKeys(%s, %s) succeeded for disabled config, want error", test.arg, test.os)
+			}
+		})
 	}
 }
