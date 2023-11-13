@@ -152,7 +152,6 @@ func TestListen(t *testing.T) {
 	}
 
 	ctx := testctx(t)
-	pipe := getTestPipePath(t)
 	resp := []byte(`{"Status":0,"StatusMessage":"OK"}`)
 	errresp := []byte(`{"Status":1,"StatusMessage":"ERR"}`)
 	req := []byte(`{"ArbitraryData":1234,"Command":"TestListen"}`)
@@ -168,6 +167,7 @@ func TestListen(t *testing.T) {
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T){
+			pipe := getTestPipePath(t)
 			cs := NewCmdServer(pipe, tc.filemode, tc.group, time.Second)
 			cs.Start()
 			go cs.Wait(ctx)
