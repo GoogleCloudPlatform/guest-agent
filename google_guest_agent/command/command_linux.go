@@ -20,9 +20,9 @@ import (
 	"os"
 	"os/user"
 	"path"
+	"runtime"
 	"strconv"
 	"syscall"
-	"runtime"
 
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 )

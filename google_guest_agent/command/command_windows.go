@@ -17,18 +17,18 @@ package command
 import (
 	"context"
 	"fmt"
-	"os/user"
 	"net"
+	"os/user"
 
-	"github.com/Microsoft/go-winio"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
+	"github.com/Microsoft/go-winio"
 )
 
 const (
 	// DefaultPipePath is the default named pipe path for windows.
 	DefaultPipePath = `\\.\pipe\google-guest-agent-network-events`
-	nullSID = "S-1-0-0"
-	worldSID = "S-1-1-0"
+	nullSID         = "S-1-0-0"
+	worldSID        = "S-1-1-0"
 	creatorOwnerSID = "S-1-3-0"
 	creatorGroupSID = "S-1-3-1"
 )
@@ -87,9 +87,9 @@ func listen(ctx context.Context, path string, filemode int, group string) (net.L
 			return nil, fmt.Errorf("context expired: %v before successful listen (last error: %v)", ctx.Err(), lastError)
 		}
 		config := &winio.PipeConfig{
-			MessageMode: false,
-			InputBufferSize: 1024,
-			OutputBufferSize: 1024,
+			MessageMode:        false,
+			InputBufferSize:    1024,
+			OutputBufferSize:   1024,
 			SecurityDescriptor: genSecurityDescriptor(filemode, group),
 		}
 		l, lastError = winio.ListenPipe(path, config)

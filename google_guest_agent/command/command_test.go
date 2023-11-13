@@ -18,8 +18,8 @@ import (
 	"context"
 	"encoding/json"
 	"io"
-	"os/user"
 	"math/rand"
+	"os/user"
 	"path"
 	"runtime"
 	"testing"
@@ -28,7 +28,7 @@ import (
 
 func getTestPipePath(t *testing.T) string {
 	if runtime.GOOS == "windows" {
-		return `\\.\pipe\google-guest-agent-network-events-test-`+t.Name()
+		return `\\.\pipe\google-guest-agent-network-events-test-` + t.Name()
 	}
 	return path.Join(t.TempDir(), "run", "pipe")
 }
@@ -124,30 +124,30 @@ func TestListen(t *testing.T) {
 	if err != nil {
 		t.Fatalf("could not get user groups for %s: %v", cu.Name, err)
 	}
-	testcases := []struct{
-		name string
+	testcases := []struct {
+		name     string
 		filemode int
-		group string
+		group    string
 	}{
 		{
-			name: "world read/writeable",
+			name:     "world read/writeable",
 			filemode: 0777,
-			group: "-1",
+			group:    "-1",
 		},
 		{
-			name: "group read/writeable",
+			name:     "group read/writeable",
 			filemode: 0770,
-			group: "-1",
+			group:    "-1",
 		},
 		{
-			name: "user read/writeable",
+			name:     "user read/writeable",
 			filemode: 0700,
-			group: "-1",
+			group:    "-1",
 		},
 		{
-			name: "additional user group as group owner",
+			name:     "additional user group as group owner",
 			filemode: 0770,
-			group: ug[rand.Intn(len(ug))],
+			group:    ug[rand.Intn(len(ug))],
 		},
 	}
 
@@ -166,7 +166,7 @@ func TestListen(t *testing.T) {
 	RegisterHandler("TestListen", h)
 
 	for _, tc := range testcases {
-		t.Run(tc.name, func(t *testing.T){
+		t.Run(tc.name, func(t *testing.T) {
 			pipe := getTestPipePath(t)
 			cs := NewCmdServer(pipe, tc.filemode, tc.group, time.Second)
 			cs.Start()

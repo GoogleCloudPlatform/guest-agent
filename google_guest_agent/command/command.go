@@ -51,34 +51,34 @@ type Response struct {
 var (
 	// CmdNotFoundError is return when there is no handler for the request command
 	CmdNotFoundError = Response{
-		Status: 101,
+		Status:        101,
 		StatusMessage: "Could not find a handler for the requested command",
 	}
 	// BadRequestError is returned for invalid or unparseable JSON
 	BadRequestError = Response{
-		Status: 102,
+		Status:        102,
 		StatusMessage: "Could not parse valid JSON from request",
 	}
 	// ConnError is returned for errors from the underlying communication protocol
 	ConnError = Response{
-		Status: 103,
+		Status:        103,
 		StatusMessage: "Connection error",
 	}
-	// ConnError is returned when the timeout period elapses before valid JSON is receieved
- 	TimeoutError = Response{
-		Status: 104,
+	// TimeoutError is returned when the timeout period elapses before valid JSON is receieved
+	TimeoutError = Response{
+		Status:        104,
 		StatusMessage: "Connection timeout before reading valid request",
 	}
 	// HandlerError is returned when the handler function returns an non-nil error. The status message will be replaced with the returnd error string.
 	HandlerError = Response{
-		Status: 105,
+		Status:        105,
 		StatusMessage: "The command handler encountered an error processing your request",
 	}
 	// InternalErrorCode is the error code for internal command server errors. Returned when failing to marshal a response.
 	InternalErrorCode = 106
-	internalError = []byte(`{"Status":106,"StatusMessage":"The command server encountered an internal error trying to respond to your request"}`)
-	handlersMu   = new(sync.RWMutex)
-	handlers     = make(map[string]Handler)
+	internalError     = []byte(`{"Status":106,"StatusMessage":"The command server encountered an internal error trying to respond to your request"}`)
+	handlersMu        = new(sync.RWMutex)
+	handlers          = make(map[string]Handler)
 )
 
 // RegisterHandler registers f as the handler for cmd. If a command.Server has
