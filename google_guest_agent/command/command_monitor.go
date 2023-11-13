@@ -137,6 +137,9 @@ func (c *Server) listen(ctx context.Context) error {
 			}
 			conn, err := srv.Accept()
 			if err != nil {
+				if err == net.ErrClosed {
+					break
+				}
 				logger.Infof("error on connection to pipe %s: %v", c.pipe, err)
 				continue
 			}
