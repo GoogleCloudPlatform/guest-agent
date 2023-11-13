@@ -228,7 +228,6 @@ func (c *Server) Wait(ctx context.Context) error {
 					err := c.listen(ctx)
 					if err != nil {
 						logger.Errorf("could not listen for commands on pipe %s: %v", c.pipe, err)
-					} else {
 					}
 				}
 				c.srvMu.Unlock()
