@@ -60,7 +60,7 @@ func Init(ctx context.Context) *Server {
 	go func() {
 		err := cmdserver.Wait(ctx)
 		if err != nil {
-			logger.Infof("stopped waiting for commands: %v", err)
+			logger.Errorf("stopped waiting for commands: %v", err)
 		}
 	}()
 	handlersMu.RLock()
