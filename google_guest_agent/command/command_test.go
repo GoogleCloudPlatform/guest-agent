@@ -131,7 +131,7 @@ func TestListen(t *testing.T) {
 	}{
 		{
 			name: "world read/writeable",
-			filemode: 0770,
+			filemode: 0777,
 			group: "-1",
 		},
 		{
