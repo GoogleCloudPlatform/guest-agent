@@ -26,8 +26,8 @@ import (
 	"time"
 
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
-	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/command"
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events"
 	mdsEvent "github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events/metadata"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/osinfo"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/scheduler"
