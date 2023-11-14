@@ -36,12 +36,17 @@ import (
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 )
 
+var cmdServer *Server
+
 // Init starts an internally managed command server which will begin listening
 // when handlers register, and stop listening when all handlers unregister. The
 // agent configuration will decide the server options. Returns a reference to
 // the internally managed command server which the caller can Close() when
 // appropriate.
 func Init(ctx context.Context) *Server {
+	if cmdServer != nil {
+		return cmdServer
+	}
 	pipe := cfg.Get().Unstable.CommandPipePath
 	if pipe == "" {
 		pipe = DefaultPipePath
@@ -56,9 +61,9 @@ func Init(ctx context.Context) *Server {
 	if err != nil {
 		logger.Errorf("could not parse command_pipe_mode as octal integer: %v falling back to mode 0770", err)
 	}
-	cmdserver = NewCmdServer(pipe, int(pipemode), cfg.Get().Unstable.CommandPipeGroup, to)
+	cmdServer = NewCmdServer(pipe, int(pipemode), cfg.Get().Unstable.CommandPipeGroup, to)
 	go func() {
-		err := cmdserver.Wait(ctx)
+		err := cmdServer.Wait(ctx)
 		if err != nil {
 			logger.Errorf("stopped waiting for commands: %v", err)
 		}
@@ -66,9 +71,9 @@ func Init(ctx context.Context) *Server {
 	handlersMu.RLock()
 	defer handlersMu.RUnlock()
 	if len(handlers) > 0 {
-		cmdserver.Start()
+		cmdServer.Start()
 	}
-	return cmdserver
+	return cmdServer
 }
 
 // NewCmdServer returns a pointer to a new Server listening on pipe p. Few
@@ -85,10 +90,6 @@ func NewCmdServer(p string, fm int, group string, to time.Duration) *Server {
 	}
 	return &cs
 }
-
-var (
-	cmdserver *Server
-)
 
 // Server is the server structure which will listen for command requests and
 // route them to handlers. Most callers should not interact with this directly.
