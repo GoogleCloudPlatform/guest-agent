@@ -14,9 +14,8 @@
 
 /*
  * This file contains the details of command's internal communication protocol
- * listener. Outside of using NewCmdServer in unit tests involving commands, most
- * callers should not need to call anything in this file. The command handler
- * and caller API is contained in command.go.
+ * listener. Most callers should not need to call anything in this file. The
+ * command handler and caller API is contained in command.go.
  */
 
 package command
@@ -61,7 +60,7 @@ func Init(ctx context.Context) *Server {
 	if err != nil {
 		logger.Errorf("could not parse command_pipe_mode as octal integer: %v falling back to mode 0770", err)
 	}
-	cmdServer = NewCmdServer(pipe, int(pipemode), cfg.Get().Unstable.CommandPipeGroup, to)
+	cmdServer = newCmdServer(pipe, int(pipemode), cfg.Get().Unstable.CommandPipeGroup, to)
 	go func() {
 		err := cmdServer.Wait(ctx)
 		if err != nil {
@@ -76,10 +75,7 @@ func Init(ctx context.Context) *Server {
 	return cmdServer
 }
 
-// NewCmdServer returns a pointer to a new Server listening on pipe p. Few
-// callers should be using this outside of unit testing, Init should be called
-// once and Server should be managed internally instead.
-func NewCmdServer(p string, fm int, group string, to time.Duration) *Server {
+func newCmdServer(p string, fm int, group string, to time.Duration) *Server {
 	cs := Server{
 		pipe:      p,
 		pipeMode:  fm,
@@ -219,7 +215,7 @@ func (c *Server) Wait(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
-			log.Infof("Wait context canceled for cmdServer: %v", ctx.Err())
+			logger.Infof("Wait context canceled for cmdServer: %v", ctx.Err())
 			return nil
 		case sig := <-c.signal:
 			switch sig {

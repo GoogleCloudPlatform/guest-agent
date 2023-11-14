@@ -90,8 +90,8 @@ func RegisterHandler(cmd string, f Handler) error {
 	handlersMu.Lock()
 	defer handlersMu.Unlock()
 	handlers[cmd] = f
-	if cmdserver != nil {
-		cmdserver.Start()
+	if cmdServer != nil {
+		cmdServer.Start()
 	}
 	return nil
 }
@@ -106,8 +106,8 @@ func UnregisterHandler(cmd string) error {
 	handlersMu.Lock()
 	defer handlersMu.Unlock()
 	delete(handlers, cmd)
-	if len(handlers) == 0 && cmdserver != nil {
-		cmdserver.Stop()
+	if len(handlers) == 0 && cmdServer != nil {
+		cmdServer.Stop()
 	}
 	return nil
 }
