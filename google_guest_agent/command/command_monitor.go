@@ -219,7 +219,8 @@ func (c *Server) Wait(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			log.Infof("Wait context canceled for cmdServer: %v", ctx.Err())
+			return nil
 		case sig := <-c.signal:
 			switch sig {
 			case "START":
