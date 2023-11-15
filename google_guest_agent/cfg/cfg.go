@@ -296,9 +296,9 @@ func defaultDataSources(extraDefaults []byte) []interface{} {
 	}
 
 	return append(res, []interface{}{
+		config,
 		config + ".distro",
 		config + ".template",
-		config,
 	}...)
 }
 
