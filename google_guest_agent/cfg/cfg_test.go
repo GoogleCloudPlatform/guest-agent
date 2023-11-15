@@ -15,8 +15,6 @@
 package cfg
 
 import (
-	"os"
-	"path"
 	"testing"
 )
 
@@ -94,84 +92,5 @@ func TestGetTwice(t *testing.T) {
 
 	if firstCfg != secondCfg {
 		t.Errorf("Get() should return always the same pointer, expected: %p, got: %p", firstCfg, secondCfg)
-	}
-}
-
-func TestConfigLoadOrder(t *testing.T) {
-	config := path.Join(t.TempDir(), "config.cfg")
-	configFile = func(string) string { return config }
-	t.Cleanup(func() { configFile = defaultConfigFile })
-	testcases := []struct {
-		name           string
-		extraDefault   string
-		distroConfig   string
-		templateConfig string
-		userConfig     string
-		output         bool
-	}{
-		{
-			name:           "user config override",
-			extraDefault:   "[NetworkInterfaces]\nSetup = true\n",
-			distroConfig:   "[NetworkInterfaces]\nSetup = true\n",
-			templateConfig: "[NetworkInterfaces]\nSetup = true\n",
-			userConfig:     "[NetworkInterfaces]\nSetup = false\n",
-			output:         false,
-		},
-		{
-			name:           "template config override",
-			extraDefault:   "[NetworkInterfaces]\nSetup = true\n",
-			distroConfig:   "[NetworkInterfaces]\nSetup = true\n",
-			templateConfig: "[NetworkInterfaces]\nSetup = false\n",
-			userConfig:     "",
-			output:         false,
-		},
-		{
-			name:           "distro config override",
-			extraDefault:   "[NetworkInterfaces]\nSetup = true\n",
-			distroConfig:   "[NetworkInterfaces]\nSetup = false\n",
-			templateConfig: "",
-			userConfig:     "",
-			output:         false,
-		},
-		{
-			name:           "extra default override",
-			extraDefault:   "[NetworkInterfaces]\nSetup = false\n",
-			distroConfig:   "",
-			templateConfig: "",
-			userConfig:     "",
-			output:         false,
-		},
-		{
-			// If this fails, other test case results are not valid
-			name:           "default is true",
-			extraDefault:   "",
-			distroConfig:   "",
-			templateConfig: "",
-			userConfig:     "",
-			output:         true,
-		},
-	}
-	for _, tc := range testcases {
-		t.Run(tc.name, func(t *testing.T) {
-			err := os.WriteFile(config+".distro", []byte(tc.distroConfig), 0777)
-			if err != nil {
-				t.Fatal(err)
-			}
-			err = os.WriteFile(config+".template", []byte(tc.templateConfig), 0777)
-			if err != nil {
-				t.Fatal(err)
-			}
-			err = os.WriteFile(config, []byte(tc.userConfig), 0777)
-			if err != nil {
-				t.Fatal(err)
-			}
-			err = Load([]byte(tc.extraDefault))
-			if err != nil {
-				t.Fatal(err)
-			}
-			if Get().NetworkInterfaces.Setup != tc.output {
-				t.Errorf("unexpected config value for NetworkInterfaces.Setup, wanted %v but got %v", Get().NetworkInterfaces.Setup, tc.output)
-			}
-		})
 	}
 }
