@@ -26,7 +26,7 @@ import (
 
 const (
 	// DefaultPipePath is the default named pipe path for windows.
-	DefaultPipePath = `\\.\pipe\google-guest-agent-network-events`
+	DefaultPipePath = `\\.\pipe\google-guest-agent-commands`
 	nullSID         = "S-1-0-0"
 	worldSID        = "S-1-1-0"
 	creatorOwnerSID = "S-1-3-0"

@@ -40,13 +40,11 @@ var cmdMonitor *Monitor = &Monitor{
 	handlers: make(map[string]Handler),
 }
 
-// Init starts an internally managed command server which will begin listening
-// when handlers register, and stop listening when all handlers unregister. The
-// agent configuration will decide the server options. Returns a reference to
-// the internally managed command server which the caller can Close() when
-// appropriate.
+// Init starts an internally managed command server. The agent configuration
+// will decide the server options. Returns a reference to the internally managed
+// command monitor which the caller can Close() when appropriate.
 func Init(ctx context.Context) *Monitor {
-	if !cfg.Get().Unstable.CommandMonitorEnabled || cmdMonitor.srv != nil {
+	if cmdMonitor.srv != nil {
 		return cmdMonitor
 	}
 	pipe := cfg.Get().Unstable.CommandPipePath

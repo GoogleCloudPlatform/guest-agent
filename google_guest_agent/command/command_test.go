@@ -55,7 +55,7 @@ func cmdServerForTest(t *testing.T, pipeMode int, pipeGroup string, timeout time
 
 func getTestPipePath(t *testing.T) string {
 	if runtime.GOOS == "windows" {
-		return `\\.\pipe\google-guest-agent-network-events-test-` + t.Name()
+		return `\\.\pipe\google-guest-agent-commands-test-` + t.Name()
 	}
 	return path.Join(t.TempDir(), "run", "pipe")
 }
