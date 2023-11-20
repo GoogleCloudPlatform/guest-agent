@@ -43,7 +43,7 @@ var cmdServer *Server
 // the internally managed command server which the caller can Close() when
 // appropriate.
 func Init(ctx context.Context) *Server {
-	if cmdServer != nil {
+	if !cfg.Get().Unstable.CommandMonitorEnabled || cmdServer != nil {
 		return cmdServer
 	}
 	pipe := cfg.Get().Unstable.CommandPipePath
