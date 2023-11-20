@@ -35,16 +35,19 @@ import (
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 )
 
-var cmdServer *Server
+var cmdMonitor *Monitor = &Monitor{
+	handlersMu: new(sync.RWMutex),
+	handlers: make(map[string]Handler),
+}
 
 // Init starts an internally managed command server which will begin listening
 // when handlers register, and stop listening when all handlers unregister. The
 // agent configuration will decide the server options. Returns a reference to
 // the internally managed command server which the caller can Close() when
 // appropriate.
-func Init(ctx context.Context) *Server {
-	if !cfg.Get().Unstable.CommandMonitorEnabled || cmdServer != nil {
-		return cmdServer
+func Init(ctx context.Context) *Monitor {
+	if !cfg.Get().Unstable.CommandMonitorEnabled || cmdMonitor.srv != nil {
+		return cmdMonitor
 	}
 	pipe := cfg.Get().Unstable.CommandPipePath
 	if pipe == "" {
@@ -60,32 +63,28 @@ func Init(ctx context.Context) *Server {
 	if err != nil {
 		logger.Errorf("could not parse command_pipe_mode as octal integer: %v falling back to mode 0770", err)
 	}
-	cmdServer = newCmdServer(pipe, int(pipemode), cfg.Get().Unstable.CommandPipeGroup, to)
-	err = cmdServer.Start(ctx)
+	cmdMonitor.srv = &Server{
+		pipe: pipe,
+		pipeMode: int(pipemode),
+		pipeGroup: cfg.Get().Unstable.CommandPipeGroup,
+		timeout: to,
+		monitor: cmdMonitor,
+	}
+	err = cmdMonitor.srv.Start(ctx)
 	if err != nil {
 		logger.Errorf("failed to start command server: %s", err)
 	}
-	return cmdServer
+	return cmdMonitor
 }
 
 // Monitor is the structure which handles command registration and deregistration.
 type Monitor struct {
 	srv *Server
-	handlersMu *sync.Mutex
+	handlersMu *sync.RWMutex
 	handlers map[string]Handler
 }
 
 func (m *Monitor) Close() error { return m.srv.Close() }
-
-func newCmdServer(p string, fm int, group string, to time.Duration) *Server {
-	cs := Server{
-		pipe:      p,
-		pipeMode:  fm,
-		pipeGroup: group,
-		timeout:   to,
-	}
-	return &cs
-}
 
 // Server is the server structure which will listen for command requests and
 // route them to handlers. Most callers should not interact with this directly.
@@ -95,6 +94,7 @@ type Server struct {
 	pipeGroup string
 	timeout   time.Duration
 	srv       net.Listener
+	monitor	  *Monitor
 }
 
 // Close signals the server to stop listening for commands and stop waiting to
@@ -190,9 +190,9 @@ func (c *Server) Start(ctx context.Context) error {
 					}
 					return
 				}
-				handlersMu.RLock()
-				defer handlersMu.RUnlock()
-				handler, ok := handlers[req.Command]
+				c.monitor.handlersMu.RLock()
+				defer c.monitor.handlersMu.RUnlock()
+				handler, ok := c.monitor.handlers[req.Command]
 				if !ok {
 					if b, err := json.Marshal(CmdNotFoundError); err != nil {
 						conn.Write(internalError)

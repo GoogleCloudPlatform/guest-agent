@@ -20,10 +20,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"sync"
 
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
 )
+
+// Get returns the current command monitor which can be used to register command handlers.
+func Get() *Monitor {
+	return cmdMonitor
+}
 
 // Handler functions are the business logic of commands. They must process json
 // encoded as a byte slice which contains a Command field and optional arbitrary
@@ -78,32 +82,30 @@ var (
 	// InternalErrorCode is the error code for internal command server errors. Returned when failing to marshal a response.
 	InternalErrorCode = 106
 	internalError     = []byte(`{"Status":106,"StatusMessage":"The command server encountered an internal error trying to respond to your request"}`)
-	handlersMu        = new(sync.RWMutex)
-	handlers          = make(map[string]Handler)
 )
 
 // RegisterHandler registers f as the handler for cmd. If a command.Server has
 // been initialized, it will be signalled to start listening for commands.
-func RegisterHandler(cmd string, f Handler) error {
-	handlersMu.Lock()
-	defer handlersMu.Unlock()
-	if _, ok := handlers[cmd]; ok {
+func (m *Monitor)RegisterHandler(cmd string, f Handler) error {
+	m.handlersMu.Lock()
+	defer m.handlersMu.Unlock()
+	if _, ok := m.handlers[cmd]; ok {
 		return fmt.Errorf("cmd %s is already handled", cmd)
 	}
-	handlers[cmd] = f
+	m.handlers[cmd] = f
 	return nil
 }
 
 // UnregisterHandler clears the handlers for cmd. If a command.Server has been
 // intialized and there are no more handlers registered, the server will be
 // signalled to stop listening for commands.
-func UnregisterHandler(cmd string) error {
-	handlersMu.Lock()
-	defer handlersMu.Unlock()
-	if _, ok := handlers[cmd]; !ok {
+func (m *Monitor)UnregisterHandler(cmd string) error {
+	m.handlersMu.Lock()
+	defer m.handlersMu.Unlock()
+	if _, ok := m.handlers[cmd]; !ok {
 		return fmt.Errorf("cmd %s is not registered", cmd)
 	}
-	delete(handlers, cmd)
+	delete(m.handlers, cmd)
 	return nil
 }
 

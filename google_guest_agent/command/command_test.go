@@ -22,10 +22,36 @@ import (
 	"math/rand"
 	"os/user"
 	"path"
+	"sync"
 	"runtime"
 	"testing"
 	"time"
 )
+
+func cmdServerForTest(t *testing.T, pipeMode int, pipeGroup string, timeout time.Duration) *Server {
+	cs := &Server {
+		pipe: getTestPipePath(t),
+		pipeMode: pipeMode,
+		pipeGroup: pipeGroup,
+		timeout: timeout,
+		monitor: &Monitor{
+			handlersMu: new(sync.RWMutex),
+			handlers: make(map[string]Handler),
+		},
+	}
+	cs.monitor.srv = cs
+	err := cs.Start(testctx(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		err := cs.Close()
+		if err != nil {
+			t.Errorf("error closing command server: %v", err)
+		}
+	})
+	return cs
+}
 
 func getTestPipePath(t *testing.T) string {
 	if runtime.GOOS == "windows" {
@@ -51,19 +77,6 @@ type testRequest struct {
 	ArbitraryData int
 }
 
-func TestClose(t *testing.T) {
-	ctx := testctx(t)
-	cs := newCmdServer(getTestPipePath(t), 0770, "-1", time.Second)
-	err := cs.Start(ctx)
-	if err != nil {
-		t.Errorf("unexpected error waiting for commands: %v", err)
-	}
-	err = cs.Close()
-	if err != nil {
-		t.Errorf("unexpected error closing server: %v", err)
-	}
-}
-
 func TestListen(t *testing.T) {
 	cu, err := user.Current()
 	if err != nil {
@@ -73,6 +86,18 @@ func TestListen(t *testing.T) {
 	if err != nil {
 		t.Fatalf("could not get user groups for %s: %v", cu.Name, err)
 	}
+	resp := []byte(`{"Status":0,"StatusMessage":"OK"}`)
+	errresp := []byte(`{"Status":1,"StatusMessage":"ERR"}`)
+	req := []byte(`{"ArbitraryData":1234,"Command":"TestListen"}`)
+	h := func(b []byte) ([]byte, error) {
+		var r testRequest
+		err := json.Unmarshal(b, &r)
+		if err != nil || r.ArbitraryData != 1234 {
+			return errresp, nil
+		}
+		return resp, nil
+	}
+
 	testcases := []struct {
 		name     string
 		filemode int
@@ -99,30 +124,14 @@ func TestListen(t *testing.T) {
 			group:    ug[rand.Intn(len(ug))],
 		},
 	}
-
-	ctx := testctx(t)
-	resp := []byte(`{"Status":0,"StatusMessage":"OK"}`)
-	errresp := []byte(`{"Status":1,"StatusMessage":"ERR"}`)
-	req := []byte(`{"ArbitraryData":1234,"Command":"TestListen"}`)
-	h := func(b []byte) ([]byte, error) {
-		var r testRequest
-		err := json.Unmarshal(b, &r)
-		if err != nil || r.ArbitraryData != 1234 {
-			return errresp, nil
-		}
-		return resp, nil
-	}
-	RegisterHandler("TestListen", h)
-
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			pipe := getTestPipePath(t)
-			cs := newCmdServer(pipe, tc.filemode, tc.group, time.Second)
-			err := cs.Start(ctx)
+			cs := cmdServerForTest(t, tc.filemode, tc.group, time.Second)
+			err := cs.monitor.RegisterHandler("TestListen", h)
 			if err != nil {
-				t.Errorf("could not start server: %v", err)
+				t.Errorf("could not register handler: %v", err)
 			}
-			d := SendCmdPipe(ctx, pipe, req)
+			d := SendCmdPipe(testctx(t), cs.pipe, req)
 			var r Response
 			err = json.Unmarshal(d, &r)
 			if err != nil {
@@ -131,35 +140,27 @@ func TestListen(t *testing.T) {
 			if r.Status != 0 || r.StatusMessage != "OK" {
 				t.Errorf("unexpected status from test-cmd, want 0, \"OK\" but got %d, %q", r.Status, r.StatusMessage)
 			}
-			cs.Close()
 		})
 	}
 }
 
 func TestHandlerFailure(t *testing.T) {
-	ctx := testctx(t)
 	req := []byte(`{"Command":"TestHandlerFailure"}`)
 	h := func(b []byte) ([]byte, error) {
 		return nil, fmt.Errorf("always fail")
 	}
-	RegisterHandler("TestHandlerFailure", h)
 
-	pipe := getTestPipePath(t)
-	cs := newCmdServer(pipe, 0777, "-1", time.Second)
-	err := cs.Start(ctx)
-	if err != nil {
-		t.Errorf("could not start server: %v", err)
-	}
-	d := SendCmdPipe(ctx, pipe, req)
+	cs := cmdServerForTest(t, 0777, "-1", time.Second)
+	cs.monitor.RegisterHandler("TestHandlerFailure", h)
+	d := SendCmdPipe(testctx(t), cs.pipe, req)
 	var r Response
-	err = json.Unmarshal(d, &r)
+	err := json.Unmarshal(d, &r)
 	if err != nil {
 		t.Error(err)
 	}
 	if r.Status != HandlerError.Status || r.StatusMessage != "always fail" {
 		t.Errorf("unexpected status from TestHandlerFailure, want %d, \"always fail\" but got %d, %q", HandlerError.Status, r.Status, r.StatusMessage)
 	}
-	cs.Close()
 }
 
 func TestListenTimeout(t *testing.T) {
@@ -176,15 +177,8 @@ func TestListenTimeout(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	ctx := testctx(t)
-	pipe := getTestPipePath(t)
-	cs := newCmdServer(pipe, 0770, "-1", time.Millisecond)
-	err = cs.Start(ctx)
-	if err != nil {
-		t.Errorf("could not start server: %v", err)
-	}
-	defer cs.Close()
-	conn, err := dialPipe(ctx, pipe)
+	cs := cmdServerForTest(t, 0770, "-1", time.Millisecond)
+	conn, err := dialPipe(testctx(t), cs.pipe)
 	if err != nil {
 		t.Errorf("could not connect to command server: %v", err)
 	}
