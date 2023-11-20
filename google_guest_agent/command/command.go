@@ -17,6 +17,7 @@ package command
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"sync"
@@ -126,15 +127,24 @@ func SendCommand(ctx context.Context, req []byte) []byte {
 func SendCmdPipe(ctx context.Context, pipe string, req []byte) []byte {
 	conn, err := dialPipe(ctx, pipe)
 	if err != nil {
-		return marshalOrInternalError(ConnError)
+		if b, err := json.Marshal(ConnError); err != nil {
+			return b
+		}
+		return internalError
 	}
 	i, err := conn.Write(req)
 	if err != nil || i != len(req) {
-		return marshalOrInternalError(ConnError)
+		if b, err := json.Marshal(ConnError); err != nil {
+			return b
+		}
+		return internalError
 	}
 	data, err := io.ReadAll(conn)
 	if err != nil {
-		return marshalOrInternalError(ConnError)
+		if b, err := json.Marshal(ConnError); err != nil {
+			return b
+		}
+		return internalError
 	}
 	return data
 }
