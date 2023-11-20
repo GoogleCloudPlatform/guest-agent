@@ -51,68 +51,16 @@ type testRequest struct {
 	ArbitraryData int
 }
 
-func TestStart(t *testing.T) {
-	ctx := testctx(t)
-	pipe := getTestPipePath(t)
-	cs := newCmdServer(pipe, 0770, "-1", time.Second)
-	cs.Start()
-	t.Cleanup(cs.Close)
-	go cs.Wait(ctx)
-	for !cs.Listening() {
-		time.Sleep(time.Nanosecond)
-	}
-	c, err := dialPipe(ctx, pipe)
-	if err != nil {
-		t.Errorf("could not connect to pipe of listening server: %v", err)
-	} else {
-		c.Close()
-	}
-}
-
-func TestStop(t *testing.T) {
-	ctx := testctx(t)
-	pipe := getTestPipePath(t)
-	cs := newCmdServer(pipe, 0770, "-1", time.Second)
-	cs.Start()
-	t.Cleanup(cs.Close)
-	go cs.Wait(ctx)
-	for !cs.Listening() {
-		time.Sleep(time.Nanosecond)
-	}
-	c, err := dialPipe(ctx, pipe)
-	if err != nil {
-		t.Errorf("could not connect to pipe of listening server: %v", err)
-	} else {
-		c.Close()
-	}
-	cs.Stop()
-	for cs.Listening() {
-		time.Sleep(time.Nanosecond)
-	}
-	c, err = dialPipe(ctx, pipe)
-	if err == nil {
-		t.Error("connected to pipe of stopped server")
-		c.Close()
-	}
-}
-
 func TestClose(t *testing.T) {
 	ctx := testctx(t)
 	cs := newCmdServer(getTestPipePath(t), 0770, "-1", time.Second)
-	cs.Close()
-	err := cs.Wait(ctx)
+	err := cs.Start(ctx)
 	if err != nil {
 		t.Errorf("unexpected error waiting for commands: %v", err)
 	}
-}
-
-func TestWaitCancel(t *testing.T) {
-	ctx := testctx(t)
-	listenctx, cancel := context.WithCancel(ctx)
-	cancel()
-	err := newCmdServer(getTestPipePath(t), 0770, "-1", time.Second).Wait(listenctx)
+	err = cs.Close()
 	if err != nil {
-		t.Errorf("unexpected error waiting for commands, got %v want %v", err, nil)
+		t.Errorf("unexpected error closing server: %v", err)
 	}
 }
 
@@ -170,14 +118,13 @@ func TestListen(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			pipe := getTestPipePath(t)
 			cs := newCmdServer(pipe, tc.filemode, tc.group, time.Second)
-			cs.Start()
-			go cs.Wait(ctx)
-			for !cs.Listening() {
-				time.Sleep(time.Nanosecond)
+			err := cs.Start(ctx)
+			if err != nil {
+				t.Errorf("could not start server: %v", err)
 			}
 			d := SendCmdPipe(ctx, pipe, req)
 			var r Response
-			err := json.Unmarshal(d, &r)
+			err = json.Unmarshal(d, &r)
 			if err != nil {
 				t.Error(err)
 			}
@@ -185,9 +132,6 @@ func TestListen(t *testing.T) {
 				t.Errorf("unexpected status from test-cmd, want 0, \"OK\" but got %d, %q", r.Status, r.StatusMessage)
 			}
 			cs.Close()
-			for !cs.Listening() {
-				time.Sleep(time.Nanosecond)
-			}
 		})
 	}
 }
@@ -202,14 +146,13 @@ func TestHandlerFailure(t *testing.T) {
 
 	pipe := getTestPipePath(t)
 	cs := newCmdServer(pipe, 0777, "-1", time.Second)
-	cs.Start()
-	go cs.Wait(ctx)
-	for !cs.Listening() {
-		time.Sleep(time.Nanosecond)
+	err := cs.Start(ctx)
+	if err != nil {
+		t.Errorf("could not start server: %v", err)
 	}
 	d := SendCmdPipe(ctx, pipe, req)
 	var r Response
-	err := json.Unmarshal(d, &r)
+	err = json.Unmarshal(d, &r)
 	if err != nil {
 		t.Error(err)
 	}
@@ -217,9 +160,6 @@ func TestHandlerFailure(t *testing.T) {
 		t.Errorf("unexpected status from TestHandlerFailure, want %d, \"always fail\" but got %d, %q", HandlerError.Status, r.Status, r.StatusMessage)
 	}
 	cs.Close()
-	for !cs.Listening() {
-		time.Sleep(time.Nanosecond)
-	}
 }
 
 func TestListenTimeout(t *testing.T) {
@@ -239,12 +179,11 @@ func TestListenTimeout(t *testing.T) {
 	ctx := testctx(t)
 	pipe := getTestPipePath(t)
 	cs := newCmdServer(pipe, 0770, "-1", time.Millisecond)
-	cs.Start()
-	t.Cleanup(cs.Close)
-	go cs.Wait(ctx)
-	for !cs.Listening() {
-		time.Sleep(time.Nanosecond)
+	err = cs.Start(ctx)
+	if err != nil {
+		t.Errorf("could not start server: %v", err)
 	}
+	defer cs.Close()
 	conn, err := dialPipe(ctx, pipe)
 	if err != nil {
 		t.Errorf("could not connect to command server: %v", err)
@@ -255,47 +194,5 @@ func TestListenTimeout(t *testing.T) {
 	}
 	if string(data) != string(expect) {
 		t.Errorf("unexpected response from timed out connection, got %s but want %s", data, expect)
-	}
-}
-
-func TestHandlerRegistration(t *testing.T) {
-	handlers = make(map[string]Handler)
-	noop := func([]byte) ([]byte, error) { return nil, nil }
-	ctx := testctx(t)
-	pipe := getTestPipePath(t)
-	cmdServer = newCmdServer(pipe, 0770, "-1", time.Second)
-	t.Cleanup(cmdServer.Close)
-	t.Cleanup(func() { cmdServer = nil })
-	go cmdServer.Wait(ctx)
-	time.Sleep(time.Millisecond)
-	if cmdServer.srv != nil {
-		t.Error("Command server is listening before handlers are registered")
-	}
-	c, err := dialPipe(ctx, pipe)
-	if err == nil {
-		t.Error("connected to pipe of stopped server")
-		c.Close()
-	}
-	err = RegisterHandler("TestHandlerRegistration", noop)
-	if err != nil {
-		t.Errorf("Failed to register command handler: %v", err)
-	}
-	for !cmdServer.Listening() {
-		time.Sleep(time.Nanosecond)
-	}
-	c, err = dialPipe(ctx, pipe)
-	if err != nil {
-		t.Errorf("could not connect to pipe of listening server: %v", err)
-	} else {
-		c.Close()
-	}
-	UnregisterHandler("TestHandlerRegistration")
-	for cmdServer.Listening() {
-		time.Sleep(time.Nanosecond)
-	}
-	c, err = dialPipe(ctx, pipe)
-	if err == nil {
-		t.Error("connected to pipe of stopped server")
-		c.Close()
 	}
 }

@@ -52,7 +52,7 @@ func Init(ctx context.Context) *Server {
 	}
 	to, err := time.ParseDuration(cfg.Get().Unstable.CommandRequestTimeout)
 	if err != nil {
-		logger.Errorf("commmand request timeout configuration is not a valid duration string, falling back to 30s timeout")
+		logger.Errorf("commmand request timeout configuration is not a valid duration string, falling back to 10s timeout")
 		to = time.Duration(10) * time.Second
 	}
 	var pipemode int64 = 0770
@@ -61,19 +61,21 @@ func Init(ctx context.Context) *Server {
 		logger.Errorf("could not parse command_pipe_mode as octal integer: %v falling back to mode 0770", err)
 	}
 	cmdServer = newCmdServer(pipe, int(pipemode), cfg.Get().Unstable.CommandPipeGroup, to)
-	go func() {
-		err := cmdServer.Wait(ctx)
-		if err != nil {
-			logger.Errorf("stopped waiting for commands: %v", err)
-		}
-	}()
-	handlersMu.RLock()
-	defer handlersMu.RUnlock()
-	if len(handlers) > 0 {
-		cmdServer.Start()
+	err = cmdServer.Start(ctx)
+	if err != nil {
+		logger.Errorf("failed to start command server: %s", err)
 	}
 	return cmdServer
 }
+
+// Monitor is the structure which handles command registration and deregistration.
+type Monitor struct {
+	srv *Server
+	handlersMu *sync.Mutex
+	handlers map[string]Handler
+}
+
+func (m *Monitor) Close() error { return m.srv.Close() }
 
 func newCmdServer(p string, fm int, group string, to time.Duration) *Server {
 	cs := Server{
@@ -81,8 +83,6 @@ func newCmdServer(p string, fm int, group string, to time.Duration) *Server {
 		pipeMode:  fm,
 		pipeGroup: group,
 		timeout:   to,
-		srvMu:     new(sync.Mutex),
-		signal:    make(chan string, 1),
 	}
 	return &cs
 }
@@ -94,34 +94,22 @@ type Server struct {
 	pipeMode  int
 	pipeGroup string
 	timeout   time.Duration
-	signal    chan (string)
-	srvMu     *sync.Mutex
 	srv       net.Listener
 }
 
-// Listening reports whether a Server is currently listening on the underlying
-// communication protocol.
-func (c Server) Listening() bool { return c.srv != nil }
-
 // Close signals the server to stop listening for commands and stop waiting to
 // listen.
-func (c *Server) Close() {
-	c.signal <- "CLOSE"
+func (c *Server) Close() error {
+	if c.srv != nil {
+		return c.srv.Close()
+	}
+	return nil
 }
 
-// Stop signals the server to stop listening for commands.
-func (c *Server) Stop() {
-	c.signal <- "STOP"
-}
-
-// Start signals the server to start listening for commands.
-func (c *Server) Start() {
-	c.signal <- "START"
-}
-
-func (c *Server) listen(ctx context.Context) error {
-	// Do not call this function without holding c.srvMu. Returns when c.srv is
-	// set and the listener is accepting connections in another goroutine
+func (c *Server) Start(ctx context.Context) error {
+	if c.srv != nil {
+		return errors.New("server already listening")
+	}
 	srv, err := listen(ctx, c.pipe, c.pipeMode, c.pipeGroup)
 	if err != nil {
 		return err
@@ -228,50 +216,4 @@ func (c *Server) listen(ctx context.Context) error {
 	}()
 	c.srv = srv
 	return nil
-}
-
-// Wait does not start the Server, it waits for a signal to begin listening
-// on the given context, as long as it is valid. To signal the server to start
-// or stop listening, call Server.Start() or Server.Stop(). To signal the
-// Server to stop waiting, call Server.Close(). This function is
-// thread-safe, but calling it multiple times is generally a bad idea, as Close()
-// will only close a single Wait() call.
-func (c *Server) Wait(ctx context.Context) error {
-	for {
-		select {
-		case <-ctx.Done():
-			logger.Infof("Wait context canceled for cmdServer: %v", ctx.Err())
-			return nil
-		case sig := <-c.signal:
-			switch sig {
-			case "START":
-				c.srvMu.Lock()
-				if c.srv == nil {
-					logger.Debugf("starting command server")
-					err := c.listen(ctx)
-					if err != nil {
-						logger.Errorf("could not listen for commands on pipe %s: %v", c.pipe, err)
-					}
-				}
-				c.srvMu.Unlock()
-			case "STOP":
-				c.srvMu.Lock()
-				if c.srv != nil {
-					logger.Debugf("stopping command server")
-					c.srv.Close()
-					c.srv = nil
-				}
-				c.srvMu.Unlock()
-			case "CLOSE":
-				logger.Debugf("closing command server")
-				c.srvMu.Lock()
-				if c.srv != nil {
-					c.srv.Close()
-					c.srv = nil
-				}
-				c.srvMu.Unlock()
-				return nil
-			}
-		}
-	}
 }

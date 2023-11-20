@@ -85,15 +85,12 @@ var (
 // RegisterHandler registers f as the handler for cmd. If a command.Server has
 // been initialized, it will be signalled to start listening for commands.
 func RegisterHandler(cmd string, f Handler) error {
+	handlersMu.Lock()
+	defer handlersMu.Unlock()
 	if _, ok := handlers[cmd]; ok {
 		return fmt.Errorf("cmd %s is already handled", cmd)
 	}
-	handlersMu.Lock()
-	defer handlersMu.Unlock()
 	handlers[cmd] = f
-	if cmdServer != nil {
-		cmdServer.Start()
-	}
 	return nil
 }
 
@@ -101,15 +98,12 @@ func RegisterHandler(cmd string, f Handler) error {
 // intialized and there are no more handlers registered, the server will be
 // signalled to stop listening for commands.
 func UnregisterHandler(cmd string) error {
+	handlersMu.Lock()
+	defer handlersMu.Unlock()
 	if _, ok := handlers[cmd]; !ok {
 		return fmt.Errorf("cmd %s is not registered", cmd)
 	}
-	handlersMu.Lock()
-	defer handlersMu.Unlock()
 	delete(handlers, cmd)
-	if len(handlers) == 0 && cmdServer != nil {
-		cmdServer.Stop()
-	}
 	return nil
 }
 
