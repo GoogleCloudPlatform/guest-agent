@@ -17,6 +17,7 @@ package command
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"math/rand"
 	"os/user"
@@ -188,6 +189,36 @@ func TestListen(t *testing.T) {
 				time.Sleep(time.Nanosecond)
 			}
 		})
+	}
+}
+
+func TestHandlerFailure(t *testing.T) {
+	ctx := testctx(t)
+	req := []byte(`{"Command":"TestHandlerFailure"}`)
+	h := func(b []byte) ([]byte, error) {
+		return nil, fmt.Errorf("always fail")
+	}
+	RegisterHandler("TestHandlerFailure", h)
+
+	pipe := getTestPipePath(t)
+	cs := newCmdServer(pipe, 0777, "-1", time.Second)
+	cs.Start()
+	go cs.Wait(ctx)
+	for !cs.Listening() {
+		time.Sleep(time.Nanosecond)
+	}
+	d := SendCmdPipe(ctx, pipe, req)
+	var r Response
+	err := json.Unmarshal(d, &r)
+	if err != nil {
+		t.Error(err)
+	}
+	if r.Status != HandlerError.Status || r.StatusMessage != "always fail" {
+		t.Errorf("unexpected status from TestHandlerFailure, want %d, \"always fail\" but got %d, %q", HandlerError.Status, r.Status, r.StatusMessage)
+	}
+	cs.Close()
+	for !cs.Listening() {
+		time.Sleep(time.Nanosecond)
 	}
 }
 
