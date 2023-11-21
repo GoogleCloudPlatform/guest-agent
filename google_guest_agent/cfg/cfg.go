@@ -275,7 +275,7 @@ type Snapshots struct {
 // is guaranteed for configurations defined in the Unstable section. By default all flags defined
 // in this section is disabled and is intended to isolate under development features.
 type Unstable struct {
-	CommandMonitorEnabled bool `ini:"command_monitor_enabled,omitempty"`
+	CommandMonitorEnabled bool   `ini:"command_monitor_enabled,omitempty"`
 	CommandPipePath       string `ini:"command_pipe_path,omitempty"`
 	CommandRequestTimeout string `ini:"command_request_timeout,omitempty"`
 	CommandPipeMode       string `ini:"command_pipe_mode,omitempty"`

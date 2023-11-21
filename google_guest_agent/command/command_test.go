@@ -22,25 +22,25 @@ import (
 	"math/rand"
 	"os/user"
 	"path"
-	"sync"
 	"runtime"
+	"sync"
 	"testing"
 	"time"
 )
 
 func cmdServerForTest(t *testing.T, pipeMode int, pipeGroup string, timeout time.Duration) *Server {
-	cs := &Server {
-		pipe: getTestPipePath(t),
-		pipeMode: pipeMode,
+	cs := &Server{
+		pipe:      getTestPipePath(t),
+		pipeMode:  pipeMode,
 		pipeGroup: pipeGroup,
-		timeout: timeout,
+		timeout:   timeout,
 		monitor: &Monitor{
 			handlersMu: new(sync.RWMutex),
-			handlers: make(map[string]Handler),
+			handlers:   make(map[string]Handler),
 		},
 	}
 	cs.monitor.srv = cs
-	err := cs.Start(testctx(t))
+	err := cs.start(testctx(t))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -37,7 +37,7 @@ import (
 
 var cmdMonitor *Monitor = &Monitor{
 	handlersMu: new(sync.RWMutex),
-	handlers: make(map[string]Handler),
+	handlers:   make(map[string]Handler),
 }
 
 // Init starts an internally managed command server. The agent configuration
@@ -62,13 +62,13 @@ func Init(ctx context.Context) *Monitor {
 		logger.Errorf("could not parse command_pipe_mode as octal integer: %v falling back to mode 0770", err)
 	}
 	cmdMonitor.srv = &Server{
-		pipe: pipe,
-		pipeMode: int(pipemode),
+		pipe:      pipe,
+		pipeMode:  int(pipemode),
 		pipeGroup: cfg.Get().Unstable.CommandPipeGroup,
-		timeout: to,
-		monitor: cmdMonitor,
+		timeout:   to,
+		monitor:   cmdMonitor,
 	}
-	err = cmdMonitor.srv.Start(ctx)
+	err = cmdMonitor.srv.start(ctx)
 	if err != nil {
 		logger.Errorf("failed to start command server: %s", err)
 	}
@@ -77,12 +77,16 @@ func Init(ctx context.Context) *Monitor {
 
 // Monitor is the structure which handles command registration and deregistration.
 type Monitor struct {
-	srv *Server
+	srv        *Server
 	handlersMu *sync.RWMutex
-	handlers map[string]Handler
+	handlers   map[string]Handler
 }
 
+// Close stops the server from listening to commands.
 func (m *Monitor) Close() error { return m.srv.Close() }
+
+// Start begins listening for commands.
+func (m *Monitor) Start(ctx context.Context) error { return m.srv.start(ctx) }
 
 // Server is the server structure which will listen for command requests and
 // route them to handlers. Most callers should not interact with this directly.
@@ -92,7 +96,7 @@ type Server struct {
 	pipeGroup string
 	timeout   time.Duration
 	srv       net.Listener
-	monitor	  *Monitor
+	monitor   *Monitor
 }
 
 // Close signals the server to stop listening for commands and stop waiting to
@@ -104,7 +108,7 @@ func (c *Server) Close() error {
 	return nil
 }
 
-func (c *Server) Start(ctx context.Context) error {
+func (c *Server) start(ctx context.Context) error {
 	if c.srv != nil {
 		return errors.New("server already listening")
 	}

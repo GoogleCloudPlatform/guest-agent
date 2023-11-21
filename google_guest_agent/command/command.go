@@ -86,7 +86,7 @@ var (
 
 // RegisterHandler registers f as the handler for cmd. If a command.Server has
 // been initialized, it will be signalled to start listening for commands.
-func (m *Monitor)RegisterHandler(cmd string, f Handler) error {
+func (m *Monitor) RegisterHandler(cmd string, f Handler) error {
 	m.handlersMu.Lock()
 	defer m.handlersMu.Unlock()
 	if _, ok := m.handlers[cmd]; ok {
@@ -99,7 +99,7 @@ func (m *Monitor)RegisterHandler(cmd string, f Handler) error {
 // UnregisterHandler clears the handlers for cmd. If a command.Server has been
 // intialized and there are no more handlers registered, the server will be
 // signalled to stop listening for commands.
-func (m *Monitor)UnregisterHandler(cmd string) error {
+func (m *Monitor) UnregisterHandler(cmd string) error {
 	m.handlersMu.Lock()
 	defer m.handlersMu.Unlock()
 	if _, ok := m.handlers[cmd]; !ok {
