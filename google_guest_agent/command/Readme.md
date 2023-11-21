@@ -20,3 +20,5 @@ A response will be valid JSON and has two required fields: Status and StatusMess
 
 By default, the Server listens on a unix socket or a named pipe, depending on platform. Permissions for the pipe and the pipe path can be set in the guest-agent [configuration](https://github.com/GoogleCloudPlatform/guest-agent#configuration). The pipe path for windows and linux systems are `\\.\pipe\google-guest-agent-commands` non-windows and `/run/google-guest-agent/commands.sock` respectively.
 
+## Implementing a command handler
+A command handler will expose this handler to be called by anyone with write permission to the underlying socket. To do so, call `command.Get().RegisterHandler(name, handerFunc)` to get the current command monitor and register the handlerFunc with it. Note that if the command system is disabled by user configuration, handler registration will succeed but the server will not be available for callers to send commands to.
