@@ -16,9 +16,9 @@ package command
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"os"
-	"fmt"
 	"os/user"
 	"path"
 	"runtime"
@@ -71,12 +71,12 @@ func mkdirpWithPerms(dir string, p os.FileMode, uid, gid int) error {
 }
 
 func morePermissive(i, j int) bool {
-	for k:=0;k<3;k++ {
-		if (i % 010) > (j %10) {
+	for k := 0; k < 3; k++ {
+		if (i % 010) > (j % 10) {
 			return true
 		}
-		i = i/010
-		j = j/010
+		i = i / 010
+		j = j / 010
 	}
 	return false
 }
