@@ -37,9 +37,6 @@ type TrustedCert struct {
 }
 
 var (
-	// cachedCertificate stores the previously retrieved certificate to be cached in case mds fails.
-	cachedCertificate string
-
 	// mdsClient is the metadata's client, used to query oslogin certificates.
 	mdsClient *metadata.Client
 )
@@ -74,18 +71,13 @@ func writeFile(ctx context.Context, evType string, data interface{}, evData *eve
 		pipeData.Finished()
 	}()
 
-	// The certificates key/endpoint is not cached, we can't rely on the metadata watcher data because of that.
 	certificate, err := mdsClient.GetKey(ctx, "oslogin/certificates", nil)
-	if err != nil && cachedCertificate != "" {
-		certificate = cachedCertificate
-		logger.Warningf("Failed to get certificate, assuming/using previously cached one.")
-	} else if err != nil {
+	if err != nil {
 		logger.Errorf("Failed to get certificate from metadata server: %+v", err)
 		return true
 	}
 
 	// Keep a copy of the returned certificate for error fallback caching.
-	cachedCertificate = certificate
 	var certs Certificates
 	var outData []string
 
