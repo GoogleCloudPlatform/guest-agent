@@ -71,7 +71,7 @@ func mkdirpWithPerms(dir string, p os.FileMode, uid, gid int) error {
 }
 
 func morePermissive(i, j int) bool {
-	for i:=0;i<3;i++ {
+	for k:=0;k<3;k++ {
 		if (i % 010) > (j %10) {
 			return true
 		}
