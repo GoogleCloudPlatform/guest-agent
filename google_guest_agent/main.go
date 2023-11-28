@@ -28,6 +28,7 @@ import (
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events"
 	mdsEvent "github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events/metadata"
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/hostname"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/osinfo"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/scheduler"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/telemetry"
@@ -204,6 +205,7 @@ func runAgent(ctx context.Context) {
 		return
 	}
 
+	hostname.Init(ctx, eventManager)
 	if err := enableDisableOSLoginCertAuth(ctx); err != nil {
 		logger.Errorf("Failed to enable sshtrustedca watcher: %+v", err)
 		return

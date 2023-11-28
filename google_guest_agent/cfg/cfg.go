@@ -101,6 +101,10 @@ snapshot_service_port = 8081
 timeout_in_seconds = 60
 
 [Unstable]
+set_fqdn = false
+set_hostname = false
+fqdn_as_hostname = false
+additional_aliases =
 `
 )
 
@@ -271,6 +275,10 @@ type Snapshots struct {
 // is guaranteed for configurations defined in the Unstable section. By default all flags defined
 // in this section is disabled and is intended to isolate under development features.
 type Unstable struct {
+	SetFqdn           bool   `ini:"set_fqdn,omitempty"`
+	SetHostname       bool   `ini:"set_hostname,omitempty"`
+	AdditionalAliases string `ini:"additional_aliases,omitempty"`
+	FqdnAsHostname    bool   `ini:"fqdn_as_hostname,omitempty"`
 }
 
 // WSFC contains the configurations of WSFC section.

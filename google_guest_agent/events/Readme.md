@@ -73,3 +73,5 @@ Below is a high level sequence diagram showing how the **Guest Agent**, **Manage
 |-------|------|----|
 |metadata|metadata-watcher,longpoll|A new version of the metadata descriptor was detected.|
 |ssh-trusted-ca-pipe-watcher|ssh-trusted-ca-pipe-watcher,read|A read in the trusted-ca pipe was detected.|
+|network|network-watcher,iface-up|A network interface was set up.|
+|network|network-watcher,hostname-reconfigure|The hostname and fqdn will be reconfigured.|
