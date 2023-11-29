@@ -103,7 +103,7 @@ timeout_in_seconds = 60
 [Unstable]
 command_monitor_enabled = false
 command_pipe_mode = 0770
-command_pipe_group = google-sudoers
+command_pipe_group =
 command_request_timeout = 10s
 `
 )
