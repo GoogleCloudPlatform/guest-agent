@@ -43,9 +43,9 @@ var cmdMonitor *Monitor = &Monitor{
 // Init starts an internally managed command server. The agent configuration
 // will decide the server options. Returns a reference to the internally managed
 // command monitor which the caller can Close() when appropriate.
-func Init(ctx context.Context) *Monitor {
+func Init(ctx context.Context) {
 	if cmdMonitor.srv != nil {
-		return cmdMonitor
+		return
 	}
 	pipe := cfg.Get().Unstable.CommandPipePath
 	if pipe == "" {
@@ -72,7 +72,14 @@ func Init(ctx context.Context) *Monitor {
 	if err != nil {
 		logger.Errorf("failed to start command server: %s", err)
 	}
-	return cmdMonitor
+}
+
+// Close will close the internally managed command server, if it was initialized.
+func Close() error {
+	if cmdMonitor.srv != nil {
+		return cmdMonitor.srv.Close()
+	}
+	return nil
 }
 
 // Monitor is the structure which handles command registration and deregistration.

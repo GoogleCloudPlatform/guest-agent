@@ -177,8 +177,8 @@ func runAgent(ctx context.Context) {
 	agentInit(ctx)
 
 	if cfg.Get().Unstable.CommandMonitorEnabled {
-		cmdsrv := command.Init(ctx)
-		defer cmdsrv.Close()
+		command.Init(ctx)
+		defer command.Close()
 	}
 
 	// Previous request to metadata *may* not have worked becasue routes don't get added until agentInit.

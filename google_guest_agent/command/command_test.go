@@ -26,6 +26,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
 )
 
 func cmdServerForTest(t *testing.T, pipeMode int, pipeGroup string, timeout time.Duration) *Server {
@@ -75,6 +77,21 @@ func testctx(t *testing.T) context.Context {
 type testRequest struct {
 	Command       string
 	ArbitraryData int
+}
+
+func TestInit(t *testing.T) {
+	cfg.Load(nil)
+	cfg.Get().Unstable.CommandPipePath = getTestPipePath(t)
+	if cmdMonitor.srv != nil {
+		t.Fatal("internal command server already exists")
+	}
+	Init(testctx(t))
+	if cmdMonitor.srv == nil {
+		t.Errorf("could not start internally managed command server")
+	}
+	if err := Close(); err != nil {
+		t.Errorf("could not close managed command server: %s", err)
+	}
 }
 
 func TestListen(t *testing.T) {
