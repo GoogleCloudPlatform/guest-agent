@@ -101,6 +101,10 @@ snapshot_service_port = 8081
 timeout_in_seconds = 60
 
 [Unstable]
+command_monitor_enabled = false
+command_pipe_mode = 0770
+command_pipe_group =
+command_request_timeout = 10s
 `
 )
 
@@ -271,6 +275,11 @@ type Snapshots struct {
 // is guaranteed for configurations defined in the Unstable section. By default all flags defined
 // in this section is disabled and is intended to isolate under development features.
 type Unstable struct {
+	CommandMonitorEnabled bool   `ini:"command_monitor_enabled,omitempty"`
+	CommandPipePath       string `ini:"command_pipe_path,omitempty"`
+	CommandRequestTimeout string `ini:"command_request_timeout,omitempty"`
+	CommandPipeMode       string `ini:"command_pipe_mode,omitempty"`
+	CommandPipeGroup      string `ini:"command_pipe_group,omitempty"`
 }
 
 // WSFC contains the configurations of WSFC section.
