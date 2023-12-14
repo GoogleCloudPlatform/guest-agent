@@ -66,7 +66,7 @@ func runScript(ctx context.Context, path, disks string, config snapshotConfig) (
 }
 
 func listenForSnapshotRequests(ctx context.Context, address string, requestChan chan<- *sspb.GuestMessage) {
-	for leaving := false; !leaving; {
+	for context.Cause(ctx) == nil {
 		// Start hanging connection on server that feeds to channel
 		logger.Infof("Attempting to connect to snapshot service at %s.", address)
 		conn, err := grpc.Dial(address, grpc.WithInsecure())
@@ -76,22 +76,22 @@ func listenForSnapshotRequests(ctx context.Context, address string, requestChan 
 		}
 
 		c := sspb.NewSnapshotServiceClient(conn)
-		ctx, cancel := context.WithCancel(ctx)
+
 		guestReady := sspb.GuestReady{
 			RequestServerInfo: false,
 		}
+
 		r, err := c.CreateConnection(ctx, &guestReady)
 		if err != nil {
-			logger.Errorf("Error creating connection: %v.", err)
-			leaving = errors.Is(err, context.Canceled)
-			cancel()
+			if !errors.Is(err, context.Canceled) {
+				logger.Errorf("Error creating connection: %v.", err)
+			}
 			continue
 		}
 		for {
 			request, err := r.Recv()
 			if err != nil {
 				logger.Errorf("Error reading snapshot request: %v.", err)
-				cancel()
 				break
 			}
 			logger.Infof("Received snapshot request.")
