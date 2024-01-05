@@ -19,15 +19,13 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"os"
 	"reflect"
 	"runtime"
 	"strings"
-	"time"
 
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
+	network "github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/network/manager"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/run"
-	"github.com/GoogleCloudPlatform/guest-agent/metadata"
 	"github.com/GoogleCloudPlatform/guest-agent/utils"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 )
@@ -102,20 +100,6 @@ func compareRoutes(configuredRoutes, desiredRoutes []string) (toAdd, toRm []stri
 }
 
 var badMAC []string
-
-func getInterfaceByMAC(mac string) (net.Interface, error) {
-	hwaddr, err := net.ParseMAC(mac)
-	if err != nil {
-		return net.Interface{}, err
-	}
-
-	for _, iface := range interfaces {
-		if iface.HardwareAddr.String() == hwaddr.String() {
-			return iface, nil
-		}
-	}
-	return net.Interface{}, fmt.Errorf("no interface found with MAC %s", mac)
-}
 
 // https://www.ietf.org/rfc/rfc1354.txt
 // Only fields that we currently care about.
@@ -296,22 +280,10 @@ func (a *addressMgr) Set(ctx context.Context) error {
 		return fmt.Errorf("error populating interfaces: %v", err)
 	}
 
-	if config.NetworkInterfaces.Setup {
-		if runtime.GOOS != "windows" {
-			logger.Debugf("Configure IPv6")
-			if err := configureIPv6(ctx); err != nil {
-				// Continue through IPv6 configuration errors.
-				logger.Errorf("Error configuring IPv6: %v", err)
-			}
-		}
-
-		if runtime.GOOS != "windows" && !interfacesEnabled {
-			logger.Debugf("Enable network interfaces")
-			if err := enableNetworkInterfaces(ctx, config); err != nil {
-				return err
-			}
-			interfacesEnabled = true
-		}
+	// Setup network interfaces.
+	err = network.SetupInterfaces(ctx, config, newMetadata.Instance.NetworkInterfaces)
+	if err != nil {
+		return fmt.Errorf("failed to setup network interfaces: %v", err)
 	}
 
 	if !config.NetworkInterfaces.IPForwarding {
@@ -321,7 +293,7 @@ func (a *addressMgr) Set(ctx context.Context) error {
 	logger.Debugf("Add routes for aliases, forwarded IP and target-instance IPs")
 	// Add routes for IP aliases, forwarded and target-instance IPs.
 	for _, ni := range newMetadata.Instance.NetworkInterfaces {
-		iface, err := getInterfaceByMAC(ni.Mac)
+		iface, err := network.GetInterfaceByMAC(ni.Mac)
 		if err != nil {
 			if !utils.ContainsString(ni.Mac, badMAC) {
 				logger.Errorf("Error getting interface: %s", err)
@@ -444,194 +416,4 @@ func (a *addressMgr) Set(ctx context.Context) error {
 	}
 
 	return nil
-}
-
-// Enables or disables IPv6 on network interfaces.
-func configureIPv6(ctx context.Context) error {
-	var newNi, oldNi metadata.NetworkInterfaces
-	if len(newMetadata.Instance.NetworkInterfaces) == 0 {
-		return fmt.Errorf("no interfaces found in metadata")
-	}
-	newNi = newMetadata.Instance.NetworkInterfaces[0]
-	if len(oldMetadata.Instance.NetworkInterfaces) > 0 {
-		oldNi = oldMetadata.Instance.NetworkInterfaces[0]
-	}
-	iface, err := getInterfaceByMAC(newNi.Mac)
-	if err != nil {
-		return err
-	}
-	switch {
-	case oldNi.DHCPv6Refresh != "" && newNi.DHCPv6Refresh == "",
-		newNi.DHCPv6Refresh == "" && len(oldMetadata.Instance.NetworkInterfaces) == 0:
-		// disable
-		// uses empty old interface slice to indicate this is first-run.
-
-		// Before obtaining or releasing an IPv6 lease, we wait for
-		// 'tentative' IPs as part of SLAAC. We wait up to 5 seconds
-		// for this condition to automatically resolve.
-		tentative := []string{"-6", "-o", "a", "s", "dev", iface.Name, "scope", "link", "tentative"}
-		for i := 0; i < 5; i++ {
-			res := run.WithOutput(ctx, "ip", tentative...)
-			if res.ExitCode == 0 && res.StdOut == "" {
-				break
-			}
-			time.Sleep(1 * time.Second)
-		}
-		if err := run.Quiet(ctx, "dhclient", "-r", "-6", "-1", "-v", iface.Name); err != nil {
-			return err
-		}
-	case oldNi.DHCPv6Refresh == "" && newNi.DHCPv6Refresh != "":
-		// enable
-		tentative := []string{"-6", "-o", "a", "s", "dev", iface.Name, "scope", "link", "tentative"}
-		for i := 0; i < 5; i++ {
-			res := run.WithOutput(ctx, "ip", tentative...)
-			if res.ExitCode == 0 && res.StdOut == "" {
-				break
-			}
-			time.Sleep(1 * time.Second)
-		}
-		val := fmt.Sprintf("net.ipv6.conf.%s.accept_ra_rt_info_max_plen=128", iface.Name)
-		if err := run.Quiet(ctx, "sysctl", val); err != nil {
-			return err
-		}
-		if err := run.Quiet(ctx, "dhclient", "-1", "-6", "-v", iface.Name); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// enableNetworkInterfaces runs `dhclient eth1 eth2 ... ethN`
-// and `dhclient -6 eth1 eth2 ... ethN`.
-// On RHEL7, it also calls disableNM for each interface.
-// On SLES, it calls enableSLESInterfaces instead of dhclient.
-func enableNetworkInterfaces(ctx context.Context, config *cfg.Sections) error {
-	if len(newMetadata.Instance.NetworkInterfaces) < 2 {
-		return nil
-	}
-	var googleInterfaces []string
-	// The primary (first) interface is managed by the OS, we only handle
-	// secondary interfaces in this code.
-	for _, ni := range newMetadata.Instance.NetworkInterfaces[1:] {
-		iface, err := getInterfaceByMAC(ni.Mac)
-		if err != nil {
-			if !utils.ContainsString(ni.Mac, badMAC) {
-				logger.Errorf("Error getting interface: %s", err)
-				badMAC = append(badMAC, ni.Mac)
-			}
-			continue
-		}
-		googleInterfaces = append(googleInterfaces, iface.Name)
-	}
-	var googleIpv6Interfaces []string
-	for _, ni := range newMetadata.Instance.NetworkInterfaces[1:] {
-		if ni.DHCPv6Refresh == "" {
-			// This interface is not IPv6 enabled
-			continue
-		}
-		iface, err := getInterfaceByMAC(ni.Mac)
-		if err != nil {
-			if !utils.ContainsString(ni.Mac, badMAC) {
-				logger.Errorf("Error getting interface: %s", err)
-				badMAC = append(badMAC, ni.Mac)
-			}
-			continue
-		}
-		googleIpv6Interfaces = append(googleIpv6Interfaces, iface.Name)
-	}
-
-	switch {
-	case osInfo.OS == "sles":
-		return enableSLESInterfaces(ctx, googleInterfaces)
-	case (osInfo.OS == "rhel" || osInfo.OS == "centos") && osInfo.Version.Major >= 7:
-		for _, iface := range googleInterfaces {
-			err := disableNM(iface)
-			if err != nil {
-				return err
-			}
-		}
-		fallthrough
-	default:
-		dhcpCommand := config.NetworkInterfaces.DHCPCommand
-		if dhcpCommand != "" {
-			tokens := strings.Split(dhcpCommand, " ")
-			return run.Quiet(ctx, tokens[0], tokens[1:]...)
-		}
-
-		// Try IPv4 first as it's higher priority.
-		if err := run.Quiet(ctx, "dhclient", googleInterfaces...); err != nil {
-			return err
-		}
-
-		if len(googleIpv6Interfaces) == 0 {
-			return nil
-		}
-		for _, iface := range googleIpv6Interfaces {
-			// Enable kernel to accept to route advertisements.
-			val := fmt.Sprintf("net.ipv6.conf.%s.accept_ra_rt_info_max_plen=128", iface)
-			if err := run.Quiet(ctx, "sysctl", val); err != nil {
-				return err
-			}
-		}
-
-		var dhclientArgs6 []string
-		dhclientArgs6 = append([]string{"-6"}, googleIpv6Interfaces...)
-		return run.Quiet(ctx, "dhclient", dhclientArgs6...)
-	}
-}
-
-// enableSLESInterfaces writes one ifcfg file for each interface, then
-// runs `wicked ifup eth1 eth2 ... ethN`
-func enableSLESInterfaces(ctx context.Context, interfaces []string) error {
-	var err error
-	var priority = 10100
-	for _, iface := range interfaces {
-		logger.Debugf("write enabling ifcfg-%s config", iface)
-
-		var ifcfg *os.File
-		ifcfg, err = os.Create("/etc/sysconfig/network/ifcfg-" + iface)
-		if err != nil {
-			return err
-		}
-		defer closer(ifcfg)
-		contents := []string{
-			googleComment,
-			"STARTMODE=hotplug",
-			// NOTE: 'dhcp' is the dhcp4+dhcp6 option.
-			"BOOTPROTO=dhcp",
-			fmt.Sprintf("DHCLIENT_ROUTE_PRIORITY=%d", priority),
-		}
-		_, err = ifcfg.WriteString(strings.Join(contents, "\n"))
-		if err != nil {
-			return err
-		}
-		priority += 100
-	}
-	args := append([]string{"ifup", "--timeout", "1"}, interfaces...)
-	return run.Quiet(ctx, "/usr/sbin/wicked", args...)
-}
-
-// disableNM writes an ifcfg file with DHCP and NetworkManager disabled.
-func disableNM(iface string) error {
-	logger.Debugf("write disabling ifcfg-%s config", iface)
-	filename := "/etc/sysconfig/network-scripts/ifcfg-" + iface
-	ifcfg, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
-	if err == nil {
-		defer closer(ifcfg)
-		contents := []string{
-			googleComment,
-			fmt.Sprintf("DEVICE=%s", iface),
-			"BOOTPROTO=none",
-			"DEFROUTE=no",
-			"IPV6INIT=no",
-			"NM_CONTROLLED=no",
-			"NOZEROCONF=yes",
-		}
-		_, err = ifcfg.WriteString(strings.Join(contents, "\n"))
-		return err
-	}
-	if os.IsExist(err) {
-		return nil
-	}
-	return err
 }
