@@ -7,6 +7,7 @@ replace github.com/GoogleCloudPlatform/guest-agent/metadata => ../metadata
 require (
 	cloud.google.com/go/storage v1.31.0
 	github.com/GoogleCloudPlatform/guest-logging-go v0.0.0-20230710215706-450679fd88a9
+	github.com/Microsoft/go-winio v0.6.1
 	github.com/go-ini/ini v1.66.6
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da
 	github.com/golang/protobuf v1.5.3
@@ -14,6 +15,7 @@ require (
 	github.com/google/go-tpm v0.9.0
 	github.com/google/go-tpm-tools v0.4.0
 	github.com/google/tink/go v1.7.0
+	github.com/hashicorp/hcl v1.0.0
 	github.com/kardianos/service v1.2.1
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/tarm/serial v0.0.0-20180830185346-98f6abe2eb07
@@ -31,7 +33,6 @@ require (
 	cloud.google.com/go/iam v1.1.1 // indirect
 	cloud.google.com/go/logging v1.7.0 // indirect
 	cloud.google.com/go/longrunning v0.5.1 // indirect
-	github.com/Microsoft/go-winio v0.6.1 // indirect
 	github.com/google/go-sev-guest v0.7.0 // indirect
 	github.com/google/logger v1.1.1 // indirect
 	github.com/google/s2a-go v0.1.4 // indirect

@@ -22,6 +22,7 @@ import (
 	"os"
 
 	"github.com/google/tink/go/aead/subtle"
+	_ "github.com/hashicorp/hcl"
 )
 
 // parseCertificate validates certificate is in valid PEM format.
