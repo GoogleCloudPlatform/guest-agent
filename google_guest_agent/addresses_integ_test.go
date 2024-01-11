@@ -22,28 +22,33 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/GoogleCloudPlatform/guest-agent/metadata"
 )
 
 const testIp = "192.168.0.0"
 
 func TestAddAndRemoveLocalRoute(t *testing.T) {
-	metdata, err := getMetadata(context.Context(), false)
+	ctx := context.Background()
+	config, _ := getConfig(t)
+	metadata, err := metadata.New().Get(ctx)
 	if err != nil {
-		t.Fatalf("failed to get metadata, err %v", err)
+		t.Fatalf("failed to get metadata: %v", err)
 	}
-	iface, err := getInterfaceByMAC(metdata.Instance.NetworkInterfaces[0].Mac)
+
+	iface, err := getInterfaceByMAC(metadata.Instance.NetworkInterfaces[0].Mac)
 	if err != nil {
 		t.Fatalf("failed to get interface from mac, err %v", err)
 	}
 	// test add local route
-	if err := removeLocalRoute(testIp, iface.Name); err != nil {
+	if err = removeLocalRoute(ctx, config, testIp, iface.Name); err != nil {
 		t.Fatalf("failed to remove local route, err %v", err)
 	}
-	if err := addLocalRoute(testIp, iface.Name); err != nil {
+	if err = addLocalRoute(ctx, config, testIp, iface.Name); err != nil {
 		t.Fatalf("add test local route should not failed, err %v", err)
 	}
 
-	res, err := getLocalRoutes(iface.Name)
+	res, err := getLocalRoutes(ctx, config, iface.Name)
 	if err != nil {
 		t.Fatalf("get local route should not failed, err %v", err)
 	}
@@ -58,12 +63,12 @@ func TestAddAndRemoveLocalRoute(t *testing.T) {
 	}
 
 	// test remove local route
-	if err := removeLocalRoute(testIp, iface.Name); err != nil {
+	if err = removeLocalRoute(ctx, config, testIp, iface.Name); err != nil {
 		t.Fatalf("add test local route should not failed")
 	}
-	res, err := getLocalRoutes(iface.Name)
+	res, err = getLocalRoutes(ctx, config, iface.Name)
 	if err != nil {
-		t.Fatalf("ip route list should not failed, err %s", res.err)
+		t.Fatalf("ip route list should not failed, err %s", err)
 	}
 
 	for _, route := range res {
@@ -74,26 +79,29 @@ func TestAddAndRemoveLocalRoute(t *testing.T) {
 }
 
 func TestGetLocalRoute(t *testing.T) {
-	metdata, err := getMetadata(context.Context(), false)
+	ctx := context.Background()
+	config, _ := getConfig(t)
+	metadata, err := metadata.New().Get(ctx)
 	if err != nil {
-		t.Fatalf("failed to get metadata, err %v", err)
+		t.Fatalf("failed to get metadata: %v", err)
 	}
-	iface, err := getInterfaceByMAC(metdata.Instance.NetworkInterfaces[0].Mac)
+
+	iface, err := getInterfaceByMAC(metadata.Instance.NetworkInterfaces[0].Mac)
 	if err != nil {
 		t.Fatalf("failed to get interface from mac, err %v", err)
 	}
 
-	if err := addLocalRoute(testIp, iface.Name); err != nil {
+	if err = addLocalRoute(ctx, config, testIp, iface.Name); err != nil {
 		t.Fatalf("add test local route should not failed, err %v", err)
 	}
-	routes, err := getLocalRoutes(iface.Name)
+	routes, err := getLocalRoutes(ctx, config, iface.Name)
 	if err != nil {
 		t.Fatalf("get local routes should not failed, err %v", err)
 	}
 	if len(routes) != 1 {
-		t.Fatal("find unexpected local route %s.", routes[0])
+		t.Fatalf("find unexpected local route %s.", routes[0])
 	}
 	if routes[0] != testIp {
-		t.Fatal("find unexpected local route %s.", routes[0])
+		t.Fatalf("find unexpected local route %s.", routes[0])
 	}
 }

@@ -38,10 +38,7 @@ func getConfig(t *testing.T) (*cfg.Sections, string) {
 		t.Fatalf("Failed to load configuration: %+v", err)
 	}
 
-	config, err := cfg.Get()
-	if err != nil {
-		t.Fatalf("Failed to get config: %+v", err)
-	}
+	config := cfg.Get()
 
 	if config == nil {
 		t.Fatal("cfg.Get() returned a nil config")
@@ -62,7 +59,7 @@ func getConfig(t *testing.T) (*cfg.Sections, string) {
 
 // TestInstanceSetupSSHKeys validates SSH keys are generated on first boot and not changed afterward.
 func TestInstanceSetupSSHKeys(t *testing.T) {
-	config, tempDir := getConfig(t)
+	_, tempDir := getConfig(t)
 	ctx := context.Background()
 	agentInit(ctx)
 
@@ -153,7 +150,6 @@ func TestInstanceSetupSSHKeysDisabled(t *testing.T) {
 }
 
 func TestInstanceSetupBotoConfig(t *testing.T) {
-	config, tempDir := getConfig(t)
 	ctx := context.Background()
 
 	if err := os.Rename(botoCfg, botoCfg+".bak"); err != nil {
@@ -184,7 +180,7 @@ func TestInstanceSetupBotoConfig(t *testing.T) {
 }
 
 func TestInstanceSetupBotoConfigDisabled(t *testing.T) {
-	config, _ := getConfig(t, tempDir)
+	config, _ := getConfig(t)
 	ctx := context.Background()
 
 	if err := os.Rename(botoCfg, botoCfg+".bak"); err != nil {
@@ -198,7 +194,7 @@ func TestInstanceSetupBotoConfigDisabled(t *testing.T) {
 	}()
 
 	// Test it is not created if disabled in config.
-	config.Section("InstanceSetup").Key("set_boto_config").SetValue("false")
+	config.InstanceSetup.SetBotoConfig = false
 	agentInit(ctx)
 
 	if _, err := os.Stat(botoCfg); err == nil || !os.IsNotExist(err) {
