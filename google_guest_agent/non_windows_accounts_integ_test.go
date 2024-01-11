@@ -37,13 +37,13 @@ func TestCreateAndRemoveGoogleUser(t *testing.T) {
 	config, _ := getConfig(t)
 
 	if exist, err := userExists(testUser); err != nil && exist {
-		t.Fatalf("test user should not exist")
+		t.Fatalf("test user should not exist: %v", err)
 	}
 	if err := createGoogleUser(ctx, config, testUser); err != nil {
-		t.Errorf("createGoogleUser failed creating test user")
+		t.Errorf("createGoogleUser failed creating test user: %v", err)
 	}
 	if exist, err := userExists(testUser); exist != true || err != nil {
-		t.Errorf("test user should exist")
+		t.Errorf("test user should exist: %v", err)
 	}
 	ret := run.WithOutput(ctx, "groups", testUser)
 	if ret.ExitCode != 0 {
@@ -57,16 +57,16 @@ func TestCreateAndRemoveGoogleUser(t *testing.T) {
 		}
 	}
 	if _, err := os.Stat(fmt.Sprintf("/home/%s", testUser)); err != nil {
-		t.Errorf("test user home directory does not exist")
+		t.Errorf("test user home directory does not exist: %v", err)
 	}
 	if err := createGoogleUser(ctx, config, testUser); err == nil {
 		t.Errorf("createGoogleUser did not return error when creating user that already exists")
 	}
 	if err := removeGoogleUser(ctx, config, testUser); err != nil {
-		t.Errorf("removeGoogleUser did not remove user")
+		t.Errorf("removeGoogleUser did not remove user: %v", err)
 	}
 	if exist, err := userExists(testUser); err != nil && exist == true {
-		t.Errorf("test user should not exist")
+		t.Errorf("test user should not exist: %v", err)
 	}
 	if err := removeGoogleUser(ctx, config, testUser); err == nil {
 		t.Errorf("removeGoogleUser did not return error when removing user that doesn't exist")
