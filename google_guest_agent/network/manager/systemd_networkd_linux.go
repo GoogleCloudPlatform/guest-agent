@@ -110,10 +110,10 @@ type systemdConfig struct {
 	Network systemdNetworkConfig
 
 	// DHCPv4 is the systemd-networkd ini file's [DHCPv4] section.
-	DHCPv4 systemdDHCPConfig
+	DHCPv4 *systemdDHCPConfig `ini:",omitempty"`
 
 	// DHCPv6 is the systemd-networkd ini file's [DHCPv4] section.
-	DHCPv6 systemdDHCPConfig
+	DHCPv6 *systemdDHCPConfig `ini:",omitempty"`
 }
 
 // Name returns the name of the network manager service.
@@ -181,7 +181,7 @@ func (n systemdNetworkd) IsManaging(ctx context.Context, iface string) (bool, er
 func (n systemdNetworkd) Setup(ctx context.Context, config *cfg.Sections, payload []metadata.NetworkInterfaces) error {
 	// Create a network configuration file with default configurations for each network interface.
 	googleInterfaces, googleIpv6Interfaces := interfaceListsIpv4Ipv6(payload)
-	for _, iface := range googleInterfaces {
+	for i, iface := range googleInterfaces {
 		logger.Debugf("write %s network config for %s", n.Name(), iface)
 
 		var dhcp = "ipv4"
@@ -199,16 +199,22 @@ func (n systemdNetworkd) Setup(ctx context.Context, config *cfg.Sections, payloa
 			},
 			Network: systemdNetworkConfig{
 				DHCP:            dhcp,
-				DNSDefaultRoute: false,
+				DNSDefaultRoute: true,
 			},
-			DHCPv4: systemdDHCPConfig{
+		}
+
+		// We are only interested on DHCP offered routes on the primary nic,
+		// ignore it for the secondary ones.
+		if i != 0 {
+			data.Network.DNSDefaultRoute = false
+			data.DHCPv4 = &systemdDHCPConfig{
 				RoutesToDNS: false,
 				RoutesToNTP: false,
-			},
-			DHCPv6: systemdDHCPConfig{
+			}
+			data.DHCPv6 = &systemdDHCPConfig{
 				RoutesToDNS: false,
 				RoutesToNTP: false,
-			},
+			}
 		}
 
 		config := ini.Empty()
