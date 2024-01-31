@@ -99,9 +99,9 @@ var (
 	// currManager is the Service implementation currently managing the interfaces.
 	currManager Service
 
-	// osRules lists the rules for applying interface configurations for primary
+	// defaultOSRules lists the rules for applying interface configurations for primary
 	// and secondary interfaces.
-	osRules = []osConfigRule{
+	defaultOSRules = []osConfigRule{
 		// Debian rules.
 		{
 			osNames: []string{"debian"},
@@ -143,10 +143,8 @@ var (
 				osConfigRuleAnyVersion: true,
 			},
 			action: osConfigAction{
-				nativeOSConfig:  slesNativeOSConfig,
-				ignoreSetup:     true,
-				ignorePrimary:   true,
-				ignoreSecondary: true,
+				nativeOSConfig: slesNativeOSConfig,
+				ignoreSetup:    true,
 			},
 		},
 		{
@@ -162,6 +160,14 @@ var (
 			},
 		},
 	}
+
+	// osinfoGet points to the function to use for getting osInfo.
+	// Primarily used for testing.
+	osinfoGet = osinfo.Get
+
+	// osRules points to the rules to use for finding relevant ignore rules.
+	// Primarily used for testing.
+	osRules = defaultOSRules
 )
 
 // registerManager registers the provided network manager service to the list of known
@@ -204,7 +210,7 @@ func detectNetworkManager(ctx context.Context, iface string) (Service, error) {
 
 // findOSRule finds the osConfigRule that applies to the current system.
 func findOSRule(broadVersion bool) *osConfigRule {
-	osInfo := osinfo.Get()
+	osInfo := osinfoGet()
 	for _, curr := range osRules {
 		if !slices.Contains(curr.osNames, osInfo.OS) {
 			continue
@@ -214,7 +220,7 @@ func findOSRule(broadVersion bool) *osConfigRule {
 			return &curr
 		}
 
-		if curr.majorVersions[osInfo.Version.Major] {
+		if !broadVersion && curr.majorVersions[osInfo.Version.Major] {
 			return &curr
 		}
 	}

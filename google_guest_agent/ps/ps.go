@@ -15,6 +15,9 @@
 // Package ps provides a way to find a process in linux without using the ps CLI tool.
 package ps
 
+// Client for finding processes.
+var Client ProcessInterface
+
 // Process describes an OS process.
 type Process struct {
 	// Pid is the process id.
@@ -26,4 +29,9 @@ type Process struct {
 	// CommandLine contains the processes executable path and its command
 	// line arguments (honoring the order they were presented when executed).
 	CommandLine []string
+}
+
+// ProcessInterface is the minimum required Ps interface for Guest Agent.
+type ProcessInterface interface {
+	Find(exeMatch string) ([]Process, error)
 }

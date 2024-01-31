@@ -247,7 +247,7 @@ func (n systemdNetworkd) Rollback(ctx context.Context, payload []metadata.Networ
 		return fmt.Errorf("failed to get list of interface names: %v", err)
 	}
 
-	for _, iface := range interfaces[1:] {
+	for _, iface := range interfaces {
 		// Find expected files.
 		configFile := fmt.Sprintf("%s/%s-%s-google-guest-agent.network", n.configDir, n.priority, iface)
 		logger.Debugf("checking for %s", configFile)
@@ -274,6 +274,10 @@ func (n systemdNetworkd) Rollback(ctx context.Context, payload []metadata.Networ
 				return err
 			}
 		}
+	}
+	// Avoid restarting systemd-networkd.
+	if err := run.Quiet(ctx, "networkctl", "reload"); err != nil {
+		return fmt.Errorf("error reloading systemd-networkd network configs: %v", err)
 	}
 	return nil
 }

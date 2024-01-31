@@ -22,20 +22,25 @@ import (
 	"testing"
 
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/osinfo"
 	"github.com/GoogleCloudPlatform/guest-agent/metadata"
 )
 
 const (
-	// Values for determining behavior of mockService's IsManaging()
-	valueFalse = 0
-	valueTrue  = 1
-	valueErr   = 2
+	// testOSVersion encapsulates the mock version to use for testing.
+	testOSVersion = 2
 )
 
 // Create mock service.
 type mockService struct {
+	// isFallback indicates whether this service is a fallback.
 	isFallback bool
-	isManaging int
+
+	// isManaging indicates whether this service is managing the primary interface.
+	isManaging bool
+
+	// managingError indicates whether isManaging() should return an error.
+	managingError bool
 }
 
 // Name implements the Service interface.
@@ -48,10 +53,10 @@ func (n mockService) Name() string {
 
 // IsManaging implements the Service interface.
 func (n mockService) IsManaging(ctx context.Context, iface string) (bool, error) {
-	if n.isManaging == valueErr {
+	if n.managingError {
 		return false, fmt.Errorf("mock error")
 	}
-	return n.isManaging == valueTrue, nil
+	return n.isManaging, nil
 }
 
 // Setup implements the Service interface.
@@ -69,109 +74,280 @@ func managerTestSetup() {
 	// Clear the known network managers and fallbacks.
 	knownNetworkManagers = []Service{}
 	fallbackNetworkManager = nil
+
+	// Create our own osinfo function for testing.
+	osinfoGet = func() osinfo.OSInfo {
+		return osinfo.OSInfo{
+			OS:            "test",
+			VersionID:     "test",
+			PrettyName:    "Test",
+			KernelRelease: "test",
+			KernelVersion: "Test",
+			Version: osinfo.Ver{
+				Major:  testOSVersion,
+				Minor:  0,
+				Patch:  0,
+				Length: 0,
+			},
+		}
+	}
 }
 
 // TestDetectNetworkManager tests whether DetectNetworkManager()
-// correctly returns a network manager that's not the fallback.
+// returns expected values given certain mock environment setups.
 func TestDetectNetworkManager(t *testing.T) {
-	managerTestSetup()
-	registerManager(mockService{
-		isFallback: false,
-		isManaging: valueTrue,
-	}, false)
-	registerManager(mockService{
-		isFallback: true,
-		isManaging: valueFalse,
-	}, false)
-	var expectedManager = knownNetworkManagers[0]
+	tests := []struct {
+		// name is the name of the test.
+		name string
 
-	s, err := detectNetworkManager(context.Background(), "iface")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		// managers are the list of mock services to register.
+		services []mockService
+
+		// expectedManager is the manager expected to be returned.
+		expectedManager mockService
+
+		// expectErr dictates whether to expect an error.
+		expectErr bool
+
+		// expectedErrorMessage is the expected error message when an error is returned.
+		expectedErrorMessage string
+	}{
+		// Base test case testing if it works.
+		{
+			name: "no-error",
+			services: []mockService{
+				{
+					isFallback: false,
+					isManaging: true,
+				},
+				{
+					isFallback: true,
+					isManaging: false,
+				},
+			},
+			expectedManager: mockService{
+				isFallback: false,
+				isManaging: true,
+			},
+			expectErr: false,
+		},
+		// Test if an error is returned if no network manager is found.
+		{
+			name: "no-manager-found",
+			services: []mockService{
+				{
+					isFallback: false,
+					isManaging: false,
+				},
+				{
+					isFallback: true,
+					isManaging: false,
+				},
+			},
+			expectErr:            true,
+			expectedErrorMessage: "no network manager impl found for iface",
+		},
+		// Test if an error is returned if IsManaging() fails.
+		{
+			name: "is-managing-fail",
+			services: []mockService{
+				{
+					isFallback:    false,
+					managingError: true,
+				},
+				{
+					isFallback: false,
+					isManaging: true,
+				},
+			},
+			expectErr:            true,
+			expectedErrorMessage: "mock error",
+		},
+		// Test if the fallback service is returned if all other services are not detected.
+		{
+			name: "fallback",
+			services: []mockService{
+				{
+					isFallback: false,
+					isManaging: false,
+				},
+				{
+					isFallback: false,
+					isManaging: false,
+				},
+				{
+					isFallback: false,
+					isManaging: false,
+				},
+				{
+					isFallback: true,
+					isManaging: true,
+				},
+			},
+			expectedManager: mockService{
+				isFallback: true,
+				isManaging: true,
+			},
+			expectErr: false,
+		},
 	}
 
-	if s.Name() != expectedManager.Name() {
-		t.Fatalf("did not get expected network manager: got %s, wanted %s", s.Name(), expectedManager.Name())
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			managerTestSetup()
+			for _, service := range test.services {
+				registerManager(service, service.isFallback)
+			}
+
+			s, err := detectNetworkManager(context.Background(), "iface")
+			if err != nil {
+				if !test.expectErr {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if err.Error() != test.expectedErrorMessage {
+					t.Fatalf("error message does not match: Expected: %s, Actual: %v", test.expectedErrorMessage, err)
+				}
+
+				// Avoid checking expectedManager.
+				return
+			}
+			if err == nil && test.expectErr {
+				t.Fatalf("no error returned when error expected")
+			}
+
+			if s != test.expectedManager {
+				t.Fatalf("did not get expected network manager. Expected: %v, Actual: %v", test.expectedManager, s)
+			}
+		})
 	}
 }
 
-// TestDetectNetworkManagerNoManager tests whether DetectNetworkManager
-// correctly errors if no suitable network managers are found.
-func TestDetectNetworkManagerNoManager(t *testing.T) {
+// TestFindOSRule tests whether findOSRule() correctly returns the expected values
+// depending on whether a matching rule exists or not.
+func TestFindOSRule(t *testing.T) {
 	managerTestSetup()
-	registerManager(mockService{
-		isFallback: false,
-		isManaging: valueFalse,
-	}, false)
-	registerManager(mockService{
-		isFallback: true,
-		isManaging: valueFalse,
-	}, true)
 
-	_, err := detectNetworkManager(context.Background(), "iface")
-	if err == nil {
-		t.Fatalf("DetectNetworkManager() did not return an error when it should have")
+	tests := []struct {
+		// name is the name of the test.
+		name string
+
+		// rules are mock OSConfig rules.
+		rules []osConfigRule
+
+		// broadVersion indicates whether to call findOSRule() using broad versions.
+		broadVersion bool
+
+		// expectedNil indicates to expect a nil return when set to true.
+		expectedNil bool
+	}{
+		// ignoreRule exists.
+		{
+			name: "ignore-exist",
+			rules: []osConfigRule{
+				{
+					osNames: []string{"test"},
+					majorVersions: map[int]bool{
+						testOSVersion: true,
+					},
+					action: osConfigAction{},
+				},
+			},
+			broadVersion: false,
+			expectedNil:  false,
+		},
+		// ignoreRule broad version exists.
+		{
+			name: "ignore-exist-broad",
+			rules: []osConfigRule{
+				{
+					osNames: []string{"test"},
+					majorVersions: map[int]bool{
+						osConfigRuleAnyVersion: true,
+					},
+					action: osConfigAction{},
+				},
+			},
+			broadVersion: true,
+			expectedNil:  false,
+		},
+		// ignoreRule does not exist.
+		{
+			name: "ignore-no-exist",
+			rules: []osConfigRule{
+				{
+					osNames: []string{"non-test"},
+					majorVersions: map[int]bool{
+						0: true,
+					},
+					action: osConfigAction{},
+				},
+			},
+			broadVersion: false,
+			expectedNil:  true,
+		},
+		// ignoreRule broadVersion does not exist.
+		{
+			name: "ignore-no-exist-broad",
+			rules: []osConfigRule{
+				{
+					osNames: []string{"non-test"},
+					majorVersions: map[int]bool{
+						osConfigRuleAnyVersion: true,
+					},
+					action: osConfigAction{},
+				},
+			},
+			broadVersion: true,
+			expectedNil:  true,
+		},
+		// ignoreRule non-broadVersion exists, but we want broad version.
+		{
+			name: "ignore-no-exist-broad-nonbroad-exist",
+			rules: []osConfigRule{
+				{
+					osNames: []string{"test"},
+					majorVersions: map[int]bool{
+						testOSVersion: true,
+					},
+					action: osConfigAction{},
+				},
+			},
+			broadVersion: true,
+			expectedNil:  true,
+		},
+		// ignoreRule broadVersion exists, but we want non-broad version.
+		{
+			name: "ignore-no-exist-broad-exist",
+			rules: []osConfigRule{
+				{
+					osNames: []string{"test"},
+					majorVersions: map[int]bool{
+						osConfigRuleAnyVersion: true,
+					},
+					action: osConfigAction{},
+				},
+			},
+			broadVersion: false,
+			expectedNil:  true,
+		},
 	}
 
-	var expectedError = "no network manager impl found for iface"
-	if err.Error() != expectedError {
-		t.Fatalf("error did not match expected error message: \nExpected: %v,\nActual: %s", expectedError, err.Error())
-	}
-}
+	// Run the tests.
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			managerTestSetup()
 
-// TestDetectNetworkManagerError tests whether DetectNetworkManager()
-// correctly throws an error if IsManaging() errors.
-func TestDetectNetworkManagerError(t *testing.T) {
-	managerTestSetup()
-	registerManager(mockService{
-		isFallback: false,
-		isManaging: valueErr,
-	}, false)
-	registerManager(mockService{
-		isFallback: true,
-		isManaging: valueTrue,
-	}, true)
+			osRules = test.rules
+			osRule := findOSRule(test.broadVersion)
 
-	_, err := detectNetworkManager(context.Background(), "iface")
-	if err == nil {
-		t.Fatalf("DetectNetworkManager() did not return an error when it should have")
-	}
+			if osRule == nil && !test.expectedNil {
+				t.Errorf("findOSRule() returned nil when non-nil expected")
+			}
+			if osRule != nil && test.expectedNil {
+				t.Errorf("findOSRule() returned non-nil when nil expected: %+v", osRule)
+			}
 
-	var expectedError = "mock error"
-	if err.Error() != expectedError {
-		t.Fatalf("error did not match expected error message: \nExpected: %v,\nActual: %s", expectedError, err.Error())
-	}
-}
-
-// TestDetectNetworkManagerFallback tests whether DetectNetworkManager
-// correctly returns the fallback if all other network manager services
-// are not detected.
-func TestDetectNetworkManagerFallback(t *testing.T) {
-	managerTestSetup()
-	registerManager(mockService{
-		isFallback: false,
-		isManaging: valueFalse,
-	}, false)
-	registerManager(mockService{
-		isFallback: false,
-		isManaging: valueFalse,
-	}, false)
-	registerManager(mockService{
-		isFallback: false,
-		isManaging: valueFalse,
-	}, false)
-	registerManager(mockService{
-		isFallback: true,
-		isManaging: valueTrue,
-	}, true)
-
-	s, err := detectNetworkManager(context.Background(), "iface")
-	if err != nil {
-		t.Fatalf("DetectNetworkManager() incorrectly returned an error: %v", err)
-	}
-
-	var expectedName = "fallback"
-	if s.Name() != expectedName {
-		t.Fatalf("DetectNetworkManager() did not return correct manager: Expected: %v, Actual: %v", expectedName, s.Name())
+			osRules = defaultOSRules
+		})
 	}
 }
