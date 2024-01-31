@@ -126,7 +126,7 @@ func (n systemdNetworkd) Name() string {
 // to check if systemd-networkd is managing or has configured the provided interface.
 func (n systemdNetworkd) IsManaging(ctx context.Context, iface string) (bool, error) {
 	// Check the version.
-	if _, err := exec.LookPath("networkctl"); err != nil {
+	if _, err := execLookPath("networkctl"); err != nil {
 		if errors.Is(err, exec.ErrNotFound) {
 			return false, nil
 		}
@@ -181,11 +181,27 @@ func (n systemdNetworkd) IsManaging(ctx context.Context, iface string) (bool, er
 func (n systemdNetworkd) Setup(ctx context.Context, config *cfg.Sections, payload []metadata.NetworkInterfaces) error {
 	// Create a network configuration file with default configurations for each network interface.
 	googleInterfaces, googleIpv6Interfaces := interfaceListsIpv4Ipv6(payload)
-	for i, iface := range googleInterfaces {
-		logger.Debugf("write %s network config for %s", n.Name(), iface)
+
+	// Write the config files.
+	if err := writeSystemdConfig(googleInterfaces, googleIpv6Interfaces, n.configDir, n.priority); err != nil {
+		return fmt.Errorf("error writing network configs: %v", err)
+	}
+
+	// Avoid restarting systemd-networkd.
+	if err := run.Quiet(ctx, "networkctl", "reload"); err != nil {
+		return fmt.Errorf("error reloading systemd-networkd network configs: %v", err)
+	}
+	return nil
+}
+
+// writeSystemdConfig writes the systemd config for all the provided interfaces in the
+// provided directory using the given priority.
+func writeSystemdConfig(interfaces, ipv6Interfaces []string, configDir, priority string) error {
+	for i, iface := range interfaces {
+		logger.Debugf("write systemd-networkd network config for %s", iface)
 
 		var dhcp = "ipv4"
-		if slices.Contains(googleIpv6Interfaces, iface) {
+		if slices.Contains(ipv6Interfaces, iface) {
 			dhcp = "yes"
 		}
 
@@ -227,14 +243,10 @@ func (n systemdNetworkd) Setup(ctx context.Context, config *cfg.Sections, payloa
 		// a priority of 1 allows the guest-agent to override any existing default configurations
 		// while also allowing users the freedom of using priorities of '0...' to override the
 		// agent's own configurations.
-		configPath := fmt.Sprintf("%s/%s-%s-google-guest-agent.network", n.configDir, n.priority, iface)
+		configPath := fmt.Sprintf("%s/%s-%s-google-guest-agent.network", configDir, priority, iface)
 		if err := config.SaveTo(configPath); err != nil {
 			return fmt.Errorf("error saving config for %s: %v", iface, err)
 		}
-	}
-	// Avoid restarting systemd-networkd.
-	if err := run.Quiet(ctx, "networkctl", "reload"); err != nil {
-		return fmt.Errorf("error reloading systemd-networkd network configs: %v", err)
 	}
 	return nil
 }
