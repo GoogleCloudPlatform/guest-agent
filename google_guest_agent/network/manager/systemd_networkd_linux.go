@@ -79,6 +79,22 @@ type systemdMatchConfig struct {
 type systemdNetworkConfig struct {
 	// DHCP determines the ipv4/ipv6 protocol version for use with dhcp.
 	DHCP string
+
+	// DNSDefaultRoute is used to determine if the link's configured DNS servers are
+	// used for resolving domain names that do not match any link's domain.
+	DNSDefaultRoute bool
+}
+
+// systemdDHCPConfig contains the dhcp specific configurations for a
+// systemd network configuration.
+type systemdDHCPConfig struct {
+	// RoutesToDNS defines if routes to the DNS servers received from the DHCP
+	// shoud be configured/installed.
+	RoutesToDNS bool
+
+	// RoutesToNTP defines if routes to the NTP servers received from the DHCP
+	// shoud be configured/installed.
+	RoutesToNTP bool
 }
 
 // systemdConfig wraps the interface configuration for systemd-networkd.
@@ -92,6 +108,12 @@ type systemdConfig struct {
 
 	// Network is the systemd-networkd ini file's [Network] section.
 	Network systemdNetworkConfig
+
+	// DHCPv4 is the systemd-networkd ini file's [DHCPv4] section.
+	DHCPv4 systemdDHCPConfig
+
+	// DHCPv6 is the systemd-networkd ini file's [DHCPv4] section.
+	DHCPv6 systemdDHCPConfig
 }
 
 // Name returns the name of the network manager service.
@@ -176,7 +198,16 @@ func (n systemdNetworkd) Setup(ctx context.Context, config *cfg.Sections, payloa
 				Name: iface,
 			},
 			Network: systemdNetworkConfig{
-				DHCP: dhcp,
+				DHCP:            dhcp,
+				DNSDefaultRoute: false,
+			},
+			DHCPv4: systemdDHCPConfig{
+				RoutesToDNS: false,
+				RoutesToNTP: false,
+			},
+			DHCPv6: systemdDHCPConfig{
+				RoutesToDNS: false,
+				RoutesToNTP: false,
 			},
 		}
 
