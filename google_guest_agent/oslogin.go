@@ -20,6 +20,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"slices"
 	"strings"
 	"time"
 
@@ -37,6 +38,13 @@ var (
 	googleBlockStart = "#### Google OS Login control. Do not edit this section. ####"
 	googleBlockEnd   = "#### End Google OS Login control section. ####"
 	trustedCAWatcher events.Watcher
+
+	// deprecatedConfigDirectives contains a list of configuration directives (or lines)
+	// that we no longer support and should not be considered for updated versions of a
+	// given configuration file.
+	deprecatedConfigDirectives = map[string][]string{
+		"/etc/pam.d/su": []string{"account    [success=bad ignore=ignore] pam_oslogin_login.so"},
+	}
 )
 
 type osloginMgr struct{}
@@ -121,6 +129,8 @@ func (o *osloginMgr) Set(ctx context.Context) error {
 	oldEnable, _, _ := getOSLoginEnabled(oldMetadata)
 	enable, twofactor, skey := getOSLoginEnabled(newMetadata)
 
+	cleanupDeprecatedDirectives()
+
 	if enable && !oldEnable {
 		logger.Infof("Enabling OS Login")
 		newMetadata.Instance.Attributes.SSHKeys = nil
@@ -186,6 +196,55 @@ func (o *osloginMgr) Set(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func cleanupDeprecatedLines(fpath string, directives []string) error {
+	// If the file doesn't exist don't even try updating it.
+	stat, err := os.Stat(fpath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("failed to stat config file: %+v", err)
+	}
+
+	data, err := os.ReadFile(fpath)
+	if err != nil {
+		return fmt.Errorf("failed to read file: %+v", err)
+	}
+
+	var updatedLines []string
+	var totalLines int
+
+	for _, line := range strings.Split(string(data), "\n") {
+		if !slices.Contains(directives, line) {
+			updatedLines = append(updatedLines, line)
+		}
+		totalLines++
+	}
+
+	// Don't attempt to update the config file if no lines werer removed/avoided.
+	if totalLines == len(updatedLines) {
+		return nil
+	}
+
+	err = os.WriteFile(fpath, []byte(strings.Join(updatedLines, "\n")), stat.Mode())
+	if err != nil {
+		return fmt.Errorf("failed to update deprecated configuration directives: %+v", err)
+	}
+
+	return nil
+}
+
+// cleanupDeprecatedDirectives checks if a given configuration line is an old
+// configuration that was deprecated and we should not consider it for the updated
+// version.
+func cleanupDeprecatedDirectives() {
+	for k, v := range deprecatedConfigDirectives {
+		if err := cleanupDeprecatedLines(k, v); err != nil {
+			logger.Errorf("failed to clean up deprecated directives: %+v", err)
+		}
+	}
 }
 
 func filterGoogleLines(contents string) []string {
