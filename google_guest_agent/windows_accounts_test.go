@@ -112,10 +112,8 @@ func TestAccountsDisabled(t *testing.T) {
 	}
 }
 
-// rename this with leading disabled because this is a resource
-// intensive test. this test takes approx. 141 seconds to complete, next
-// longest test is 0.43 seconds.
-func disabledTestNewPwd(t *testing.T) {
+// Test takes ~43 sec to complete and is resource intensive.
+func TestNewPwd(t *testing.T) {
 	minPasswordLength := 15
 	maxPasswordLength := 255
 	var tests = []struct {
@@ -133,31 +131,33 @@ func disabledTestNewPwd(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		for i := 0; i < 100000; i++ {
-			pwd, err := newPwd(tt.passwordLength)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if len(pwd) != tt.wantPasswordLength {
-				t.Errorf("Password is not %d characters: len(%s)=%d", tt.wantPasswordLength, pwd, len(pwd))
-			}
-			var l, u, n, s int
-			for _, r := range pwd {
-				switch {
-				case unicode.IsLower(r):
-					l = 1
-				case unicode.IsUpper(r):
-					u = 1
-				case unicode.IsDigit(r):
-					n = 1
-				case unicode.IsPunct(r) || unicode.IsSymbol(r):
-					s = 1
+		t.Run(tt.name, func(t *testing.T) {
+			for i := 0; i < 100000; i++ {
+				pwd, err := newPwd(tt.passwordLength)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if len(pwd) != tt.wantPasswordLength {
+					t.Errorf("Password is not %d characters: len(%s)=%d", tt.wantPasswordLength, pwd, len(pwd))
+				}
+				var l, u, n, s int
+				for _, r := range pwd {
+					switch {
+					case unicode.IsLower(r):
+						l = 1
+					case unicode.IsUpper(r):
+						u = 1
+					case unicode.IsDigit(r):
+						n = 1
+					case unicode.IsPunct(r) || unicode.IsSymbol(r):
+						s = 1
+					}
+				}
+				if l+u+n+s < 3 {
+					t.Errorf("Password does not have at least one character from 3 categories: '%v'", pwd)
 				}
 			}
-			if l+u+n+s < 3 {
-				t.Errorf("Password does not have at least one character from 3 categories: '%v'", pwd)
-			}
-		}
+		})
 	}
 }
 
