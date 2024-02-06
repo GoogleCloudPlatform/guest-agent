@@ -48,7 +48,6 @@ const (
 	storageURL     = "storage.googleapis.com"
 	bucket         = "([a-z0-9][-_.a-z0-9]*)"
 	object         = "(.+)"
-	version        = "dev"
 	defaultTimeout = 20 * time.Second
 )
 
@@ -82,7 +81,8 @@ var (
 
 	testStorageClient *storage.Client
 
-	client metadata.MDSClientInterface
+	client  metadata.MDSClientInterface
+	version string
 )
 
 func init() {
