@@ -29,6 +29,7 @@ import (
 	"math/big"
 	"reflect"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -422,7 +423,7 @@ func compareAccounts(newKeys metadata.WindowsKeys, oldStrKeys []string) metadata
 	for _, s := range oldStrKeys {
 		var key metadata.WindowsKey
 		if err := json.Unmarshal([]byte(s), &key); err != nil {
-			if !utils.ContainsString(s, badReg) {
+			if !slices.Contains(badReg, s) {
 				logger.Errorf("Bad windows key from registry: %s", err)
 				badReg = append(badReg, s)
 			}

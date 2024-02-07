@@ -23,6 +23,7 @@ import (
 	"os/exec"
 	"path"
 	"runtime"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -214,7 +215,7 @@ func getUserKeys(mdkeys []string) map[string][]string {
 			}
 
 			if err != nil {
-				if !utils.ContainsString(trimmedKey, badSSHKeys) {
+				if !slices.Contains(badSSHKeys, trimmedKey) {
 					logger.Errorf("%s: %s", err.Error(), trimmedKey)
 					badSSHKeys = append(badSSHKeys, trimmedKey)
 				}

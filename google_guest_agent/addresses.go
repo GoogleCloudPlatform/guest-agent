@@ -21,21 +21,19 @@ import (
 	"net"
 	"reflect"
 	"runtime"
+	"slices"
 	"strings"
 
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
 	network "github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/network/manager"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/run"
-	"github.com/GoogleCloudPlatform/guest-agent/utils"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 )
 
 var (
-	addressKey        = regKeyBase + `\ForwardedIps`
-	oldWSFCAddresses  string
-	oldWSFCEnable     bool
-	interfacesEnabled bool
-	interfaces        []net.Interface
+	addressKey       = regKeyBase + `\ForwardedIps`
+	oldWSFCAddresses string
+	oldWSFCEnable    bool
 )
 
 type addressMgr struct{}
@@ -76,7 +74,9 @@ func getForwardsFromRegistry(mac string) ([]string, error) {
 		oldName := strings.Replace(mac, ":", "", -1)
 		regFwdIPs, err = readRegMultiString(addressKey, oldName)
 		if err == nil {
-			deleteRegKey(addressKey, oldName)
+			if err = deleteRegKey(addressKey, oldName); err != nil {
+				logger.Warningf("Failed to delete key: %q, name: %q from registry", addressKey, oldName)
+			}
 		}
 	} else if err != nil {
 		return nil, err
@@ -86,13 +86,13 @@ func getForwardsFromRegistry(mac string) ([]string, error) {
 
 func compareRoutes(configuredRoutes, desiredRoutes []string) (toAdd, toRm []string) {
 	for _, desiredRoute := range desiredRoutes {
-		if !utils.ContainsString(desiredRoute, configuredRoutes) {
+		if !slices.Contains(configuredRoutes, desiredRoute) {
 			toAdd = append(toAdd, desiredRoute)
 		}
 	}
 
 	for _, configuredRoute := range configuredRoutes {
-		if !utils.ContainsString(configuredRoute, desiredRoutes) {
+		if !slices.Contains(desiredRoutes, configuredRoute) {
 			toRm = append(toRm, configuredRoute)
 		}
 	}
@@ -205,7 +205,7 @@ func (a *addressMgr) applyWSFCFilter(config *cfg.Sections) {
 		for idx := range interfaces {
 			var filteredForwardedIps []string
 			for _, ip := range interfaces[idx].ForwardedIps {
-				if !utils.ContainsString(ip, wsfcAddrs) {
+				if !slices.Contains(wsfcAddrs, ip) {
 					filteredForwardedIps = append(filteredForwardedIps, ip)
 				}
 			}
@@ -213,7 +213,7 @@ func (a *addressMgr) applyWSFCFilter(config *cfg.Sections) {
 
 			var filteredTargetInstanceIps []string
 			for _, ip := range interfaces[idx].TargetInstanceIps {
-				if !utils.ContainsString(ip, wsfcAddrs) {
+				if !slices.Contains(wsfcAddrs, ip) {
 					filteredTargetInstanceIps = append(filteredTargetInstanceIps, ip)
 				}
 			}
@@ -274,14 +274,8 @@ func (a *addressMgr) Set(ctx context.Context) error {
 		a.applyWSFCFilter(config)
 	}
 
-	var err error
-	interfaces, err = net.Interfaces()
-	if err != nil {
-		return fmt.Errorf("error populating interfaces: %v", err)
-	}
-
 	// Setup network interfaces.
-	err = network.SetupInterfaces(ctx, config, newMetadata.Instance.NetworkInterfaces)
+	err := network.SetupInterfaces(ctx, config, newMetadata.Instance.NetworkInterfaces)
 	if err != nil {
 		return fmt.Errorf("failed to setup network interfaces: %v", err)
 	}
@@ -295,7 +289,7 @@ func (a *addressMgr) Set(ctx context.Context) error {
 	for _, ni := range newMetadata.Instance.NetworkInterfaces {
 		iface, err := network.GetInterfaceByMAC(ni.Mac)
 		if err != nil {
-			if !utils.ContainsString(ni.Mac, badMAC) {
+			if !slices.Contains(badMAC, ni.Mac) {
 				logger.Errorf("Error getting interface: %s", err)
 				badMAC = append(badMAC, ni.Mac)
 			}
@@ -328,7 +322,7 @@ func (a *addressMgr) Set(ctx context.Context) error {
 			}
 			for _, ip := range configuredIPs {
 				// Only add to `forwardedIPs` if it is recorded in the registry.
-				if utils.ContainsString(ip, regFwdIPs) {
+				if slices.Contains(regFwdIPs, ip) {
 					forwardedIPs = append(forwardedIPs, ip)
 				}
 			}
@@ -371,14 +365,14 @@ func (a *addressMgr) Set(ctx context.Context) error {
 		var registryEntries []string
 		for _, ip := range wantIPs {
 			// If the IP is not in toAdd, add to registry list and continue.
-			if !utils.ContainsString(ip, toAdd) {
+			if !slices.Contains(toAdd, ip) {
 				registryEntries = append(registryEntries, ip)
 				continue
 			}
 			var err error
 			if runtime.GOOS == "windows" {
 				// Don't addAddress if this is already configured.
-				if !utils.ContainsString(ip, configuredIPs) {
+				if !slices.Contains(configuredIPs, ip) {
 					err = addAddress(net.ParseIP(ip), net.IPv4Mask(255, 255, 255, 255), uint32(iface.Index))
 				}
 			} else {
@@ -394,7 +388,7 @@ func (a *addressMgr) Set(ctx context.Context) error {
 		for _, ip := range toRm {
 			var err error
 			if runtime.GOOS == "windows" {
-				if !utils.ContainsString(ip, configuredIPs) {
+				if !slices.Contains(configuredIPs, ip) {
 					continue
 				}
 				err = removeAddress(net.ParseIP(ip), uint32(iface.Index))
