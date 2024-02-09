@@ -26,6 +26,9 @@ import (
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 )
 
+// Client is the Runner running commands.
+var Client RunnerInterface
+
 // Result wraps a command execution result.
 type Result struct {
 	// Exit code. Set to -1 if we failed to run the command.
@@ -38,13 +41,37 @@ type Result struct {
 	Combined string
 }
 
+// RunnerInterface defines the runner running commands.
+type RunnerInterface interface {
+	// Quiet runs a command and doesn't return a result, but errors in case of failure.
+	Quiet(ctx context.Context, name string, args ...string) error
+
+	// WithOutput runs a command and returns the result.
+	WithOutput(ctx context.Context, name string, args ...string) *Result
+
+	// WithOutputTimeout runs a command with a defined timeout and returns its result.
+	WithOutputTimeout(ctx context.Context, timeout time.Duration, name string, args ...string) *Result
+
+	// WithCombinedOutput runs a command and returns a result with stderr and stdout
+	// combined in the Combined member of Result.
+	WithCombinedOutput(ctx context.Context, name string, args ...string) *Result
+}
+
+// init initializes the RunClient.
+func init() {
+	Client = Runner{}
+}
+
 // Error return an error containing the stderr content.
 func (e Result) Error() string {
 	return strings.TrimSuffix(e.StdErr, "\n")
 }
 
+// Runner implements the RunnerInterface and represents the runner running commands.
+type Runner struct{}
+
 // Quiet runs a command and doesn't return a result, but an error in case of failure.
-func Quiet(ctx context.Context, name string, args ...string) error {
+func (r Runner) Quiet(ctx context.Context, name string, args ...string) error {
 	res := execCommand(exec.CommandContext(ctx, name, args...))
 	if res.ExitCode != 0 {
 		return res
@@ -53,12 +80,12 @@ func Quiet(ctx context.Context, name string, args ...string) error {
 }
 
 // WithOutput runs a command and returns the result.
-func WithOutput(ctx context.Context, name string, args ...string) *Result {
+func (r Runner) WithOutput(ctx context.Context, name string, args ...string) *Result {
 	return execCommand(exec.CommandContext(ctx, name, args...))
 }
 
 // WithOutputTimeout runs a command with a defined timeout and returns its result.
-func WithOutputTimeout(ctx context.Context, timeout time.Duration, name string, args ...string) *Result {
+func (r Runner) WithOutputTimeout(ctx context.Context, timeout time.Duration, name string, args ...string) *Result {
 	child, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
@@ -72,7 +99,7 @@ func WithOutputTimeout(ctx context.Context, timeout time.Duration, name string, 
 
 // WithCombinedOutput returns a result with stderr and stdout combined in the Combined
 // member of Result.
-func WithCombinedOutput(ctx context.Context, name string, args ...string) *Result {
+func (r Runner) WithCombinedOutput(ctx context.Context, name string, args ...string) *Result {
 	cmd := exec.CommandContext(ctx, name, args...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -89,6 +116,26 @@ func WithCombinedOutput(ctx context.Context, name string, args ...string) *Resul
 	return &Result{
 		Combined: string(output),
 	}
+}
+
+// Quiet runs the current RunClient's Quiet() function.
+func Quiet(ctx context.Context, name string, args ...string) error {
+	return Client.Quiet(ctx, name, args...)
+}
+
+// WithOutput runs the current RunClient's WithOutput() function.
+func WithOutput(ctx context.Context, name string, args ...string) *Result {
+	return Client.WithOutput(ctx, name, args...)
+}
+
+// WithOutputTimeout runs the current RunClient's WithOutputTimeout() function.
+func WithOutputTimeout(ctx context.Context, timeout time.Duration, name string, args ...string) *Result {
+	return Client.WithOutputTimeout(ctx, timeout, name, args...)
+}
+
+// WithCombinedOutput runs the current RunCLient's WithCombinedOutput function.
+func WithCombinedOutput(ctx context.Context, name string, args ...string) *Result {
+	return Client.WithCombinedOutput(ctx, name, args...)
 }
 
 func execCommand(cmd *exec.Cmd) *Result {

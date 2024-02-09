@@ -22,6 +22,9 @@ import (
 	"strconv"
 )
 
+// LinuxClient is for finding processes on linux distributions.
+type LinuxClient struct{}
+
 const (
 	// defaultLinuxProcDir is the default location of proc filesystem mount point in
 	// a linux system.
@@ -35,8 +38,13 @@ var (
 	linuxProcDir = defaultLinuxProcDir
 )
 
+// init creates the Linux process finder.
+func init() {
+	Client = &LinuxClient{}
+}
+
 // Find finds all processes with the executable path matching the provided regex.
-func Find(exeMatch string) ([]Process, error) {
+func (p LinuxClient) Find(exeMatch string) ([]Process, error) {
 	var result []Process
 
 	procExpression, err := regexp.Compile("^[0-9]*$")
@@ -105,4 +113,9 @@ func Find(exeMatch string) ([]Process, error) {
 	}
 
 	return result, nil
+}
+
+// Find finds all processes with the executable matching the provided regex.
+func Find(exeMatch string) ([]Process, error) {
+	return Client.Find(exeMatch)
 }

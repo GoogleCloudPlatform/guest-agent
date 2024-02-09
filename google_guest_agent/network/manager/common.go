@@ -19,6 +19,7 @@ package manager
 import (
 	"fmt"
 	"net"
+	"os/exec"
 
 	"github.com/GoogleCloudPlatform/guest-agent/metadata"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
@@ -26,6 +27,9 @@ import (
 
 var (
 	badMAC = make(map[string]net.Interface)
+
+	// execLookPath points to the function to check if a path exists.
+	execLookPath = exec.LookPath
 )
 
 // interfaceNames extracts the names of the network interfaces from the provided list

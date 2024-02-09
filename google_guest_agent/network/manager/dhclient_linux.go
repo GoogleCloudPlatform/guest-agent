@@ -36,7 +36,7 @@ import (
 
 const (
 	// The base directory for dhclient files managed by guest agent.
-	baseDhclientDir = "/var/google-dhclient.d"
+	defaultBaseDhclientDir = "/var/google-dhclient.d"
 
 	// For finer control of the execution, dhclient is invoked for
 	// each interface individually such that each call will have its
@@ -56,6 +56,11 @@ var (
 	// ipv6 is a wrapper containing the protocol version and its respective
 	// dhclient argument.
 	ipv6 = ipVersion{"ipv6", "-6"}
+)
+
+var (
+	// baseDhclientDir points to the base directory for DHClient leases and PIDs.
+	baseDhclientDir = defaultBaseDhclientDir
 )
 
 // ipVersion is a wrapper containing the human-readable version string and
@@ -85,7 +90,7 @@ func (n dhclient) Name() string {
 // IsManaging checks if the dhclient CLI is available.
 func (n dhclient) IsManaging(ctx context.Context, iface string) (bool, error) {
 	// Check if the dhclient CLI exists.
-	if _, err := exec.LookPath("dhclient"); err != nil {
+	if _, err := execLookPath("dhclient"); err != nil {
 		if errors.Is(err, exec.ErrNotFound) {
 			return false, nil
 		}
@@ -260,7 +265,9 @@ func dhclientProcessExists(ctx context.Context, iface string, ipVersion ipVersio
 			if ipVersion == ipv6 {
 				return containsProtocolArg, nil
 			}
-			return true, nil
+			if ipVersion == ipv4 && !slices.Contains(commandLine, ipv6.dhclientArg) {
+				return true, nil
+			}
 		}
 	}
 	return false, nil
