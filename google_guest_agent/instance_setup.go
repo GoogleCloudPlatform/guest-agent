@@ -29,6 +29,7 @@ import (
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/run"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/scheduler"
+	"github.com/GoogleCloudPlatform/guest-agent/retry"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 	"github.com/go-ini/ini"
 )
@@ -94,13 +95,11 @@ func agentInit(ctx context.Context) {
 	config := cfg.Get()
 
 	if runtime.GOOS == "windows" {
-		// Indefinitely retry to set up required MDS route.
-		for ; ; time.Sleep(1 * time.Second) {
-			if err := addMetadataRoute(); err != nil {
-				logger.Errorf("Could not set default route to metadata: %v", err)
-			} else {
-				break
-			}
+		// Try maximum for 1 min.
+		policy := retry.Policy{MaxAttempts: 60, BackoffFactor: 1, Jitter: time.Second}
+		err := retry.Run(ctx, policy, addMetadataRoute)
+		if err != nil {
+			panic(fmt.Sprintf("Failed to set metadata route: %+v", err))
 		}
 	} else {
 		// Linux instance setup.

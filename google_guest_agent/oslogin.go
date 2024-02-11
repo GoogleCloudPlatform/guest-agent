@@ -43,7 +43,7 @@ var (
 	// that we no longer support and should not be considered for updated versions of a
 	// given configuration file.
 	deprecatedConfigDirectives = map[string][]string{
-		"/etc/pam.d/su": []string{"account    [success=bad ignore=ignore] pam_oslogin_login.so"},
+		"/etc/pam.d/su": {"account    [success=bad ignore=ignore] pam_oslogin_login.so"},
 	}
 )
 
