@@ -17,13 +17,20 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
+	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
+	"time"
 
+	"cloud.google.com/go/storage"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
 	"github.com/GoogleCloudPlatform/guest-agent/metadata"
+	"google.golang.org/api/option"
 )
 
 func TestMain(m *testing.M) {
@@ -293,6 +300,154 @@ func TestGetWantedKeysError(t *testing.T) {
 			}
 			if _, err := getWantedKeys([]string{"", test.arg}, test.os); err == nil {
 				t.Errorf("getWantedKeys(%s, %s) succeeded for disabled config, want error", test.arg, test.os)
+			}
+		})
+	}
+}
+
+func TestDownloadURL(t *testing.T) {
+	ctx := context.Background()
+	ctr := make(map[string]int)
+	// No need to wait longer, override for testing.
+	defaultRetryPolicy.Jitter = time.Millisecond
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// /retry should succeed within 2 retries; /fail should always fail.
+		if (r.URL.Path == "/retry" && ctr["/retry"] != 1) || strings.Contains(r.URL.Path, "fail") {
+			w.WriteHeader(400)
+		}
+
+		fmt.Fprintf(w, r.URL.Path)
+		ctr[r.URL.Path] = ctr[r.URL.Path] + 1
+	}))
+	defer server.Close()
+
+	tests := []struct {
+		name    string
+		key     string
+		wantErr bool
+		retries int
+	}{
+		{
+			name:    "succeed_immediately",
+			key:     "/immediate_download",
+			wantErr: false,
+			retries: 1,
+		},
+		{
+			name:    "succeed_after_retry",
+			key:     "/retry",
+			wantErr: false,
+			retries: 2,
+		},
+		{
+			name:    "fail_retry_exhaust",
+			key:     "/fail",
+			wantErr: true,
+			retries: 3,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f, err := os.OpenFile(filepath.Join(t.TempDir(), tt.name), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0755)
+			if err != nil {
+				t.Fatalf("Failed to setup test file: %v", err)
+			}
+			defer f.Close()
+			url := server.URL + tt.key
+			if err := downloadURL(ctx, url, f); (err != nil) != tt.wantErr {
+				t.Errorf("downloadURL(ctx, %s, %s) error = [%v], wantErr %t", url, f.Name(), err, tt.wantErr)
+			}
+
+			if !tt.wantErr {
+				gotBytes, err := os.ReadFile(f.Name())
+				if err != nil {
+					t.Errorf("failed to read output file %q, with error: %v", f.Name(), err)
+				}
+				if string(gotBytes) != tt.key {
+					t.Errorf("downloadURL(ctx, %s, %s) wrote = [%s], want [%s]", url, f.Name(), string(gotBytes), tt.key)
+				}
+			}
+
+			if ctr[tt.key] != tt.retries {
+				t.Errorf("downloadURL(ctx, %s, %s) retried [%d] times, should have returned after [%d] retries", url, f.Name(), ctr[tt.key], tt.retries)
+			}
+		})
+	}
+}
+
+func TestDownloadGSURL(t *testing.T) {
+	ctx := context.Background()
+	ctr := make(map[string]int)
+	// No need to wait longer, override for testing.
+	defaultRetryPolicy.Jitter = time.Millisecond
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Fake error for invalid object request.
+		if strings.Contains(r.URL.Path, "invalid") {
+			w.WriteHeader(404)
+		}
+		fmt.Fprintf(w, r.URL.Path)
+		ctr[r.URL.Path] = ctr[r.URL.Path] + 1
+	}))
+	defer server.Close()
+
+	var err error
+	httpClient := &http.Client{Transport: &http.Transport{}}
+	testStorageClient, err = storage.NewClient(ctx, option.WithHTTPClient(httpClient), option.WithEndpoint(server.URL))
+	if err != nil {
+		t.Fatalf("Failed to setup test storage client, err: %+v", err)
+	}
+	defer testStorageClient.Close()
+
+	tests := []struct {
+		name    string
+		bucket  string
+		object  string
+		wantErr bool
+		retries int
+	}{
+		{
+			name:    "valid_object",
+			bucket:  "valid",
+			object:  "obj1",
+			wantErr: false,
+			retries: 1,
+		},
+		{
+			name:    "invalid_object",
+			bucket:  "invalid",
+			object:  "obj1",
+			wantErr: true,
+			retries: 3,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f, err := os.OpenFile(filepath.Join(t.TempDir(), tt.name), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0755)
+			if err != nil {
+				t.Fatalf("Failed to setup test file: %v", err)
+			}
+			defer f.Close()
+
+			if err := downloadGSURL(ctx, tt.bucket, tt.object, f); (err != nil) != tt.wantErr {
+				t.Errorf("downloadGSURL(ctx, %s, %s, %s) error = [%+v], wantErr %t", tt.bucket, tt.object, f.Name(), err, tt.wantErr)
+			}
+
+			want := fmt.Sprintf("/%s/%s", tt.bucket, tt.object)
+
+			if !tt.wantErr {
+				gotBytes, err := os.ReadFile(f.Name())
+				if err != nil {
+					t.Errorf("failed to read output file %q, with error: %v", f.Name(), err)
+				}
+
+				if string(gotBytes) != want {
+					t.Errorf("downloadGSURL(ctx, %s, %s, %s) wrote = [%s], want [%s]", tt.bucket, tt.object, f.Name(), string(gotBytes), want)
+				}
+			}
+
+			if ctr[want] != tt.retries {
+				t.Errorf("downloadGSURL(ctx, %s, %s, %s) retried [%d] times, should have returned after [%d] retries", tt.bucket, tt.object, f.Name(), ctr[want], tt.retries)
 			}
 		})
 	}
