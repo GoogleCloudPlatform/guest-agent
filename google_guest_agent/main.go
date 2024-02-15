@@ -169,6 +169,9 @@ func runAgent(ctx context.Context) {
 		os.Exit(1)
 	}
 
+	// Try flushing logs before exiting, if not flushed logs could go missing.
+	defer logger.Close()
+
 	logger.Infof("GCE Agent Started (version %s)", version)
 
 	osInfo = osinfo.Get()
