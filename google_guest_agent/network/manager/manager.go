@@ -19,9 +19,7 @@ package manager
 import (
 	"context"
 	"fmt"
-	"os"
 	"slices"
-	"strings"
 
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/osinfo"
@@ -66,18 +64,17 @@ type osConfigAction struct {
 
 	// ignoreSecondary determines whether to ignore all non-primary network interfaces.
 	ignoreSecondary bool
+}
 
-	// nativeOSConfig is a function pointer to the specific implementation that
-	// enables/disables OS management of the provided nics.
-	// NOTE: This will eventually be moved to the specific network manager implementation.
-	nativeOSConfig func(ctx context.Context, nic []string) error
+// guestAgentSection is the section added to guest-agent-written ini files to indicate
+// that the ini file is managed by the agent.
+type guestAgentSection struct {
+	// Managed indicates whether this ini file is managed by the agent.
+	Managed bool
 }
 
 const (
 	googleComment = "# Added by Google Compute Engine Guest Agent."
-
-	// osConfigRuleAnyVersion applies a rule for any version of an OS.
-	osConfigRuleAnyVersion = -1
 )
 
 var (
@@ -119,15 +116,6 @@ var (
 			},
 			action: osConfigAction{
 				ignorePrimary: true,
-			},
-		},
-		{
-			osNames: []string{"rhel", "centos", "rocky"},
-			majorVersions: map[int]bool{
-				osConfigRuleAnyVersion: true,
-			},
-			action: osConfigAction{
-				nativeOSConfig: rhelNativeOSConfig,
 			},
 		},
 		// Ubuntu rules
@@ -193,18 +181,14 @@ func detectNetworkManager(ctx context.Context, iface string) (Service, error) {
 }
 
 // findOSRule finds the osConfigRule that applies to the current system.
-func findOSRule(broadVersion bool) *osConfigRule {
+func findOSRule() *osConfigRule {
 	osInfo := osinfoGet()
 	for _, curr := range osRules {
 		if !slices.Contains(curr.osNames, osInfo.OS) {
 			continue
 		}
 
-		if broadVersion && curr.majorVersions[osConfigRuleAnyVersion] {
-			return &curr
-		}
-
-		if !broadVersion && curr.majorVersions[osInfo.Version.Major] {
+		if curr.majorVersions[osInfo.Version.Major] {
 			return &curr
 		}
 	}
@@ -214,7 +198,7 @@ func findOSRule(broadVersion bool) *osConfigRule {
 // shouldManageInterface returns whether the guest agent should manage an interface
 // provided whether the interface of interest is the primary interface or not.
 func shouldManageInterface(isPrimary bool) bool {
-	rule := findOSRule(false)
+	rule := findOSRule()
 	if rule != nil {
 		if isPrimary {
 			return !rule.action.ignorePrimary
@@ -231,7 +215,7 @@ func shouldManageInterface(isPrimary bool) bool {
 func SetupInterfaces(ctx context.Context, config *cfg.Sections, nics []metadata.NetworkInterfaces) error {
 	// User may have disabled network interface setup entirely.
 	if !config.NetworkInterfaces.Setup {
-		logger.Infof("network interface setup disabled, skipping...")
+		logger.Infof("Network interface setup disabled, skipping...")
 		return nil
 	}
 
@@ -241,15 +225,6 @@ func SetupInterfaces(ctx context.Context, config *cfg.Sections, nics []metadata.
 	}
 	primaryInterface := interfaces[0]
 
-	// Apply the OS-specific rules.
-	osRule := findOSRule(true)
-	if osRule != nil && osRule.action.nativeOSConfig != nil {
-		logger.Infof("Found OS config rule. Running...")
-		if err = osRule.action.nativeOSConfig(ctx, interfaces); err != nil {
-			return fmt.Errorf("failed to disable OS nic management: %v", err)
-		}
-	}
-
 	// Get the network manager.
 	nm, err := detectNetworkManager(ctx, primaryInterface)
 	if err != nil {
@@ -258,50 +233,18 @@ func SetupInterfaces(ctx context.Context, config *cfg.Sections, nics []metadata.
 
 	// Since the manager is different, undo all the changes of the old manager.
 	if currManager != nil && nm != currManager {
+		logger.Infof("Rolling back %s", currManager.Name())
 		if err = currManager.Rollback(ctx, nics); err != nil {
 			return fmt.Errorf("error rolling back config for %s: %v", currManager.Name(), err)
 		}
 	}
 
 	currManager = nm
+	logger.Infof("Setting up %s", nm.Name())
 	if err = nm.Setup(ctx, config, nics); err != nil {
 		return fmt.Errorf("error setting up %s: %v", nm.Name(), err)
 	}
-	return nil
-}
 
-// rhelNativeOSConfig writes an ifcfg file with DHCP and NetworkManager disabled
-// to all secondary nics.
-func rhelNativeOSConfig(ctx context.Context, interfaces []string) error {
-	for _, curr := range interfaces[1:] {
-		if err := writeRHELIfcfg(curr); err != nil {
-			return err
-		}
-	}
+	logger.Infof("Finished setting up %s", nm.Name())
 	return nil
-}
-
-// writeRHELIfcfg writes the ifcfg file for the specified interface.
-func writeRHELIfcfg(iface string) error {
-	logger.Debugf("write disabling ifcfg-%s config", iface)
-	filename := "/etc/sysconfig/network-scripts/ifcfg-" + iface
-	ifcfg, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
-	if err == nil {
-		defer ifcfg.Close()
-		contents := []string{
-			googleComment,
-			fmt.Sprintf("DEVICE=%s", iface),
-			"BOOTPROTO=none",
-			"DEFROUTE=no",
-			"IPV6INIT=no",
-			"NM_CONTROLLED=no",
-			"NOZEROCONF=yes",
-		}
-		_, err = ifcfg.WriteString(strings.Join(contents, "\n"))
-		return err
-	}
-	if os.IsExist(err) {
-		return nil
-	}
-	return err
 }
