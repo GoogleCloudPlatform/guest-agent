@@ -164,7 +164,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	defer logger.Infof("Done")
+	// Try flushing logs before exiting, if not flushed logs could go missing.
+	defer func() {
+		logger.Infof("Done")
+		logger.Close()
+	}()
 
 	if !isEnabled(ctx) {
 		logger.Debugf("GCE Workload Certificate refresh is not enabled, skipping cert generation.")

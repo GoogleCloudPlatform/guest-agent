@@ -449,7 +449,13 @@ func main() {
 		opts.ProjectName = projectID
 	}
 
-	logger.Init(ctx, opts)
+	if err := logger.Init(ctx, opts); err != nil {
+		fmt.Printf("Error initializing logger: %+v", err)
+		os.Exit(1)
+	}
+
+	// Try flushing logs before exiting, if not flushed logs could go missing.
+	defer logger.Close()
 
 	logger.Infof("Starting %s scripts (version %s).", os.Args[1], version)
 
