@@ -20,7 +20,9 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
@@ -173,43 +175,138 @@ func TestGetKeyRecursive(t *testing.T) {
 }
 
 func TestShouldRetry(t *testing.T) {
-
 	tests := []struct {
-		desc string
-		resp *http.Response
-		err  error
-		want bool
+		desc   string
+		status int
+		err    error
+		want   bool
 	}{
 		{
-			desc: "404_should_not_retry",
-			resp: &http.Response{StatusCode: 404},
-			want: false,
-			err:  nil,
+			desc:   "404_should_not_retry",
+			status: 404,
+			want:   false,
+			err:    nil,
 		},
 		{
-			desc: "429_should_retry",
-			resp: &http.Response{StatusCode: 429},
-			want: true,
-			err:  nil,
+			desc:   "429_should_retry",
+			status: 429,
+			want:   true,
+			err:    nil,
 		},
 		{
-			desc: "ctx_canceled_should_not_retry",
-			resp: &http.Response{StatusCode: 200},
-			want: false,
-			err:  context.Canceled,
-		},
-		{
-			desc: "random_err_should_retry",
-			resp: &http.Response{StatusCode: 200},
-			want: true,
-			err:  fmt.Errorf("fake retriable error"),
+			desc:   "random_err_should_retry",
+			status: 200,
+			want:   true,
+			err:    fmt.Errorf("fake retriable error"),
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			if got := shouldRetry(test.resp, test.err); got != test.want {
-				t.Errorf("shouldRetry(%+v, %+v) = %t, want %t", test.resp, test.err, got, test.want)
+			err := &MDSReqError{test.status, test.err}
+			if got := shouldRetry(err); got != test.want {
+				t.Errorf("shouldRetry(%+v) = %t, want %t", err, got, test.want)
+			}
+		})
+	}
+}
+
+func TestRetry(t *testing.T) {
+	want := "some-metadata"
+	ctr := 0
+	retries := 3
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if ctr == retries {
+			fmt.Fprint(w, want)
+		} else {
+			ctr++
+			// 412 error code should be retried.
+			w.WriteHeader(412)
+		}
+	}))
+	defer ts.Close()
+
+	client := &Client{
+		metadataURL: ts.URL,
+		httpClient: &http.Client{
+			Timeout: 1 * time.Second,
+		},
+	}
+
+	reqURL, err := url.JoinPath(ts.URL, "key")
+	if err != nil {
+		t.Fatalf("Failed to setup mock URL: %v", err)
+	}
+	req := requestConfig{baseURL: reqURL}
+
+	got, err := client.retry(context.Background(), req)
+	if err != nil {
+		t.Errorf("retry(ctx, %+v) failed unexpectedly with error: %v", req, err)
+	}
+	if got != want {
+		t.Errorf("retry(ctx, %+v) = %s, want %s", req, got, want)
+	}
+	if ctr != retries {
+		t.Errorf("retry(ctx, %+v) retried %d times, should have returned after %d retries", req, ctr, retries)
+	}
+}
+
+func TestRetryError(t *testing.T) {
+	ctx := context.Background()
+	ctr := make(map[string]int)
+	backoffAttempts = 5
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "retry") {
+			// Retriable status code.
+			w.WriteHeader(412)
+		} else {
+			// Non-retriable status code.
+			w.WriteHeader(404)
+		}
+		ctr[r.URL.Path] = ctr[r.URL.Path] + 1
+	}))
+	defer ts.Close()
+
+	client := &Client{
+		metadataURL: ts.URL,
+		httpClient: &http.Client{
+			Timeout: 1 * time.Second,
+		},
+	}
+
+	tests := []struct {
+		desc    string
+		mdsKey  string
+		wantCtr int
+	}{
+		{
+			desc:    "retries_exhausted",
+			wantCtr: backoffAttempts,
+			mdsKey:  "/retry",
+		},
+		{
+			desc:    "non_retriable_failure",
+			wantCtr: 1,
+			mdsKey:  "/fail_fast",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.desc, func(t *testing.T) {
+			reqURL, err := url.JoinPath(ts.URL, test.mdsKey)
+			if err != nil {
+				t.Fatalf("Failed to setup mock URL: %v", err)
+			}
+			req := requestConfig{baseURL: reqURL}
+
+			_, err = client.retry(ctx, req)
+			if err == nil {
+				t.Errorf("retry(ctx, %+v) succeeded, want error", req)
+			}
+			if ctr[test.mdsKey] != test.wantCtr {
+				t.Errorf("retry(ctx, %+v) retried %d times, should have returned after %d retries", req, ctr[test.mdsKey], test.wantCtr)
 			}
 		})
 	}

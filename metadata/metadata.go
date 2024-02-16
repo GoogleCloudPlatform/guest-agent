@@ -18,15 +18,16 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/GoogleCloudPlatform/guest-agent/retry"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 )
 
@@ -272,50 +273,51 @@ func (c *Client) updateEtag(resp *http.Response) bool {
 	return c.etag != oldEtag
 }
 
-func shouldRetry(resp *http.Response, err error) bool {
-	// If the context was canceled just return the error and don't retry.
-	if err != nil && errors.Is(err, context.Canceled) {
-		return false
+// MDSReqError represents custom error produced by HTTP requests made on MDS. It captures
+// error and HTTP response for inspecting status code.
+type MDSReqError struct {
+	status int
+	err    error
+}
+
+// Error implements method defined on error interface to transform custom type into error.
+func (m *MDSReqError) Error() string {
+	return fmt.Sprintf("request failed with status code: [%d], error: [%v]", m.status, m.err)
+}
+
+// shouldRetry method checks if MDSReqError is temporary and retriable or not.
+func shouldRetry(err error) bool {
+	e, ok := err.(*MDSReqError)
+	if !ok {
+		// Unknown error retry.
+		return true
 	}
 
 	// Known non-retriable status codes.
-	if resp != nil && resp.StatusCode == 404 {
-		return false
-	}
+	codes := []int{404}
 
-	return true
+	return !slices.Contains(codes, e.status)
 }
 
 func (c *Client) retry(ctx context.Context, cfg requestConfig) (string, error) {
-	var ferr error
-	for i := 1; i <= backoffAttempts; i++ {
+	policy := retry.Policy{MaxAttempts: backoffAttempts, Jitter: backoffDuration, BackoffFactor: 1, ShouldRetry: shouldRetry}
+
+	fn := func() (string, error) {
 		resp, err := c.do(ctx, cfg)
-		ferr = err
-		// Check if error is retriable, if not just return the error and don't retry.
-		if err != nil && !shouldRetry(resp, err) {
-			return "", err
-		}
-
-		// Apply the backoff strategy.
 		if err != nil {
-			logger.Debugf("Attempt %d: failed to connect to metadata server: %+v", i, err)
-			time.Sleep(time.Duration(i) * backoffDuration)
-			continue
+			return "", &MDSReqError{resp.StatusCode, err}
 		}
-
 		defer resp.Body.Close()
+
 		md, err := io.ReadAll(resp.Body)
 		if err != nil {
-			ferr = err
-			logger.Debugf("Attempt %d: failed to read metadata server response bytes: %+v", i, err)
-			time.Sleep(time.Duration(i) * backoffDuration)
-			continue
+			return "", fmt.Errorf("failed to read metadata server response bytes: %+v", err)
 		}
 
 		return string(md), nil
 	}
-	logger.Errorf("Exhausted %d retry attempts to connect to MDS, failed with an error: %+v", backoffAttempts, ferr)
-	return "", fmt.Errorf("reached max attempts to connect to metadata")
+
+	return retry.RunWithResponse(ctx, policy, fn)
 }
 
 // GetKey gets a specific metadata key.
