@@ -71,11 +71,6 @@ type osConfigAction struct {
 	// enables/disables OS management of the provided nics.
 	// NOTE: This will eventually be moved to the specific network manager implementation.
 	nativeOSConfig func(ctx context.Context, nic []string) error
-
-	// ignoreSetup indicates whether to ignore the rest of the network management setup.
-	// This is used with nativeOSConfig to determine if, after running the function, the
-	// agent should continue with the rest of the setup.
-	ignoreSetup bool
 }
 
 const (
@@ -252,10 +247,6 @@ func SetupInterfaces(ctx context.Context, config *cfg.Sections, nics []metadata.
 		logger.Infof("Found OS config rule. Running...")
 		if err = osRule.action.nativeOSConfig(ctx, interfaces); err != nil {
 			return fmt.Errorf("failed to disable OS nic management: %v", err)
-		}
-		// Don't run setup.
-		if osRule.action.ignoreSetup {
-			return nil
 		}
 	}
 
