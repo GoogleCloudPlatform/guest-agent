@@ -38,17 +38,17 @@ var (
 	}
 )
 
-// testOpts is a wrapper for all options to set for test setup.
-type testOpts struct {
+// systemdTestOpts is a wrapper for all options to set for test setup.
+type systemdTestOpts struct {
 	// lookPathOpts contains options for lookPath mocking.
-	lookPathOpts lookPathOpts
+	lookPathOpts systemdLookPathOpts
 
 	// runnerOpts contains options for run mocking.
-	runnerOpts runnerOpts
+	runnerOpts systemdRunnerOpts
 }
 
-// lookPathOpts contains options for lookPath mocking.
-type lookPathOpts struct {
+// systemdLookPathOpts contains options for lookPath mocking.
+type systemdLookPathOpts struct {
 	// returnErr indicates whether to return error.
 	returnErr bool
 
@@ -58,19 +58,19 @@ type lookPathOpts struct {
 
 // systemdMockRunner is the Mock Runner to use for testing.
 type systemdMockRunner struct {
-	// Options for when running `networkctl --version`
-	versionOpts versionOpts
+	// versionOpts are options for when running `networkctl --version`
+	versionOpts systemdVersionOpts
 
-	// Options for running `systemctl is-active systemd-networkd.service`
+	// isActiveErr is an option for running `systemctl is-active systemd-networkd.service`
 	// isActiveErr indicates whether to return an error when running the command.
 	isActiveErr bool
 
-	// Options for running `networkctl status iface --json=short`
-	statusOpts statusOpts
+	// statusOpts are options for running `networkctl status iface --json=short`
+	statusOpts systemdStatusOpts
 }
 
-// versionOpts are options for running `networkctl --version`.
-type versionOpts struct {
+// systemdVersionOpts are options for running `networkctl --version`.
+type systemdVersionOpts struct {
 	// returnErr indicates whether the command should return an error.
 	returnErr bool
 
@@ -78,8 +78,8 @@ type versionOpts struct {
 	version int
 }
 
-// statusOpts are options for running `networkctl status iface --json=short`
-type statusOpts struct {
+// systemdStatusOpts are options for running `networkctl status iface --json=short`
+type systemdStatusOpts struct {
 	// returnValue indicates whether to return a configured or non-configured interface.
 	returnValue bool
 
@@ -94,17 +94,17 @@ type statusOpts struct {
 	configuredKey string
 }
 
-// runnerOpts are options to set for intializing the MockRunner.
-type runnerOpts struct {
-	// Options for when running `networkctl --version`
-	versionOpts versionOpts
+// systemdRunnerOpts are options to set for intializing the MockRunner.
+type systemdRunnerOpts struct {
+	// versionOpts are options for when running `networkctl --version`
+	versionOpts systemdVersionOpts
 
-	// Options for running `systemctl is-active systemd-networkd.service`
+	// isActiveErr is an option for running `systemctl is-active systemd-networkd.service`
 	// isActiveErr indicates whether to return an error when running the command.
 	isActiveErr bool
 
-	// Options for running `networkctl status iface --json=short`
-	statusOpts statusOpts
+	// statusOpts are options for running `networkctl status iface --json=short`
+	statusOpts systemdStatusOpts
 }
 
 func (s systemdMockRunner) Quiet(ctx context.Context, name string, args ...string) error {
@@ -176,7 +176,7 @@ func (s systemdMockRunner) WithCombinedOutput(ctx context.Context, name string, 
 }
 
 // systemdTestSetup sets up the environment before each test.
-func systemdTestSetup(t *testing.T, opts testOpts) {
+func systemdTestSetup(t *testing.T, opts systemdTestOpts) {
 	t.Helper()
 	mockDir := path.Join(t.TempDir(), "systemd", "network")
 	mockSystemd.configDir = mockDir
@@ -225,8 +225,8 @@ func TestSystemdNetworkdIsManaging(t *testing.T) {
 		// name is the name of the test.
 		name string
 
-		// runnerOpts are the options to set for the mock runner.
-		opts testOpts
+		// opts are the options to set for test environment setup.
+		opts systemdTestOpts
 
 		// expectedRes is the expected return value of IsManaging()
 		expectedRes bool
@@ -240,8 +240,8 @@ func TestSystemdNetworkdIsManaging(t *testing.T) {
 		// networkctl does not exist.
 		{
 			name: "no-networkctl",
-			opts: testOpts{
-				lookPathOpts: lookPathOpts{
+			opts: systemdTestOpts{
+				lookPathOpts: systemdLookPathOpts{
 					returnValue: false,
 				},
 			},
@@ -251,8 +251,8 @@ func TestSystemdNetworkdIsManaging(t *testing.T) {
 		// LookPath error.
 		{
 			name: "lookpath-error",
-			opts: testOpts{
-				lookPathOpts: lookPathOpts{
+			opts: systemdTestOpts{
+				lookPathOpts: systemdLookPathOpts{
 					returnErr: true,
 				},
 			},
@@ -263,12 +263,12 @@ func TestSystemdNetworkdIsManaging(t *testing.T) {
 		// networkctl unsupported version
 		{
 			name: "unsupported-systemd-version",
-			opts: testOpts{
-				lookPathOpts: lookPathOpts{
+			opts: systemdTestOpts{
+				lookPathOpts: systemdLookPathOpts{
 					returnValue: true,
 				},
-				runnerOpts: runnerOpts{
-					versionOpts: versionOpts{
+				runnerOpts: systemdRunnerOpts{
+					versionOpts: systemdVersionOpts{
 						version: 249,
 					},
 				},
@@ -279,12 +279,12 @@ func TestSystemdNetworkdIsManaging(t *testing.T) {
 		// networkctl version error
 		{
 			name: "systemd-version-error",
-			opts: testOpts{
-				lookPathOpts: lookPathOpts{
+			opts: systemdTestOpts{
+				lookPathOpts: systemdLookPathOpts{
 					returnValue: true,
 				},
-				runnerOpts: runnerOpts{
-					versionOpts: versionOpts{
+				runnerOpts: systemdRunnerOpts{
+					versionOpts: systemdVersionOpts{
 						returnErr: true,
 					},
 				},
@@ -296,12 +296,12 @@ func TestSystemdNetworkdIsManaging(t *testing.T) {
 		// networkctl is-active error.
 		{
 			name: "networkctl-is-active-error",
-			opts: testOpts{
-				lookPathOpts: lookPathOpts{
+			opts: systemdTestOpts{
+				lookPathOpts: systemdLookPathOpts{
 					returnValue: true,
 				},
-				runnerOpts: runnerOpts{
-					versionOpts: versionOpts{
+				runnerOpts: systemdRunnerOpts{
+					versionOpts: systemdVersionOpts{
 						version: 300,
 					},
 					isActiveErr: true,
@@ -313,15 +313,15 @@ func TestSystemdNetworkdIsManaging(t *testing.T) {
 		// networkctl status error.
 		{
 			name: "networkctl-status-error",
-			opts: testOpts{
-				lookPathOpts: lookPathOpts{
+			opts: systemdTestOpts{
+				lookPathOpts: systemdLookPathOpts{
 					returnValue: true,
 				},
-				runnerOpts: runnerOpts{
-					versionOpts: versionOpts{
+				runnerOpts: systemdRunnerOpts{
+					versionOpts: systemdVersionOpts{
 						version: 300,
 					},
-					statusOpts: statusOpts{
+					statusOpts: systemdStatusOpts{
 						returnErr: true,
 					},
 				},
@@ -333,15 +333,15 @@ func TestSystemdNetworkdIsManaging(t *testing.T) {
 		// networkctl status no networkctl key.
 		{
 			name: "networkctl-status-no-key",
-			opts: testOpts{
-				lookPathOpts: lookPathOpts{
+			opts: systemdTestOpts{
+				lookPathOpts: systemdLookPathOpts{
 					returnValue: true,
 				},
-				runnerOpts: runnerOpts{
-					versionOpts: versionOpts{
+				runnerOpts: systemdRunnerOpts{
+					versionOpts: systemdVersionOpts{
 						version: 300,
 					},
-					statusOpts: statusOpts{
+					statusOpts: systemdStatusOpts{
 						returnValue: false,
 						hasKey:      false,
 					},
@@ -354,15 +354,15 @@ func TestSystemdNetworkdIsManaging(t *testing.T) {
 		// networkctl status interface is unmanaged.
 		{
 			name: "networkctl-status-unmanaged",
-			opts: testOpts{
-				lookPathOpts: lookPathOpts{
+			opts: systemdTestOpts{
+				lookPathOpts: systemdLookPathOpts{
 					returnValue: true,
 				},
-				runnerOpts: runnerOpts{
-					versionOpts: versionOpts{
+				runnerOpts: systemdRunnerOpts{
+					versionOpts: systemdVersionOpts{
 						version: 300,
 					},
-					statusOpts: statusOpts{
+					statusOpts: systemdStatusOpts{
 						returnValue:   false,
 						hasKey:        true,
 						configuredKey: "AdministrativeState",
@@ -375,15 +375,15 @@ func TestSystemdNetworkdIsManaging(t *testing.T) {
 		// networkctl status interface is managed. Whole method passes.
 		{
 			name: "pass",
-			opts: testOpts{
-				lookPathOpts: lookPathOpts{
+			opts: systemdTestOpts{
+				lookPathOpts: systemdLookPathOpts{
 					returnValue: true,
 				},
-				runnerOpts: runnerOpts{
-					versionOpts: versionOpts{
+				runnerOpts: systemdRunnerOpts{
+					versionOpts: systemdVersionOpts{
 						version: 300,
 					},
-					statusOpts: statusOpts{
+					statusOpts: systemdStatusOpts{
 						returnValue:   true,
 						hasKey:        true,
 						configuredKey: "SetupState",
@@ -481,7 +481,7 @@ func TestSystemdNetworkdConfig(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			systemdTestSetup(t, testOpts{})
+			systemdTestSetup(t, systemdTestOpts{})
 
 			if err := writeSystemdConfig(test.testInterfaces, test.testIpv6Interfaces, mockSystemd.configDir, mockSystemd.priority); err != nil {
 				t.Fatalf("unexpected error: %v", err)
