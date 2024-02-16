@@ -17,7 +17,6 @@
 package main
 
 // TODO: compare log outputs in this utility to linux.
-// TODO: standardize and consolidate retries.
 
 import (
 	"bufio"
@@ -40,6 +39,7 @@ import (
 	"cloud.google.com/go/storage"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
 	"github.com/GoogleCloudPlatform/guest-agent/metadata"
+	"github.com/GoogleCloudPlatform/guest-agent/retry"
 	"github.com/GoogleCloudPlatform/guest-agent/utils"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 )
@@ -79,10 +79,13 @@ var (
 	// https://commondatastorage.googleapis.com/<bucket>/<object>
 	gsHTTPRegex3 = regexp.MustCompile(fmt.Sprintf(`^http[s]?://(?:commondata)?storage\.googleapis\.com/%s/%s$`, bucket, object))
 
+	// testStorageClient is used to override GCS client in unit tests.
 	testStorageClient *storage.Client
 
 	client  metadata.MDSClientInterface
 	version string
+	// defaultRetryPolicy is default policy to retry up to 3 times, only wait 1 second between retries.
+	defaultRetryPolicy = retry.Policy{MaxAttempts: 3, BackoffFactor: 1, Jitter: time.Second}
 )
 
 func init() {
@@ -103,9 +106,12 @@ func downloadGSURL(ctx context.Context, bucket, object string, file *os.File) er
 	}
 	defer client.Close()
 
-	r, err := client.Bucket(bucket).Object(object).NewReader(ctx)
+	r, err := retry.RunWithResponse(ctx, defaultRetryPolicy, func() (*storage.Reader, error) {
+		r, err := client.Bucket(bucket).Object(object).NewReader(ctx)
+		return r, err
+	})
 	if err != nil {
-		return fmt.Errorf("error reading object %q: %v", object, err)
+		return err
 	}
 	defer r.Close()
 
@@ -113,25 +119,21 @@ func downloadGSURL(ctx context.Context, bucket, object string, file *os.File) er
 	return err
 }
 
-func downloadURL(url string, file *os.File) error {
-	// Retry up to 3 times, only wait 1 second between retries.
-	var res *http.Response
-	var err error
-	for i := 1; ; i++ {
-		res, err = http.Get(url)
-		if err != nil && i > 3 {
-			return err
+func downloadURL(ctx context.Context, url string, file *os.File) error {
+	res, err := retry.RunWithResponse(context.Background(), defaultRetryPolicy, func() (*http.Response, error) {
+		res, err := http.Get(url)
+		if err != nil {
+			return res, err
 		}
-		if err == nil {
-			break
+		if res.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("GET %q, bad status: %s", url, res.Status)
 		}
-		time.Sleep(1 * time.Second)
+		return res, nil
+	})
+	if err != nil {
+		return err
 	}
 	defer res.Body.Close()
-
-	if res.StatusCode != http.StatusOK {
-		return fmt.Errorf("GET %q, bad status: %s", url, res.Status)
-	}
 
 	_, err = io.Copy(file, res.Body)
 	return err
@@ -142,34 +144,27 @@ func downloadScript(ctx context.Context, path string, file *os.File) error {
 	// particularly once a system is promoted to a domain controller.
 	// Try to lookup storage.googleapis.com and sleep for up to 100s if
 	// we get an error.
-	// TODO: do we need to do this on every script?
-	for i := 0; i < 20; i++ {
-		if _, err := net.LookupHost(storageURL); err == nil {
-			break
-		}
-		time.Sleep(5 * time.Second)
+	policy := retry.Policy{MaxAttempts: 20, BackoffFactor: 1, Jitter: time.Second * 5}
+	err := retry.Run(ctx, policy, func() error {
+		_, err := net.LookupHost(storageURL)
+		return err
+	})
+	if err != nil {
+		return fmt.Errorf("%q lookup failed, err: %+v", storageURL, err)
 	}
+
 	bucket, object := parseGCS(path)
 	if bucket != "" && object != "" {
-		// TODO: why is this retry outer, but downloadURL retry is inner?
-		// Retry up to 3 times, only wait 1 second between retries.
-		for i := 1; ; i++ {
-			err := downloadGSURL(ctx, bucket, object, file)
-			if err == nil {
-				return nil
-			}
-			if err != nil && i > 3 {
-				logger.Infof("Failed to download GCS path: %v", err)
-				break
-			}
-			time.Sleep(1 * time.Second)
+		err = downloadGSURL(ctx, bucket, object, file)
+		if err != nil {
+			logger.Infof("Failed to download object [%s] from GCS bucket [%s], err: %+v", object, bucket, err)
 		}
 		logger.Infof("Trying unauthenticated download")
 		path = fmt.Sprintf("https://%s/%s/%s", storageURL, bucket, object)
 	}
 
 	// Fall back to an HTTP GET of the URL.
-	return downloadURL(path, file)
+	return downloadURL(ctx, path, file)
 }
 
 func parseGCS(path string) (string, string) {
