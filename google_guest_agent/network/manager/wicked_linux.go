@@ -25,7 +25,6 @@ import (
 
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/run"
-	"github.com/GoogleCloudPlatform/guest-agent/metadata"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 )
 
@@ -80,12 +79,12 @@ func (n wicked) IsManaging(ctx context.Context, iface string) (bool, error) {
 	return false, nil
 }
 
-// Setup writes the necessary configuration files for each interface and enables them.
-func (n wicked) Setup(ctx context.Context, cfg *cfg.Sections, payload []metadata.NetworkInterfaces) error {
-	if len(payload) < 2 {
+// SetupEthernetInterface writes the necessary configuration files for each interface and enables them.
+func (n wicked) SetupEthernetInterface(ctx context.Context, cfg *cfg.Sections, nics *Interfaces) error {
+	if len(nics.EthernetInterfaces) < 2 {
 		return nil
 	}
-	ifaces, err := interfaceNames(payload)
+	ifaces, err := interfaceNames(nics.EthernetInterfaces)
 	if err != nil {
 		return fmt.Errorf("failed to get network interfaces: %v", err)
 	}
@@ -98,6 +97,12 @@ func (n wicked) Setup(ctx context.Context, cfg *cfg.Sections, payload []metadata
 	if err = run.Quiet(ctx, wickedCommand, args...); err != nil {
 		return fmt.Errorf("error enabling interfaces: %v", err)
 	}
+	return nil
+}
+
+// SetupVlanInterface writes the apppropriate vLAN interfaces configuration for the network manager service
+// for all configured interfaces.
+func (n wicked) SetupVlanInterface(ctx context.Context, cfg *cfg.Sections, nics *Interfaces) error {
 	return nil
 }
 
@@ -139,8 +144,8 @@ func ifcfgFilePath(configDir, iface string) string {
 }
 
 // Rollback deletes all the ifcfg files written by Setup, then reloads wicked.service.
-func (n wicked) Rollback(ctx context.Context, payload []metadata.NetworkInterfaces) error {
-	ifaces, err := interfaceNames(payload)
+func (n wicked) Rollback(ctx context.Context, nics *Interfaces) error {
+	ifaces, err := interfaceNames(nics.EthernetInterfaces)
 	if err != nil {
 		return fmt.Errorf("failed to get network interfaces: %v", err)
 	}

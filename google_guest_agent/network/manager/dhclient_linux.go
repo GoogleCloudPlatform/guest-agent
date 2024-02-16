@@ -30,7 +30,6 @@ import (
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/ps"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/run"
-	"github.com/GoogleCloudPlatform/guest-agent/metadata"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 )
 
@@ -99,9 +98,9 @@ func (n dhclient) IsManaging(ctx context.Context, iface string) (bool, error) {
 	return true, nil
 }
 
-// Setup sets up the non-primary interfaces with dhclient, having different setup procedures
+// SetupEthernetInterface sets up the non-primary interfaces with dhclient, having different setup procedures
 // for IPv6 network interfaces and IPv4 network interfaces.
-func (n dhclient) Setup(ctx context.Context, config *cfg.Sections, payload []metadata.NetworkInterfaces) error {
+func (n dhclient) SetupEthernetInterface(ctx context.Context, config *cfg.Sections, nics *Interfaces) error {
 	dhcpCommand := config.NetworkInterfaces.DHCPCommand
 	if dhcpCommand != "" {
 		tokens := strings.Split(dhcpCommand, " ")
@@ -117,7 +116,7 @@ func (n dhclient) Setup(ctx context.Context, config *cfg.Sections, payload []met
 	}
 
 	// Get all interfaces separated by ipv4 and ipv6.
-	googleInterfaces, googleIpv6Interfaces := interfaceListsIpv4Ipv6(payload)
+	googleInterfaces, googleIpv6Interfaces := interfaceListsIpv4Ipv6(nics.EthernetInterfaces)
 	obtainIpv4Interfaces, obtainIpv6Interfaces, releaseIpv6Interfaces, err := partitionInterfaces(ctx, googleInterfaces, googleIpv6Interfaces)
 	if err != nil {
 		return fmt.Errorf("error partitioning interfaces: %v", err)
@@ -163,6 +162,11 @@ func (n dhclient) Setup(ctx context.Context, config *cfg.Sections, payload []met
 			logger.Errorf("failed to run dhclient: %+x", err)
 		}
 	}
+	return nil
+}
+
+// SetupVlanInterface calls the appropriate native commands to configure a vlan interface.
+func (n dhclient) SetupVlanInterface(ctx context.Context, config *cfg.Sections, nics *Interfaces) error {
 	return nil
 }
 
@@ -274,8 +278,8 @@ func dhclientProcessExists(ctx context.Context, iface string, ipVersion ipVersio
 }
 
 // Rollback releases all leases from DHClient, effectively undoing the dhclient configurations.
-func (n dhclient) Rollback(ctx context.Context, payload []metadata.NetworkInterfaces) error {
-	googleInterfaces, googleIpv6Interfaces := interfaceListsIpv4Ipv6(payload)
+func (n dhclient) Rollback(ctx context.Context, nics *Interfaces) error {
+	googleInterfaces, googleIpv6Interfaces := interfaceListsIpv4Ipv6(nics.EthernetInterfaces)
 
 	// Release all the interface leases from dhclient.
 	for _, iface := range googleInterfaces {

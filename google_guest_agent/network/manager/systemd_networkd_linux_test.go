@@ -483,7 +483,8 @@ func TestSystemdNetworkdConfig(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			systemdTestSetup(t, systemdTestOpts{})
 
-			if err := writeSystemdConfig(test.testInterfaces, test.testIpv6Interfaces, mockSystemd.configDir, mockSystemd.priority); err != nil {
+			if err := writeSystemdEthernetConfig(test.testInterfaces, test.testIpv6Interfaces,
+				mockSystemd.configDir, mockSystemd.priority); err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
 

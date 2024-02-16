@@ -29,7 +29,6 @@ import (
 
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/run"
-	"github.com/GoogleCloudPlatform/guest-agent/metadata"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 	"github.com/go-ini/ini"
 )
@@ -169,14 +168,14 @@ func (n systemdNetworkd) IsManaging(ctx context.Context, iface string) (bool, er
 	return false, fmt.Errorf("could not determine interface state, one of %v was not present", n.networkCtlKeys)
 }
 
-// Setup sets up the non-primary network interfaces for systemd-networkd by writing
+// SetupEthernetInterface sets up the non-primary network interfaces for systemd-networkd by writing
 // configuration files to the specified configuration directory.
-func (n systemdNetworkd) Setup(ctx context.Context, config *cfg.Sections, payload []metadata.NetworkInterfaces) error {
+func (n systemdNetworkd) SetupEthernetInterface(ctx context.Context, config *cfg.Sections, nics *Interfaces) error {
 	// Create a network configuration file with default configurations for each network interface.
-	googleInterfaces, googleIpv6Interfaces := interfaceListsIpv4Ipv6(payload)
+	googleInterfaces, googleIpv6Interfaces := interfaceListsIpv4Ipv6(nics.EthernetInterfaces)
 
 	// Write the config files.
-	if err := writeSystemdConfig(googleInterfaces, googleIpv6Interfaces, n.configDir, n.priority); err != nil {
+	if err := writeSystemdEthernetConfig(googleInterfaces, googleIpv6Interfaces, n.configDir, n.priority); err != nil {
 		return fmt.Errorf("error writing network configs: %v", err)
 	}
 
@@ -187,9 +186,15 @@ func (n systemdNetworkd) Setup(ctx context.Context, config *cfg.Sections, payloa
 	return nil
 }
 
-// writeSystemdConfig writes the systemd config for all the provided interfaces in the
+// SetupVlanInterface writes the apppropriate vLAN interfaces configuration for the network manager service
+// for all configured interfaces.
+func (n systemdNetworkd) SetupVlanInterface(ctx context.Context, config *cfg.Sections, nics *Interfaces) error {
+	return nil
+}
+
+// writeSystemdEthernetConfig writes the systemd config for all the provided interfaces in the
 // provided directory using the given priority.
-func writeSystemdConfig(interfaces, ipv6Interfaces []string, configDir, priority string) error {
+func writeSystemdEthernetConfig(interfaces, ipv6Interfaces []string, configDir, priority string) error {
 	for i, iface := range interfaces {
 		logger.Debugf("write systemd-networkd network config for %s", iface)
 
@@ -245,9 +250,9 @@ func writeSystemdConfig(interfaces, ipv6Interfaces []string, configDir, priority
 }
 
 // Rollback deletes the configuration files created by the agent for systemd-networkd.
-func (n systemdNetworkd) Rollback(ctx context.Context, payload []metadata.NetworkInterfaces) error {
+func (n systemdNetworkd) Rollback(ctx context.Context, nics *Interfaces) error {
 	logger.Infof("rolling back changes for %s", n.Name())
-	interfaces, err := interfaceNames(payload)
+	interfaces, err := interfaceNames(nics.EthernetInterfaces)
 	if err != nil {
 		return fmt.Errorf("failed to get list of interface names: %v", err)
 	}
