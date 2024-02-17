@@ -19,6 +19,7 @@ package manager
 import (
 	"context"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"path"
@@ -27,6 +28,7 @@ import (
 	"time"
 
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/run"
+	"github.com/GoogleCloudPlatform/guest-agent/metadata"
 	"github.com/go-ini/ini"
 )
 
@@ -34,7 +36,7 @@ import (
 var (
 	mockSystemd = systemdNetworkd{
 		networkCtlKeys: []string{"AdministrativeState", "SetupState"},
-		priority:       "1",
+		priority:       1,
 	}
 )
 
@@ -483,8 +485,7 @@ func TestSystemdNetworkdConfig(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			systemdTestSetup(t, systemdTestOpts{})
 
-			if err := writeSystemdEthernetConfig(test.testInterfaces, test.testIpv6Interfaces,
-				mockSystemd.configDir, mockSystemd.priority); err != nil {
+			if err := mockSystemd.writeEthernetConfig(test.testInterfaces, test.testIpv6Interfaces); err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
 
@@ -545,6 +546,207 @@ func TestSystemdNetworkdConfig(t *testing.T) {
 			}
 			// Cleanup.
 			systemdTestTearDown(t)
+		})
+	}
+}
+
+func TestSetupVlanInterfaceSuccess(t *testing.T) {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		t.Fatalf("could not list local interfaces: %+v", err)
+	}
+
+	tests := []struct {
+		ethernetInterface metadata.NetworkInterfaces
+		vlanInterface     metadata.VlanInterface
+	}{
+		{
+			vlanInterface: metadata.VlanInterface{
+				Mac:             "foobar",
+				ParentInterface: "/computeMetadata/v1/instance/network-interfaces/0/",
+				Vlan:            22,
+			},
+			ethernetInterface: metadata.NetworkInterfaces{
+				Mac: ifaces[1].HardwareAddr.String(),
+			},
+		},
+		{
+			vlanInterface: metadata.VlanInterface{
+				Mac:             "foobar",
+				ParentInterface: "/computeMetadata/v1/instance/network-interfaces/0/",
+				Vlan:            33,
+			},
+			ethernetInterface: metadata.NetworkInterfaces{
+				Mac: ifaces[1].HardwareAddr.String(),
+			},
+		},
+	}
+
+	opts := systemdTestOpts{
+		lookPathOpts: systemdLookPathOpts{
+			returnValue: true,
+		},
+		runnerOpts: systemdRunnerOpts{
+			versionOpts: systemdVersionOpts{
+				version: 300,
+			},
+			statusOpts: systemdStatusOpts{
+				returnValue:   true,
+				hasKey:        true,
+				configuredKey: "SetupState",
+			},
+		}}
+
+	for i, curr := range tests {
+		t.Run(fmt.Sprintf("test-setup-vlan-succes-%d", i), func(t *testing.T) {
+			testDir := t.TempDir()
+
+			impl := &systemdNetworkd{
+				configDir:      testDir,
+				networkCtlKeys: []string{"AdministrativeState", "SetupState"},
+				priority:       1,
+			}
+
+			systemdTestSetup(t, opts)
+
+			t.Cleanup(func() {
+				dhclientTestTearDown(t)
+			})
+
+			nics := &Interfaces{
+				EthernetInterfaces: []metadata.NetworkInterfaces{curr.ethernetInterface},
+				VlanInterfaces: map[int]metadata.VlanInterface{
+					curr.vlanInterface.Vlan: curr.vlanInterface,
+				},
+			}
+
+			ctx := context.Background()
+			if err := impl.SetupVlanInterface(ctx, nil, nics); err != nil {
+				t.Fatalf("expected err: nil, got: %+v", err)
+			}
+
+			networkFileName := fmt.Sprintf("1-gcp.%s.%d-google-guest-agent.network", ifaces[1].Name, curr.vlanInterface.Vlan)
+			networkFile := path.Join(testDir, networkFileName)
+
+			fileExists := func(fpath string, shouldExist bool) {
+				t.Helper()
+				_, err := os.Stat(fpath)
+				if shouldExist && err != nil && os.IsNotExist(err) {
+					t.Fatalf("expected to have file(%s), got error: %+v", fpath, err)
+				} else if !shouldExist && err == nil {
+					t.Fatalf("expected to not have file(%s), got error: nil", fpath)
+				}
+			}
+
+			netdevFileName := fmt.Sprintf("1-gcp.%s.%d-google-guest-agent.netdev", ifaces[1].Name, curr.vlanInterface.Vlan)
+			netdevFile := path.Join(testDir, netdevFileName)
+
+			fileExists(networkFile, true)
+			fileExists(netdevFile, true)
+
+			// Trying to re install it should produce failure.
+			if err := impl.SetupVlanInterface(ctx, nil, nics); err != nil {
+				t.Fatalf("expected err: nil, got: %+v", err)
+			}
+
+			fileExists(networkFile, true)
+			fileExists(netdevFile, true)
+
+			// Running SetupVlanInterface() without VlanInterfaces do actually cleanup/remove
+			// vlan configurations.
+			nics.VlanInterfaces = nil
+			if err := impl.SetupVlanInterface(ctx, nil, nics); err != nil {
+				t.Fatalf("expected err: nil, got: %+v", err)
+			}
+
+			fileExists(networkFile, false)
+			fileExists(netdevFile, false)
+		})
+	}
+}
+
+func TestSetupVlanInterfaceFailure(t *testing.T) {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		t.Fatalf("could not list local interfaces: %+v", err)
+	}
+
+	tests := []struct {
+		ethernetInterface metadata.NetworkInterfaces
+		vlanInterface     metadata.VlanInterface
+	}{
+		{
+			vlanInterface: metadata.VlanInterface{
+				Mac:             "foobar",
+				ParentInterface: "/computeMetadata/v1/instance/network-interfaces/x/",
+				Vlan:            33,
+			},
+			ethernetInterface: metadata.NetworkInterfaces{
+				Mac: ifaces[1].HardwareAddr.String(),
+			},
+		},
+		{
+			vlanInterface: metadata.VlanInterface{
+				Mac:             "foobar",
+				ParentInterface: "/computeMetadata/v1/instance/network-interfaces/1/",
+				Vlan:            11,
+			},
+			ethernetInterface: metadata.NetworkInterfaces{
+				Mac: ifaces[1].HardwareAddr.String(),
+			},
+		},
+		{
+			vlanInterface: metadata.VlanInterface{
+				Mac:             "foobar",
+				ParentInterface: "/computeMetadata/v1/instance/network-interfaces/0/",
+				Vlan:            22,
+			},
+			ethernetInterface: metadata.NetworkInterfaces{
+				Mac: "foo-bar",
+			},
+		},
+	}
+
+	opts := systemdTestOpts{
+		lookPathOpts: systemdLookPathOpts{
+			returnValue: true,
+		},
+		runnerOpts: systemdRunnerOpts{
+			versionOpts: systemdVersionOpts{
+				version: 300,
+			},
+			statusOpts: systemdStatusOpts{
+				returnValue:   true,
+				hasKey:        true,
+				configuredKey: "SetupState",
+			},
+		}}
+
+	for i, curr := range tests {
+		t.Run(fmt.Sprintf("test-setup-vlan-success-%d", i), func(t *testing.T) {
+			impl := &systemdNetworkd{
+				configDir:      t.TempDir(),
+				networkCtlKeys: []string{"AdministrativeState", "SetupState"},
+				priority:       1,
+			}
+
+			systemdTestSetup(t, opts)
+
+			t.Cleanup(func() {
+				dhclientTestTearDown(t)
+			})
+
+			nics := &Interfaces{
+				EthernetInterfaces: []metadata.NetworkInterfaces{curr.ethernetInterface},
+				VlanInterfaces: map[int]metadata.VlanInterface{
+					curr.vlanInterface.Vlan: curr.vlanInterface,
+				},
+			}
+
+			ctx := context.Background()
+			if err := impl.SetupVlanInterface(ctx, nil, nics); err == nil {
+				t.Fatal("expected err: non-nill, got: nil")
+			}
 		})
 	}
 }

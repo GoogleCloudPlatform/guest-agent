@@ -137,14 +137,19 @@ type virtualClock struct {
 type Instance struct {
 	// ID is the instance ID.
 	ID json.Number
+
 	// MachineType represents the instance's machine type.
 	MachineType string
+
 	// Attributes are the instance's attributes.
 	Attributes Attributes
+
 	// NetworkInterfaces contains all configured regular network interfaces (primary and secondary).
 	NetworkInterfaces []NetworkInterfaces
+
 	// VlanNetworkInterfaces contains all the vLAN network interfaces.
 	VlanNetworkInterfaces []map[int]VlanInterface
+
 	// VirtualClock contains the drift-token attribute.
 	VirtualClock virtualClock
 }
