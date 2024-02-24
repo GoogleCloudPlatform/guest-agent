@@ -206,3 +206,78 @@ func TestOutputTimeoutFail(t *testing.T) {
 		})
 	}
 }
+
+func TestCommandSpecSuccess(t *testing.T) {
+	type commandData struct {
+		Data string
+	}
+
+	tests := []struct {
+		spec CommandSpec
+		data commandData
+	}{
+		{
+			CommandSpec{"echo {{.Data}}", "failed to echo {{.Data}}"},
+			commandData{"foobar"},
+		},
+		{
+			CommandSpec{"cat {{.Data}}", "failed to cat file {{.Data}}"},
+			commandData{"/proc/cpuinfo"},
+		},
+		{
+			CommandSpec{"echo 'foobar' {{.Data}}", "failed to write to file {{.Data}}"},
+			commandData{path.Join(t.TempDir(), "file.data")},
+		},
+	}
+
+	for i, curr := range tests {
+		t.Run(fmt.Sprintf("test-%d", i), func(t *testing.T) {
+			if err := curr.spec.RunQuiet(context.Background(), curr.data); err != nil {
+				t.Errorf("RunQuiet(%+v) = %+v, want: nil", curr.data, err)
+			}
+		})
+	}
+}
+
+func TestCommandSpecFailure(t *testing.T) {
+	type commandData struct {
+		Data string
+	}
+
+	tests := []struct {
+		spec          CommandSpec
+		data          commandData
+		internalError error
+	}{
+		{
+			spec:          CommandSpec{"", "failed to echo {{.Data}}"},
+			data:          commandData{"foobar"},
+			internalError: ErrCommandTemplate,
+		},
+		{
+			spec:          CommandSpec{"invalid field {{.UnknownField}}", "failed to echo {{.Data}}"},
+			data:          commandData{"foobar"},
+			internalError: ErrCommandTemplate,
+		},
+		{
+			spec:          CommandSpec{"echo {{.Data}}", "invalid data {{.UnknownField}}"},
+			data:          commandData{"foobar"},
+			internalError: ErrTemplateError,
+		},
+		{
+			spec: CommandSpec{"echoxx {{.Data}}", "invalid data {{.Data}}"},
+			data: commandData{"foobar"},
+		},
+	}
+
+	for i, curr := range tests {
+		t.Run(fmt.Sprintf("test-%d", i), func(t *testing.T) {
+			err := curr.spec.RunQuiet(context.Background(), curr.data)
+			if curr.internalError != nil && err != curr.internalError {
+				t.Errorf("RunQuiet(%+v) = %+v, want: %+v", curr.data, err, curr.internalError)
+			} else if err == nil {
+				t.Errorf("RunQuiet(%+v) = %+v, want: non-nil", curr.data, err)
+			}
+		})
+	}
+}
