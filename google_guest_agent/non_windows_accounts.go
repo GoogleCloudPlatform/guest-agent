@@ -344,12 +344,12 @@ func createUserGroupCmd(cmd, user, group string) (string, []string) {
 // createGoogleUser creates a Google managed user account if needed and adds it
 // to the configured groups.
 func createGoogleUser(ctx context.Context, config *cfg.Sections, user string) error {
-	var uid string
+	var uid, gid string
 	if config.Accounts.ReuseHomedir {
-		uid = getUID(fmt.Sprintf("/home/%s", user))
+		uid, gid = getUIDAndGID(fmt.Sprintf("/home/%s", user))
 	}
 
-	if err := createUser(ctx, user, uid); err != nil {
+	if err := createUser(ctx, user, uid, gid); err != nil {
 		return err
 	}
 	groups := config.Accounts.Groups

@@ -27,20 +27,29 @@ import (
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/run"
 )
 
-func getUID(path string) string {
+func getUIDAndGID(path string) (string, string) {
 	if dir, err := os.Stat(path); err == nil {
 		if stat, ok := dir.Sys().(*syscall.Stat_t); ok {
-			return fmt.Sprintf("%d", stat.Uid)
+			return fmt.Sprintf("%d", stat.Uid), fmt.Sprintf("%d", stat.Gid)
 		}
 	}
-	return ""
+	return "", ""
 }
 
-func createUser(ctx context.Context, username, uid string) error {
+func createUser(ctx context.Context, username, uid, gid string) error {
 	config := cfg.Get()
 	useradd := config.Accounts.UserAddCmd
 	if uid != "" {
 		useradd = fmt.Sprintf("%s -u %s", useradd, uid)
+	}
+	if gid != "" {
+		groupadd := config.Accounts.GroupAddCmd
+		groupadd = fmt.Sprintf("%s -g %s", groupadd, gid)
+		cmd, args := createUserGroupCmd(groupadd, "", username)
+		if err := run.Quiet(ctx, cmd, args...); err != nil {
+			return err
+		}
+		useradd = fmt.Sprintf("%s -g %s", useradd, gid)
 	}
 	cmd, args := createUserGroupCmd(useradd, username, "")
 	return run.Quiet(ctx, cmd, args...)
