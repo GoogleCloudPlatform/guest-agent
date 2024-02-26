@@ -62,13 +62,6 @@ func init() {
 	}, false)
 }
 
-// guestAgent contains the guest-agent control flags/data.
-type guestAgent struct {
-	// ManagedByGuestAgent determines if a given configuration was written and is
-	// managed by guest-agent.
-	ManagedByGuestAgent bool
-}
-
 // systemdMatchConfig contains the systemd-networkd's interface matching criteria.
 type systemdMatchConfig struct {
 	// Name is the matching criteria based on the interface name.
@@ -101,7 +94,7 @@ type systemdDHCPConfig struct {
 // Ultimately the structure will be unmarshalled into a .ini file.
 type systemdConfig struct {
 	// GuestAgent is a section containing guest-agent control flags/data.
-	GuestAgent guestAgent
+	GuestAgent guestAgentSection
 
 	// Match is the systemd-networkd ini file's [Match] section.
 	Match systemdMatchConfig
@@ -207,8 +200,8 @@ func writeSystemdConfig(interfaces, ipv6Interfaces []string, configDir, priority
 
 		// Create and setup ini file.
 		data := systemdConfig{
-			GuestAgent: guestAgent{
-				ManagedByGuestAgent: true,
+			GuestAgent: guestAgentSection{
+				Managed: true,
 			},
 			Match: systemdMatchConfig{
 				Name: iface,
@@ -280,7 +273,7 @@ func (n systemdNetworkd) Rollback(ctx context.Context, payload []metadata.Networ
 		}
 
 		// Check that the guest section exists and the key is set to true.
-		if sections.GuestAgent.ManagedByGuestAgent {
+		if sections.GuestAgent.Managed {
 			logger.Debugf("removing %s", configFile)
 			if err = os.Remove(configFile); err != nil && !os.IsNotExist(err) {
 				return err
