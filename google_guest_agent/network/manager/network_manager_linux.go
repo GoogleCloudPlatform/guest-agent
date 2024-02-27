@@ -27,9 +27,7 @@ import (
 
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/run"
-	"github.com/GoogleCloudPlatform/guest-agent/metadata"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
-	"github.com/go-ini/ini"
 )
 
 const (
@@ -93,6 +91,11 @@ func (n networkManager) Name() string {
 	return "NetworkManager"
 }
 
+// Configure gives the opportunity for the Service implementation to adjust its configuration
+// based on the Guest Agent configuration.
+func (n *networkManager) Configure(ctx context.Context, config *cfg.Sections) {
+}
+
 // IsManaging checks if NetworkManager is managing the provided interface.
 func (n networkManager) IsManaging(ctx context.Context, iface string) (bool, error) {
 	// Check whether NetworkManager.service is active.
@@ -127,8 +130,8 @@ func (n networkManager) IsManaging(ctx context.Context, iface string) (bool, err
 }
 
 // Setup sets up the necessary configurations for NetworkManager.
-func (n networkManager) Setup(ctx context.Context, config *cfg.Sections, payload []metadata.NetworkInterfaces) error {
-	ifaces, err := interfaceNames(payload)
+func (n networkManager) SetupEthernetInterface(ctx context.Context, config *cfg.Sections, nics *Interfaces) error {
+	ifaces, err := interfaceNames(nics.EthernetInterfaces)
 	if err != nil {
 		return fmt.Errorf("error getting interfaces: %v", err)
 	}
@@ -153,6 +156,12 @@ func (n networkManager) Setup(ctx context.Context, config *cfg.Sections, payload
 	return nil
 }
 
+// SetupVlanInterface writes the apppropriate vLAN interfaces configuration for the network manager service
+// for all configured interfaces.
+func (n networkManager) SetupVlanInterface(ctx context.Context, config *cfg.Sections, nics *Interfaces) error {
+	return nil
+}
+
 // networkManagerConfigFilePath gets the config file path for the provided interface.
 func (n networkManager) networkManagerConfigFilePath(iface string) string {
 	return path.Join(n.configDir, fmt.Sprintf("google-guest-agent-%s.nmconnection", iface))
@@ -167,11 +176,6 @@ func (n networkManager) writeNetworkManagerConfigs(ifaces []string) ([]string, e
 
 		configFilePath := n.networkManagerConfigFilePath(iface)
 		connID := fmt.Sprintf("google-guest-agent-%s", iface)
-
-		opts := ini.LoadOptions{
-			Insensitive: true,
-		}
-		configFile := ini.Empty(opts)
 
 		// Create the ini file.
 		config := nmConfig{
@@ -191,12 +195,8 @@ func (n networkManager) writeNetworkManagerConfigs(ifaces []string) ([]string, e
 			},
 		}
 
-		if err := configFile.ReflectFrom(&config); err != nil {
-			return []string{}, fmt.Errorf("error creating config ini: %v", err)
-		}
-
 		// Save the config.
-		if err := configFile.SaveTo(configFilePath); err != nil {
+		if err := writeIniFile(configFilePath, &config); err != nil {
 			return []string{}, fmt.Errorf("error saving connection config for %s: %v", iface, err)
 		}
 
@@ -211,28 +211,18 @@ func (n networkManager) writeNetworkManagerConfigs(ifaces []string) ([]string, e
 }
 
 // Rollback deletes the configurations created by Setup().
-func (n networkManager) Rollback(ctx context.Context, payload []metadata.NetworkInterfaces) error {
-	ifaces, err := interfaceNames(payload)
+func (n networkManager) Rollback(ctx context.Context, nics *Interfaces) error {
+	ifaces, err := interfaceNames(nics.EthernetInterfaces)
 	if err != nil {
 		return fmt.Errorf("error getting interfaces: %v", err)
 	}
 
 	for _, iface := range ifaces {
 		configFilePath := path.Join(n.configDir, fmt.Sprintf("google-guest-agent-%s.nmconnection", iface))
-		opts := ini.LoadOptions{
-			Loose:       true,
-			Insensitive: true,
-		}
-
-		// See if it exists.
-		configFile, err := ini.LoadSources(opts, configFilePath)
-		if err != nil {
-			return fmt.Errorf("error loading config file: %v", err)
-		}
 
 		config := new(nmConfig)
-		if err = configFile.MapTo(config); err != nil {
-			return fmt.Errorf("error parsing config ini for %s: %v", iface, err)
+		if err := readIniFile(configFilePath, config); err != nil {
+			return fmt.Errorf("error loading NetworkManager .nmconnection file: %v", err)
 		}
 
 		if config.GuestAgent.Managed {
