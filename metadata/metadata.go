@@ -305,7 +305,11 @@ func (c *Client) retry(ctx context.Context, cfg requestConfig) (string, error) {
 	fn := func() (string, error) {
 		resp, err := c.do(ctx, cfg)
 		if err != nil {
-			return "", &MDSReqError{resp.StatusCode, err}
+			statusCode := -1
+			if resp != nil {
+				statusCode = resp.StatusCode
+			}
+			return "", &MDSReqError{statusCode, err}
 		}
 		defer resp.Body.Close()
 
