@@ -30,7 +30,7 @@ import (
 
 var (
 	// mockWicked is the test wicked implementation for testing.
-	mockWicked = &wicked{}
+	mockWicked = &wicked{wickedCommand: defaultWickedCommand}
 )
 
 // wickedTestOpts are options to set for test environment setup.
@@ -88,7 +88,7 @@ func (w wickedMockRunner) WithOutput(ctx context.Context, name string, args ...s
 		}
 		return &run.Result{}
 	}
-	if name == wickedCommand && slices.Contains(args, "ifstatus") && slices.Contains(args, "iface") && slices.Contains(args, "--brief") {
+	if name == mockWicked.wickedCommand && slices.Contains(args, "ifstatus") && slices.Contains(args, "iface") && slices.Contains(args, "--brief") {
 		statusOpts := w.statusOpts
 		if statusOpts.returnError {
 			return &run.Result{
@@ -235,9 +235,9 @@ func TestIsManaging(t *testing.T) {
 	}
 }
 
-// TestWriteWickedConfig tests whether the wicked configuration files are
+// TestWriteEthernetConfigs tests whether the wicked configuration files are
 // written correctly and to the right location.
-func TestWriteWickedConfigs(t *testing.T) {
+func TestWriteEthernetConfigs(t *testing.T) {
 	tests := []struct {
 		// name is the name of the test.
 		name string
@@ -271,7 +271,7 @@ func TestWriteWickedConfigs(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			wickedTestSetup(t, wickedTestOpts{})
 
-			err := writeWickedConfigs(mockWicked.configDir, test.testInterfaces)
+			err := mockWicked.writeEthernetConfigs(test.testInterfaces)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}

@@ -23,7 +23,6 @@ import (
 
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/osinfo"
-	"github.com/GoogleCloudPlatform/guest-agent/metadata"
 )
 
 const (
@@ -51,6 +50,11 @@ func (n mockService) Name() string {
 	return "service"
 }
 
+// Configure gives the opportunity for the Service implementation to adjust its configuration
+// based on the Guest Agent configuration.
+func (n mockService) Configure(ctx context.Context, config *cfg.Sections) {
+}
+
 // IsManaging implements the Service interface.
 func (n mockService) IsManaging(ctx context.Context, iface string) (bool, error) {
 	if n.managingError {
@@ -59,13 +63,18 @@ func (n mockService) IsManaging(ctx context.Context, iface string) (bool, error)
 	return n.isManaging, nil
 }
 
-// Setup implements the Service interface.
-func (n mockService) Setup(ctx context.Context, config *cfg.Sections, payload []metadata.NetworkInterfaces) error {
+// SetupEthernetInterface implements the Service interface.
+func (n mockService) SetupEthernetInterface(ctx context.Context, config *cfg.Sections, nics *Interfaces) error {
+	return nil
+}
+
+// SetupVlanInterface implements the Service interface.
+func (n mockService) SetupVlanInterface(ctx context.Context, config *cfg.Sections, nics *Interfaces) error {
 	return nil
 }
 
 // Rollback implements the Service interface.
-func (n mockService) Rollback(ctx context.Context, payload []metadata.NetworkInterfaces) error {
+func (n mockService) Rollback(ctx context.Context, nics *Interfaces) error {
 	return nil
 }
 

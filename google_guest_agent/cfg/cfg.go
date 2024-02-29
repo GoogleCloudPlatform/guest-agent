@@ -105,6 +105,8 @@ command_monitor_enabled = false
 command_pipe_mode = 0770
 command_pipe_group =
 command_request_timeout = 10s
+vlan_setup_enabled = false
+systemd_config_dir = /usr/lib/systemd/network
 `
 )
 
@@ -280,6 +282,8 @@ type Unstable struct {
 	CommandRequestTimeout string `ini:"command_request_timeout,omitempty"`
 	CommandPipeMode       string `ini:"command_pipe_mode,omitempty"`
 	CommandPipeGroup      string `ini:"command_pipe_group,omitempty"`
+	VlanSetupEnabled      bool   `ini:"vlan_setup_enabled,omitempty"`
+	SystemdConfigDir      string `ini:"systemd_config_dir,omitempty"`
 }
 
 // WSFC contains the configurations of WSFC section.

@@ -236,6 +236,7 @@ func (a *addressMgr) Diff(ctx context.Context) (bool, error) {
 	wsfcEnable := a.parseWSFCEnable(config)
 
 	diff := !reflect.DeepEqual(newMetadata.Instance.NetworkInterfaces, oldMetadata.Instance.NetworkInterfaces) ||
+		!reflect.DeepEqual(newMetadata.Instance.VlanNetworkInterfaces, oldMetadata.Instance.VlanNetworkInterfaces) ||
 		wsfcEnable != oldWSFCEnable || wsfcAddresses != oldWSFCAddresses
 
 	oldWSFCAddresses = wsfcAddresses
@@ -277,7 +278,7 @@ func (a *addressMgr) Set(ctx context.Context) error {
 	// Guest Agent does not manage interfaces on Windows.
 	if runtime.GOOS != "windows" {
 		// Setup network interfaces.
-		err := network.SetupInterfaces(ctx, config, newMetadata.Instance.NetworkInterfaces)
+		err := network.SetupInterfaces(ctx, config, newMetadata)
 		if err != nil {
 			return fmt.Errorf("failed to setup network interfaces: %v", err)
 		}

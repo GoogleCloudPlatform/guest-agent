@@ -135,11 +135,23 @@ type virtualClock struct {
 
 // Instance describes the metadata's instance attributes/keys.
 type Instance struct {
-	ID                json.Number
-	MachineType       string
-	Attributes        Attributes
+	// ID is the instance ID.
+	ID json.Number
+
+	// MachineType represents the instance's machine type.
+	MachineType string
+
+	// Attributes are the instance's attributes.
+	Attributes Attributes
+
+	// NetworkInterfaces contains all configured regular network interfaces (primary and secondary).
 	NetworkInterfaces []NetworkInterfaces
-	VirtualClock      virtualClock
+
+	// VlanNetworkInterfaces contains all the vLAN network interfaces.
+	VlanNetworkInterfaces []map[int]VlanInterface
+
+	// VirtualClock contains the drift-token attribute.
+	VirtualClock virtualClock
 }
 
 // NetworkInterfaces describes the instances network interfaces configurations.
@@ -150,6 +162,34 @@ type NetworkInterfaces struct {
 	IPAliases         []string
 	Mac               string
 	DHCPv6Refresh     string
+}
+
+// VlanInterface describes the instances vlan network interfaces configurations.
+type VlanInterface struct {
+	// Mac is the vLAN interface's mac address.
+	Mac string
+
+	// ParentInterface is the mds reference of the parent/physical interface i.e.:
+	// /computeMetadata/v1/instance/network-interfaces/0/
+	ParentInterface string
+
+	// Vlan is the vlan id.
+	Vlan int
+
+	// MTU is the vlan's MTU value.
+	MTU int
+
+	// IP is the vlan's ip address.
+	IP string
+
+	// IPv6 is the vlan's ipv6 address.
+	IPv6 []string
+
+	// Gateway is the vlan's gateway address.
+	Gateway string
+
+	// GatewayIPv6 is the vlan's IPv6 gateway address.
+	GatewayIPv6 string
 }
 
 // Project describes the projects instance's attributes.

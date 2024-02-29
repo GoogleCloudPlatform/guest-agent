@@ -30,18 +30,35 @@ import (
 // Service is an interface for setting up network configurations
 // using different network managing services, such as systemd-networkd and wicked.
 type Service interface {
+	// Configure gives the opportunity for the Service implementation to adjust its configuration
+	// based on the Guest Agent configuration.
+	Configure(ctx context.Context, config *cfg.Sections)
+
 	// IsManaging checks whether this network manager service is managing the provided interface.
 	IsManaging(ctx context.Context, iface string) (bool, error)
 
 	// Name is the name of the network manager service.
 	Name() string
 
-	// Setup writes the appropriate configurations for the network manager service for all
+	// SetupEthernetInterface writes the appropriate configurations for the network manager service for all
 	// non-primary network interfaces.
-	Setup(ctx context.Context, config *cfg.Sections, payload []metadata.NetworkInterfaces) error
+	SetupEthernetInterface(ctx context.Context, config *cfg.Sections, nics *Interfaces) error
+
+	// SetupVlanInterface writes the apppropriate vLAN interfaces configuration for the network manager service
+	// for all configured interfaces.
+	SetupVlanInterface(ctx context.Context, config *cfg.Sections, nics *Interfaces) error
 
 	// Rollback rolls back the changes created in Setup.
-	Rollback(ctx context.Context, payload []metadata.NetworkInterfaces) error
+	Rollback(ctx context.Context, nics *Interfaces) error
+}
+
+// Interfaces wraps both ethernet and vlan interfaces.
+type Interfaces struct {
+	// EthernetInterfaces are the regular ethernet interfaces descriptors offered by metadata.
+	EthernetInterfaces []metadata.NetworkInterfaces
+
+	// VlanInterfaces are the vLAN interfaces descriptors offered by metadata.
+	VlanInterfaces map[int]metadata.VlanInterface
 }
 
 // osConfigRule describes matching rules for OS's, used for specifying either
@@ -212,14 +229,25 @@ func shouldManageInterface(isPrimary bool) bool {
 // SetupInterfaces sets up all the network interfaces on the system, applying rules described
 // by osRules and using the native network manager service detected to be managing the primary
 // network interface.
-func SetupInterfaces(ctx context.Context, config *cfg.Sections, nics []metadata.NetworkInterfaces) error {
+func SetupInterfaces(ctx context.Context, config *cfg.Sections, mds *metadata.Descriptor) error {
 	// User may have disabled network interface setup entirely.
 	if !config.NetworkInterfaces.Setup {
 		logger.Infof("Network interface setup disabled, skipping...")
 		return nil
 	}
 
-	interfaces, err := interfaceNames(nics)
+	nics := &Interfaces{
+		EthernetInterfaces: mds.Instance.NetworkInterfaces,
+		VlanInterfaces:     map[int]metadata.VlanInterface{},
+	}
+
+	for _, curr := range mds.Instance.VlanNetworkInterfaces {
+		for key, val := range curr {
+			nics.VlanInterfaces[key] = val
+		}
+	}
+
+	interfaces, err := interfaceNames(nics.EthernetInterfaces)
 	if err != nil {
 		return fmt.Errorf("error getting interface names: %v", err)
 	}
@@ -231,6 +259,8 @@ func SetupInterfaces(ctx context.Context, config *cfg.Sections, nics []metadata.
 		return fmt.Errorf("error detecting network manager service: %v", err)
 	}
 
+	nm.Configure(ctx, config)
+
 	// Since the manager is different, undo all the changes of the old manager.
 	if currManager != nil && nm != currManager {
 		logger.Infof("Rolling back %s", currManager.Name())
@@ -240,11 +270,19 @@ func SetupInterfaces(ctx context.Context, config *cfg.Sections, nics []metadata.
 	}
 
 	currManager = nm
+
 	logger.Infof("Setting up %s", nm.Name())
-	if err = nm.Setup(ctx, config, nics); err != nil {
-		return fmt.Errorf("error setting up %s: %v", nm.Name(), err)
+	if err = nm.SetupEthernetInterface(ctx, config, nics); err != nil {
+		return fmt.Errorf("manager(%s): error setting up ethernet interfaces: %v", nm.Name(), err)
+	}
+
+	if config.Unstable.VlanSetupEnabled {
+		if err = nm.SetupVlanInterface(ctx, config, nics); err != nil {
+			return fmt.Errorf("manager(%s): error setting up vlan interfaces: %v", nm.Name(), err)
+		}
 	}
 
 	logger.Infof("Finished setting up %s", nm.Name())
+
 	return nil
 }

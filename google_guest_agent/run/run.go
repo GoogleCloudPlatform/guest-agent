@@ -19,15 +19,25 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"os/exec"
 	"strings"
+	"text/template"
 	"time"
 
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 )
 
-// Client is the Runner running commands.
-var Client RunnerInterface
+var (
+	// Client is the Runner running commands.
+	Client RunnerInterface
+
+	// ErrCommandTemplate is the error returned when a CommandSpec's Command template is boggus.
+	ErrCommandTemplate = errors.New("invalid command format template")
+
+	// ErrTemplateError is the error returned when a CommandSpec's Error template is boggus.
+	ErrTemplateError = errors.New("invalid error format template")
+)
 
 // Result wraps a command execution result.
 type Result struct {
@@ -57,9 +67,93 @@ type RunnerInterface interface {
 	WithCombinedOutput(ctx context.Context, name string, args ...string) *Result
 }
 
+// CommandSpec defines a Command template and an Error template. The data
+// structure to be used with the templates is up to the user to define.
+type CommandSpec struct {
+	// Command is the command template i.e: "echo '{{.MyDataString}}'".
+	Command string
+
+	// Error is the error template, if the command fails this template is
+	// used to build the error message, i.e: "failed to parse file {{.FileName}}".
+	Error string
+}
+
+// CommandSet is set of commands to be executed together, IOW a command batch.
+type CommandSet []CommandSpec
+
 // init initializes the RunClient.
 func init() {
 	Client = Runner{}
+}
+
+// RunQuiet runs all the commands in a CommandSet, no command output is handled.
+// All commands are run as a batch.
+func (s CommandSet) RunQuiet(ctx context.Context, data any) error {
+	for _, curr := range s {
+		if err := curr.RunQuiet(ctx, data); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// commandFormat formats the CommandSpec's Command field. The data is passed in
+// to the template parsing and execution.
+func (c CommandSpec) commandFormat(data any) ([]string, error) {
+	if len(strings.Trim(c.Command, " ")) == 0 {
+		return nil, ErrCommandTemplate
+	}
+
+	tmpl, err := template.New("").Parse(c.Command)
+	if err != nil {
+		logger.Debugf("error parsing command format: %+v", err)
+		return nil, ErrCommandTemplate
+	}
+
+	var buffer bytes.Buffer
+	if err := tmpl.Execute(&buffer, data); err != nil {
+		logger.Debugf("error executing command format: %+v", err)
+		return nil, ErrCommandTemplate
+	}
+
+	return strings.Split(buffer.String(), " "), nil
+}
+
+// errorFormat formats the CommandSpec's Error field. The data is passed in to the
+// template parsing and execution.
+func (c CommandSpec) errorFormat(data any) (string, error) {
+	tmpl, err := template.New("").Parse(c.Error)
+	if err != nil {
+		logger.Debugf("error parsing error format: %+v", err)
+		return "", ErrTemplateError
+	}
+
+	var buffer bytes.Buffer
+	if err := tmpl.Execute(&buffer, data); err != nil {
+		logger.Debugf("error executing error format: %+v", err)
+		return "", ErrTemplateError
+	}
+
+	return buffer.String(), nil
+}
+
+// RunQuiet runs a CommandSpec command, no command output is handled.
+func (c CommandSpec) RunQuiet(ctx context.Context, data any) error {
+	tokens, err := c.commandFormat(data)
+	if err != nil {
+		return err
+	}
+
+	errorMsg, err := c.errorFormat(data)
+	if err != nil {
+		return err
+	}
+
+	if err := Client.Quiet(ctx, tokens[0], tokens[1:]...); err != nil {
+		return fmt.Errorf("%+s: %+v: %+v", errorMsg, len(tokens), err)
+	}
+
+	return nil
 }
 
 // Error return an error containing the stderr content.

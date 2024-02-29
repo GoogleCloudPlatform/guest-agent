@@ -95,7 +95,7 @@ func (d dhclientMockPs) Find(exematch string) ([]ps.Process, error) {
 				Exe: "/random/path",
 				CommandLine: []string{
 					"dhclient",
-					d.ipVersions[i].dhclientArg,
+					d.ipVersions[i].Flag,
 					d.ifaces[i],
 				},
 			})
