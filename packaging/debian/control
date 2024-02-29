@@ -1,13 +1,24 @@
 Source: google-guest-agent
 Maintainer: Google Cloud Team <gc-team@google.com>
-Section: misc
+Section: devel
+Testsuite: autopkgtest-pkg-go
 Priority: optional
-Standards-Version: 3.9.8
-Build-Depends: debhelper (>= 9.20160709), dh-golang (>= 1.1), golang-go
+Build-Depends: debhelper-compat (= 12),
+               dh-golang,
+               golang-any
+Standards-Version: 4.5.0
+Homepage: https://github.com/GoogleCloudPlatform/guest-agent
+Rules-Requires-Root: no
+XS-Go-Import-Path: github.com/GoogleCloudPlatform/guest-agent
 
 Package: google-guest-agent
 Architecture: any
-Depends: ${misc:Depends}, google-compute-engine-oslogin (>= 1:20231003)
-Conflicts: python-google-compute-engine, python3-google-compute-engine
+Depends: ${misc:Depends},
+         ${shlibs:Depends},
+         google-compute-engine-oslogin (>= 20231004.00)
+Built-Using: ${misc:Built-Using}
+Breaks: gce-compute-image-packages (<< 20191115),
+        python3-google-compute-engine
+Replaces: gce-compute-image-packages (<< 20191115)
 Description: Google Compute Engine Guest Agent
  Contains the guest agent and metadata script runner binaries.
