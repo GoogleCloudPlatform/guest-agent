@@ -91,8 +91,8 @@ func (a *accountsMgr) Diff(ctx context.Context) (bool, error) {
 		}
 	}
 	// If we've just disabled OS Login.
-	oldOslogin, _, _ := getOSLoginEnabled(oldMetadata)
-	newOslogin, _, _ := getOSLoginEnabled(newMetadata)
+	oldOslogin, _, _, _ := getOSLoginEnabled(oldMetadata)
+	newOslogin, _, _, _ := getOSLoginEnabled(newMetadata)
 	if oldOslogin && !newOslogin {
 		return true, nil
 	}
@@ -106,7 +106,7 @@ func (a *accountsMgr) Timeout(ctx context.Context) (bool, error) {
 
 func (a *accountsMgr) Disabled(ctx context.Context) (bool, error) {
 	config := cfg.Get()
-	oslogin, _, _ := getOSLoginEnabled(newMetadata)
+	oslogin, _, _, _ := getOSLoginEnabled(newMetadata)
 	return false || runtime.GOOS == "windows" || oslogin || !config.Daemons.AccountsDaemon, nil
 }
 
