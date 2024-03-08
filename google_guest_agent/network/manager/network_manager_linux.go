@@ -145,7 +145,7 @@ func (n networkManager) SetupEthernetInterface(ctx context.Context, config *cfg.
 		return fmt.Errorf("error getting interfaces: %v", err)
 	}
 
-	connections, err := n.writeNetworkManagerConfigs(ifaces)
+	interfaces, err := n.writeNetworkManagerConfigs(ifaces)
 	if err != nil {
 		return fmt.Errorf("error writing NetworkManager connection configs: %v", err)
 	}
@@ -157,9 +157,9 @@ func (n networkManager) SetupEthernetInterface(ctx context.Context, config *cfg.
 	}
 
 	// Enable the new connections.
-	for _, conn := range connections {
-		if err = run.Quiet(ctx, "nmcli", "conn", "up", "id", conn); err != nil {
-			return fmt.Errorf("error enabling connection %s: %v", conn, err)
+	for _, ifname := range interfaces {
+		if err = run.Quiet(ctx, "nmcli", "conn", "up", "ifname", ifname); err != nil {
+			return fmt.Errorf("error enabling connection %s: %v", ifname, err)
 		}
 	}
 	return nil
@@ -182,7 +182,7 @@ func (n networkManager) ifcfgFilePath(iface string) string {
 
 // writeNetworkManagerConfigs writes the configuration files for NetworkManager.
 func (n networkManager) writeNetworkManagerConfigs(ifaces []string) ([]string, error) {
-	var connections []string
+	var result []string
 
 	for _, iface := range ifaces {
 		logger.Debugf("writing nmconnection file for %s", iface)
@@ -230,9 +230,10 @@ func (n networkManager) writeNetworkManagerConfigs(ifaces []string) ([]string, e
 			}
 		}
 
-		connections = append(connections, connID)
+		result = append(result, iface)
 	}
-	return connections, nil
+
+	return result, nil
 }
 
 // Rollback deletes the configurations created by Setup().
