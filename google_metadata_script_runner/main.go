@@ -120,7 +120,7 @@ func downloadGSURL(ctx context.Context, bucket, object string, file *os.File) er
 }
 
 func downloadURL(ctx context.Context, url string, file *os.File) error {
-	res, err := retry.RunWithResponse(context.Background(), defaultRetryPolicy, func() (*http.Response, error) {
+	res, err := retry.RunWithResponse(ctx, defaultRetryPolicy, func() (*http.Response, error) {
 		res, err := http.Get(url)
 		if err != nil {
 			return res, err
@@ -156,9 +156,16 @@ func downloadScript(ctx context.Context, path string, file *os.File) error {
 	bucket, object := parseGCS(path)
 	if bucket != "" && object != "" {
 		err = downloadGSURL(ctx, bucket, object, file)
+		if err == nil {
+			logger.Debugf("Succesfull download using GSURL, bucket: %s, object: %s, file: %+v",
+				bucket, object, file)
+			return nil
+		}
+
 		if err != nil {
 			logger.Infof("Failed to download object [%s] from GCS bucket [%s], err: %+v", object, bucket, err)
 		}
+
 		logger.Infof("Trying unauthenticated download")
 		path = fmt.Sprintf("https://%s/%s/%s", storageURL, bucket, object)
 	}
