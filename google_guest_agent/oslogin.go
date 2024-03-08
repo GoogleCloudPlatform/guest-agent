@@ -75,7 +75,7 @@ func getOSLoginEnabled(md *metadata.Descriptor) (bool, bool, bool, bool) {
 	}
 	var reqCerts bool
 	if md.Project.Attributes.RequireCerts != nil {
-		reqCerts  = *md.Project.Attributes.RequireCerts
+		reqCerts = *md.Project.Attributes.RequireCerts
 	}
 	if md.Instance.Attributes.RequireCerts != nil {
 		reqCerts = *md.Instance.Attributes.RequireCerts

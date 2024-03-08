@@ -197,7 +197,7 @@ func TestUpdateSSHConfig(t *testing.T) {
 	matchblock2 := `       AuthenticationMethods publickey`
 
 	var tests = []struct {
-		contents, want                []string
+		contents, want                             []string
 		enable, twofactor, skey, reqCerts, cfgCert bool
 	}{
 		{
@@ -494,7 +494,6 @@ func TestUpdateSSHConfig(t *testing.T) {
 			reqCerts:  true,
 			cfgCert:   false,
 		},
-
 	}
 
 	if err := cfg.Load(nil); err != nil {
@@ -668,7 +667,7 @@ func TestUpdateGroupConf(t *testing.T) {
 
 func TestGetOSLoginEnabled(t *testing.T) {
 	var tests = []struct {
-		md                      string
+		md                                string
 		enable, twofactor, skey, reqCerts bool
 	}{
 		{
@@ -699,7 +698,7 @@ func TestGetOSLoginEnabled(t *testing.T) {
 			enable:    false,
 			twofactor: false,
 			skey:      false,
-			reqCerts: false,
+			reqCerts:  false,
 		},
 		{
 			// Handle weird values
@@ -733,7 +732,6 @@ func TestGetOSLoginEnabled(t *testing.T) {
 			skey:      false,
 			reqCerts:  true,
 		},
-
 	}
 
 	for idx, tt := range tests {
