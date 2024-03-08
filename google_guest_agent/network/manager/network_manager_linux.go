@@ -50,16 +50,10 @@ type nmConnectionSection struct {
 	ConnType string `ini:"type"`
 }
 
-// nmIpv4Section is the ipv4 section of NetworkManager's keyfile.
-type nmIpv4Section struct {
+// nmIPSection is the ipv4/ipv6 section of NetworkManager's keyfile.
+type nmIPSection struct {
 	// Method is the IP configuration method. Supports "auto", "manual", and "link-local".
-	Method string
-}
-
-// nmIpv6Section is the ipv6 section of NetworkManager's keyfile.
-type nmIpv6Section struct {
-	// Method is the IP configuration method. Supports "auto", "manual", and "link-local".
-	Method string
+	Method string `ini:"method"`
 }
 
 // nmConfig is a wrapper containing all the sections for the NetworkManager keyfile.
@@ -71,10 +65,10 @@ type nmConfig struct {
 	Connection nmConnectionSection `ini:"connection"`
 
 	// Ipv4 is the ipv4 section.
-	Ipv4 nmIpv4Section `ini:"ipv4"`
+	Ipv4 nmIPSection `ini:"ipv4"`
 
 	// Ipv6 is the ipv6 section.
-	Ipv6 nmIpv6Section `ini:"ipv6"`
+	Ipv6 nmIPSection `ini:"ipv6"`
 }
 
 // networkManager implements the manager.Service interface for NetworkManager.
@@ -200,10 +194,10 @@ func (n networkManager) writeNetworkManagerConfigs(ifaces []string) ([]string, e
 				ID:            connID,
 				ConnType:      "ethernet",
 			},
-			Ipv4: nmIpv4Section{
+			Ipv4: nmIPSection{
 				Method: "auto",
 			},
-			Ipv6: nmIpv6Section{
+			Ipv6: nmIPSection{
 				Method: "auto",
 			},
 		}
