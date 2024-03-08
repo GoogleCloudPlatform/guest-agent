@@ -360,8 +360,8 @@ func TestWriteNetworkManagerConfigs(t *testing.T) {
 			}
 
 			for i, conn := range conns {
-				if conn != test.expectedIDs[i] {
-					t.Fatalf("unexpected connection ID. Expected: %s, Actual: %s", test.expectedIDs[i], conn)
+				if conn != test.testInterfaces[i] {
+					t.Fatalf("unexpected connection interface. Expected: %s, Actual: %s", test.testInterfaces[i], conn)
 				}
 
 				// Load the file and check the sections.

@@ -31,7 +31,11 @@ import (
 )
 
 const (
+	// defaultNetworkManagerConfigDir is the directory where the network manager nmconnection files are stored.
 	defaultNetworkManagerConfigDir = "/etc/NetworkManager/system-connections"
+
+	// defaultNetworkScriptsDir is the directory where the old (no longer managed) ifcfg files are stored.
+	defaultNetworkScriptsDir = "/etc/sysconfig/network-scripts"
 )
 
 // nmConnectionSection is the connection section of NetworkManager's keyfile.
@@ -77,12 +81,17 @@ type nmConfig struct {
 type networkManager struct {
 	// configDir is the directory to which to write the configuration files.
 	configDir string
+
+	// networkScriptsDir is the directory containing no longer supported ifcfg files, this files
+	// need to be migrated case they are found.
+	networkScriptsDir string
 }
 
 // init registers this network manager service to the list of known network managers.
 func init() {
 	registerManager(&networkManager{
-		configDir: defaultNetworkManagerConfigDir,
+		configDir:         defaultNetworkManagerConfigDir,
+		networkScriptsDir: defaultNetworkScriptsDir,
 	}, false)
 }
 
@@ -136,7 +145,7 @@ func (n networkManager) SetupEthernetInterface(ctx context.Context, config *cfg.
 		return fmt.Errorf("error getting interfaces: %v", err)
 	}
 
-	connections, err := n.writeNetworkManagerConfigs(ifaces)
+	interfaces, err := n.writeNetworkManagerConfigs(ifaces)
 	if err != nil {
 		return fmt.Errorf("error writing NetworkManager connection configs: %v", err)
 	}
@@ -148,9 +157,9 @@ func (n networkManager) SetupEthernetInterface(ctx context.Context, config *cfg.
 	}
 
 	// Enable the new connections.
-	for _, conn := range connections {
-		if err = run.Quiet(ctx, "nmcli", "conn", "up", "id", conn); err != nil {
-			return fmt.Errorf("error enabling connection %s: %v", conn, err)
+	for _, ifname := range interfaces {
+		if err = run.Quiet(ctx, "nmcli", "conn", "up", "ifname", ifname); err != nil {
+			return fmt.Errorf("error enabling connection %s: %v", ifname, err)
 		}
 	}
 	return nil
@@ -167,9 +176,13 @@ func (n networkManager) networkManagerConfigFilePath(iface string) string {
 	return path.Join(n.configDir, fmt.Sprintf("google-guest-agent-%s.nmconnection", iface))
 }
 
+func (n networkManager) ifcfgFilePath(iface string) string {
+	return path.Join(n.networkScriptsDir, fmt.Sprintf("ifcfg-%s", iface))
+}
+
 // writeNetworkManagerConfigs writes the configuration files for NetworkManager.
 func (n networkManager) writeNetworkManagerConfigs(ifaces []string) ([]string, error) {
-	var connections []string
+	var result []string
 
 	for _, iface := range ifaces {
 		logger.Debugf("writing nmconnection file for %s", iface)
@@ -205,9 +218,22 @@ func (n networkManager) writeNetworkManagerConfigs(ifaces []string) ([]string, e
 			return []string{}, fmt.Errorf("error updating permissions for %s connection config: %v", iface, err)
 		}
 
-		connections = append(connections, connID)
+		ifcfgFilePath := n.ifcfgFilePath(iface)
+		_, err := os.Stat(ifcfgFilePath)
+		if err != nil {
+			if !os.IsNotExist(err) {
+				return nil, fmt.Errorf("failed to stat ifcfg file(%s): %v", ifcfgFilePath, err)
+			}
+		} else {
+			if err := os.Remove(ifcfgFilePath); err != nil {
+				return nil, fmt.Errorf("failed to remove previously managed ifcfg file(%s): %v", ifcfgFilePath, err)
+			}
+		}
+
+		result = append(result, iface)
 	}
-	return connections, nil
+
+	return result, nil
 }
 
 // Rollback deletes the configurations created by Setup().
