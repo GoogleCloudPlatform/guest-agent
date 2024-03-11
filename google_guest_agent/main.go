@@ -53,6 +53,7 @@ var (
 	oldMetadata, newMetadata *metadata.Descriptor
 	osInfo                   osinfo.OSInfo
 	mdsClient                *metadata.Client
+	addressManager           = &addressMgr{}
 )
 
 const (
@@ -86,7 +87,7 @@ func closeFile(c io.Closer) {
 
 func availableManagers() []manager {
 	managers := []manager{
-		&addressMgr{},
+		addressManager,
 	}
 
 	if runtime.GOOS == "windows" {
@@ -104,45 +105,48 @@ func availableManagers() []manager {
 	)
 }
 
+func runManager(ctx context.Context, mgr manager) {
+	disabled, err := mgr.Disabled(ctx)
+	if err != nil {
+		logger.Errorf("Failed to run manager's Disabled() call: %+v", err)
+		return
+	}
+
+	if disabled {
+		logger.Debugf("manager %#v disabled, skipping", mgr)
+		return
+	}
+
+	timeout, err := mgr.Timeout(ctx)
+	if err != nil {
+		logger.Errorf("[%#v] Failed to run manager Timeout() call: %+v", mgr, err)
+		return
+	}
+
+	diff, err := mgr.Diff(ctx)
+	if err != nil {
+		logger.Errorf("[%#v] Failed to run manager Diff() call: %+v", mgr, err)
+		return
+	}
+
+	if !timeout && !diff {
+		logger.Debugf("[%#v] Manager reports no diff", mgr)
+		return
+	}
+
+	logger.Debugf("running %#v manager", mgr)
+	if err := mgr.Set(ctx); err != nil {
+		logger.Errorf("[%#v] Failed to run manager Set() call: %s", mgr, err)
+	}
+}
+
 func runUpdate(ctx context.Context) {
 	var wg sync.WaitGroup
 	for _, mgr := range availableManagers() {
 		wg.Add(1)
 		go func(mgr manager) {
 			defer wg.Done()
-
-			disabled, err := mgr.Disabled(ctx)
-			if err != nil {
-				logger.Errorf("Failed to run manager's Disabled() call: %+v", err)
-				return
-			}
-
-			if disabled {
-				logger.Debugf("manager %#v disabled, skipping", mgr)
-				return
-			}
-
-			timeout, err := mgr.Timeout(ctx)
-			if err != nil {
-				logger.Errorf("[%#v] Failed to run manager Timeout() call: %+v", mgr, err)
-				return
-			}
-
-			diff, err := mgr.Diff(ctx)
-			if err != nil {
-				logger.Errorf("[%#v] Failed to run manager Diff() call: %+v", mgr, err)
-				return
-			}
-
-			if !timeout && !diff {
-				logger.Debugf("[%#v] Manager reports no diff", mgr)
-				return
-			}
-
-			logger.Debugf("running %#v manager", mgr)
-			if err := mgr.Set(ctx); err != nil {
-				logger.Errorf("[%#v] Failed to run manager Set() call: %s", mgr, err)
-			}
+			runManager(ctx, mgr)
 		}(mgr)
 	}
 	wg.Wait()
