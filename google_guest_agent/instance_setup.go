@@ -159,6 +159,9 @@ func agentInit(ctx context.Context) {
 			}
 		}
 
+		// Early setup the network configurations before we notify systemd we are done.
+		runManager(ctx, addressManager)
+
 		// Disable overcommit accounting; e2 instances only.
 		parts := strings.Split(newMetadata.Instance.MachineType, "/")
 		if strings.HasPrefix(parts[len(parts)-1], "e2-") {
