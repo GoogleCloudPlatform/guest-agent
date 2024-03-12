@@ -231,6 +231,11 @@ func (a *addressMgr) applyWSFCFilter(config *cfg.Sections) {
 }
 
 func (a *addressMgr) Diff(ctx context.Context) (bool, error) {
+	// Return true if this is the first call (when the first mds descriptor is available).
+	if oldMetadata == nil {
+		return true, nil
+	}
+
 	config := cfg.Get()
 	wsfcAddresses := a.parseWSFCAddresses(config)
 	wsfcEnable := a.parseWSFCEnable(config)
