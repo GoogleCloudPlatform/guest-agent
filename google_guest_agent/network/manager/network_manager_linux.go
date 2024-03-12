@@ -150,8 +150,8 @@ func (n networkManager) SetupEthernetInterface(ctx context.Context, config *cfg.
 		return fmt.Errorf("error reloading NetworkManager config cache: %v", err)
 	}
 
-	// Enable the new connections.
-	for _, ifname := range interfaces {
+	// Enable the new connections. Ignore the primary interface as it will already be up.
+	for _, ifname := range interfaces[1:] {
 		if err = run.Quiet(ctx, "nmcli", "conn", "up", "ifname", ifname); err != nil {
 			return fmt.Errorf("error enabling connection %s: %v", ifname, err)
 		}
