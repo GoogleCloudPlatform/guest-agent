@@ -38,7 +38,7 @@ import (
 const (
 	// minSupportedVersion is the version from which we start supporting
 	// systemd-networkd.
-	minSupportedVersion = 253
+	minSupportedVersion = 252
 )
 
 type systemdNetworkd struct {
