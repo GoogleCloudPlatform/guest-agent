@@ -227,7 +227,7 @@ func runAgent(ctx context.Context) {
 		logger.Debugf("Handling metadata %q event.", evType)
 
 		// If metadata watcher failed there isn't much we can do, just ignore the event and
-		// allow the water to get it corrected.
+		// allow the watcher to get it corrected.
 		if evData.Error != nil {
 			logger.Infof("Metadata event watcher failed, ignoring: %+v", evData.Error)
 			return true
