@@ -134,7 +134,7 @@ func createOrResetPwd(ctx context.Context, k metadata.WindowsKey) (*credsJSON, e
 		}
 	} else {
 		logger.Infof("Creating user %s", k.UserName)
-		if err := createUser(ctx, k.UserName, pwd); err != nil {
+		if err := createUser(ctx, k.UserName, pwd, ""); err != nil {
 			return nil, fmt.Errorf("error running createUser: %v", err)
 		}
 		if k.AddToAdministrators == nil || *k.AddToAdministrators {
@@ -156,7 +156,7 @@ func createSSHUser(ctx context.Context, user string) error {
 		return nil
 	}
 	logger.Infof("Creating user %s", user)
-	if err := createUser(ctx, user, pwd); err != nil {
+	if err := createUser(ctx, user, pwd, ""); err != nil {
 		return fmt.Errorf("error running createUser: %v", err)
 	}
 
