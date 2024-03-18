@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"os"
 	"os/exec"
 	"path"
 	"regexp"
@@ -38,16 +37,11 @@ import (
 
 const (
 	// The base directory for dhclient files managed by guest agent.
-	defaultBaseDhclientDir = "/var/google-dhclient.d"
-
 	// For finer control of the execution, dhclient is invoked for
 	// each interface individually such that each call will have its
-	// own PID file. This is where those PID files are expected to be
-	// written.
-	pidFileDir = "pids"
-
-	// Similar thing for PID files, but for DHClient leases.
-	leaseFileDir = "leases"
+	// own PID file. This is where those PID and lease files are
+	// expected to be written.
+	defaultBaseDhclientDir = "/run"
 )
 
 var (
@@ -197,14 +191,6 @@ func (n dhclient) SetupEthernetInterface(ctx context.Context, config *cfg.Sectio
 	if dhcpCommand != "" {
 		tokens := strings.Split(dhcpCommand, " ")
 		return run.Quiet(ctx, tokens[0], tokens[1:]...)
-	}
-
-	// Create the necessary directories.
-	if err := os.MkdirAll(fmt.Sprintf("%s/%s", baseDhclientDir, pidFileDir), 0755); err != nil {
-		return fmt.Errorf("failed to create directory: %v", err)
-	}
-	if err := os.MkdirAll(fmt.Sprintf("%s/%s", baseDhclientDir, leaseFileDir), 0755); err != nil {
-		return fmt.Errorf("failed to create directory: %v", err)
 	}
 
 	// Get all interfaces separated by ipv4 and ipv6.
@@ -398,13 +384,13 @@ func (n dhclient) removeVlanInterfaces(ctx context.Context, keepMe []string) err
 // pidFilePath gets the expected file path for the PID pertaining to the provided
 // interface and IP version.
 func pidFilePath(iface string, ipVersion ipVersion) string {
-	return path.Join(baseDhclientDir, pidFileDir, fmt.Sprintf("dhclient.google-guest-agent.%s.%s.pid", iface, ipVersion.Flag))
+	return path.Join(baseDhclientDir, fmt.Sprintf("dhclient.google-guest-agent.%s.%s.pid", iface, ipVersion.Flag))
 }
 
 // leaseFilePath gets the expected file path for the leases pertaining to the provided
 // interface and IP version.
 func leaseFilePath(iface string, ipVersion ipVersion) string {
-	return path.Join(baseDhclientDir, leaseFileDir, fmt.Sprintf("dhclient.google-guest-agent.%s.%s.pid", iface, ipVersion.Flag))
+	return path.Join(baseDhclientDir, fmt.Sprintf("dhclient.google-guest-agent.%s.%s.lease", iface, ipVersion.Flag))
 }
 
 // runDhclient obtains a lease with the provided IP version for the given
@@ -476,7 +462,7 @@ func partitionInterfaces(ctx context.Context, interfaces, ipv6Interfaces []strin
 
 // dhclientProcessExists checks if a dhclient process for the provided
 // interface and IP version exists.
-func dhclientProcessExists(ctx context.Context, iface string, ipVersion ipVersion) (bool, error) {
+func dhclientProcessExists(_ context.Context, iface string, ipVersion ipVersion) (bool, error) {
 	processes, err := ps.Find(".*dhclient.*")
 	if err != nil {
 		return false, fmt.Errorf("error finding dhclient process: %v", err)

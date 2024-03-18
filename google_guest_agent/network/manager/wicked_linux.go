@@ -339,10 +339,6 @@ func (n wicked) Rollback(ctx context.Context, nics *Interfaces) error {
 		}
 
 		iface := fmt.Sprintf("%s.%d", parentInterface, curr.Vlan)
-		if err != nil {
-			return fmt.Errorf("failed to decode vlan id: %+d", err)
-		}
-
 		if err := n.removeInterface(ctx, iface); err != nil {
 			return fmt.Errorf("failed to rollback wicked ethernet interface: %+v", err)
 		}
