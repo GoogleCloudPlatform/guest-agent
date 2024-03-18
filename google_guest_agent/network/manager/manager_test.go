@@ -220,7 +220,7 @@ func TestDetectNetworkManager(t *testing.T) {
 				// Avoid checking expectedManager.
 				return
 			}
-			if err == nil && test.expectErr {
+			if test.expectErr {
 				t.Fatalf("no error returned when error expected")
 			}
 

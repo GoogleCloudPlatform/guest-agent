@@ -158,7 +158,7 @@ func (s systemdMockRunner) WithOutput(ctx context.Context, name string, args ...
 				StdOut: mockOut,
 			}
 		}
-		mockOut := fmt.Sprintf("{\"Name\": \"iface\"}")
+		mockOut := `{"Name": "iface"}`
 		return &run.Result{
 			StdOut: mockOut,
 		}
