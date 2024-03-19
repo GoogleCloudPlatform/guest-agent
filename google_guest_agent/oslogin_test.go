@@ -676,7 +676,7 @@ func TestGetOSLoginEnabled(t *testing.T) {
 			reqCerts:  false,
 		},
 		{
-			md:        `{"project": {"attributes": {"enable-oslogin": "true", "enable-oslogin-2fa": "true", "require-oslogin-certificates": "true"}}}`,
+			md:        `{"project": {"attributes": {"enable-oslogin": "true", "enable-oslogin-2fa": "true", "enable-oslogin-certificates": "true"}}}`,
 			enable:    true,
 			twofactor: true,
 			skey:      false,
@@ -724,7 +724,7 @@ func TestGetOSLoginEnabled(t *testing.T) {
 		},
 		{
 			// ReqCerts test
-			md:        `{"instance": {"attributes": {"enable-oslogin": "true", "enable-oslogin-2fa": "true", "require-oslogin-certificates": "true"}}}`,
+			md:        `{"instance": {"attributes": {"enable-oslogin": "true", "enable-oslogin-2fa": "true", "enable-oslogin-certificates": "true"}}}`,
 			enable:    true,
 			twofactor: true,
 			skey:      false,

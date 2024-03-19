@@ -240,7 +240,7 @@ func (a *Attributes) UnmarshalJSON(b []byte) error {
 		SSHKeys               string      `json:"ssh-keys"`
 		TwoFactor             string      `json:"enable-oslogin-2fa"`
 		SecurityKey           string      `json:"enable-oslogin-sk"`
-		RequireCerts          string      `json:"require-oslogin-certificates"`
+		RequireCerts          string      `json:"enable-oslogin-certificates"`
 		WindowsKeys           WindowsKeys `json:"windows-keys"`
 		WSFCAddresses         string      `json:"wsfc-addrs"`
 		WSFCAgentPort         string      `json:"wsfc-agent-port"`
