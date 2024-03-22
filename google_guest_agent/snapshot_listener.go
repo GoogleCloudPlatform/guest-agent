@@ -19,10 +19,12 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/run"
 	sspb "github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/snapshot_service"
+	"github.com/GoogleCloudPlatform/guest-agent/retry"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 	"github.com/golang/groupcache/lru"
 	"google.golang.org/grpc"
@@ -30,35 +32,33 @@ import (
 )
 
 var (
-	scriptsDir                   = "/etc/google/snapshots/"
 	seenPreSnapshotOperationIds  = lru.New(128)
 	seenPostSnapshotOperationIds = lru.New(128)
-	maxRequestHandleAttempts     = 10 // completely arbitrary max attempt
+	// policy is the retry policy used for sending snapshot response.
+	policy = retry.Policy{MaxAttempts: 10, BackoffFactor: 1, Jitter: time.Second}
 )
 
-type snapshotConfig struct {
-	timeout time.Duration // seconds
-}
+const (
+	// scriptsDir is the directory with snapshot pre/post scripts to be executed on request.
+	scriptsDir = "/etc/google/snapshots/"
+)
 
-func getSnapshotConfig(timeoutInSeconds int) (snapshotConfig, error) {
-	var conf snapshotConfig
-	conf.timeout = time.Duration(timeoutInSeconds) * time.Second
-	return conf, nil
-}
-
-func runScript(ctx context.Context, path, disks string, config snapshotConfig) (int, sspb.AgentErrorCode) {
-	logger.Infof("Running guest consistent snapshot script at: %s.", path)
+func runScript(ctx context.Context, path, disks string, timeout time.Duration) (int, sspb.AgentErrorCode) {
+	logger.Infof("Running guest consistent snapshot script at: %s", path)
 
 	if _, err := os.Stat(path); os.IsNotExist(err) {
+		logger.Errorf("os.stat(%s) failed with error: %v", path, err)
 		return -1, sspb.AgentErrorCode_SCRIPT_NOT_FOUND
 	}
 
-	execResult := run.WithOutputTimeout(ctx, config.timeout, path, disks)
+	execResult := run.WithOutputTimeout(ctx, timeout, path, disks)
 	if execResult.ExitCode == 124 {
+		logger.Errorf("Script %q with argument [%s] timedout with error: %+v", path, disks, execResult)
 		return execResult.ExitCode, sspb.AgentErrorCode_SCRIPT_TIMED_OUT
 	}
 
 	if execResult.ExitCode != 0 {
+		logger.Errorf("Script %q with argument [%s] failed with error: %+v", path, disks, execResult)
 		return execResult.ExitCode, sspb.AgentErrorCode_UNHANDLED_SCRIPT_ERROR
 	}
 
@@ -67,9 +67,9 @@ func runScript(ctx context.Context, path, disks string, config snapshotConfig) (
 
 func listenForSnapshotRequests(ctx context.Context, address string, requestChan chan<- *sspb.GuestMessage) {
 	for context.Cause(ctx) == nil {
-		// Start hanging connection on server that feeds to channel
+		// Start hanging connection on server that feeds to channel.
 		logger.Infof("Attempting to connect to snapshot service at %s.", address)
-		conn, err := grpc.Dial(address, grpc.WithInsecure())
+		conn, err := grpc.Dial(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		if err != nil {
 			logger.Errorf("Failed to connect to snapshot service: %v.", err)
 			return
@@ -100,59 +100,53 @@ func listenForSnapshotRequests(ctx context.Context, address string, requestChan 
 	}
 }
 
-func getSnapshotResponse(ctx context.Context, timeoutInSeconds int, guestMessage *sspb.GuestMessage) *sspb.SnapshotResponse {
-	switch {
-	case guestMessage.GetSnapshotRequest() != nil:
-		request := guestMessage.GetSnapshotRequest()
-		response := &sspb.SnapshotResponse{
-			OperationId: request.GetOperationId(),
-			Type:        request.GetType(),
-		}
+func getSnapshotResponse(ctx context.Context, timeout time.Duration, guestMessage *sspb.GuestMessage) *sspb.SnapshotResponse {
+	request := guestMessage.GetSnapshotRequest()
 
-		config, err := getSnapshotConfig(timeoutInSeconds)
-		if err != nil {
-			response.AgentReturnCode = sspb.AgentErrorCode_INVALID_CONFIG
-			return response
+	if request == nil {
+		logger.Warningf("Invalid snapshot request [%v], ignoring", request)
+		return nil
+	}
 
-		}
+	response := &sspb.SnapshotResponse{
+		OperationId: request.GetOperationId(),
+		Type:        request.GetType(),
+	}
 
-		var url string
-		switch request.GetType() {
-		case sspb.OperationType_PRE_SNAPSHOT:
-			logger.Infof("Handling pre snapshot request for operation id %d.", request.GetOperationId())
-			_, found := seenPreSnapshotOperationIds.Get(request.GetOperationId())
-			if found {
-				logger.Infof("Duplicate pre snapshot request operation id %d.", request.GetOperationId())
-				return nil
-			}
-			seenPreSnapshotOperationIds.Add(request.GetOperationId(), request.GetOperationId())
-			url = scriptsDir + "pre.sh"
-		case sspb.OperationType_POST_SNAPSHOT:
-			logger.Infof("Handling post snapshot request for operation id %d.", request.GetOperationId())
-			_, found := seenPostSnapshotOperationIds.Get(request.GetOperationId())
-			if found {
-				logger.Infof("Duplicate post snapshot request operation id %d.", request.GetOperationId())
-				return nil
-			}
-			seenPostSnapshotOperationIds.Add(request.GetOperationId(), request.GetOperationId())
-			url = scriptsDir + "post.sh"
-		default:
-			logger.Errorf("Unhandled operation type %d.", request.GetType())
+	var scriptPath string
+	switch request.GetType() {
+	case sspb.OperationType_PRE_SNAPSHOT:
+		logger.Infof("Handling pre snapshot request for operation id %d.", request.GetOperationId())
+		_, found := seenPreSnapshotOperationIds.Get(request.GetOperationId())
+		if found {
+			logger.Infof("Duplicate pre snapshot request operation id %d.", request.GetOperationId())
 			return nil
 		}
-
-		scriptsReturnCode, agentErrorCode := runScript(ctx, url, request.GetDiskList(), config)
-		response.ScriptsReturnCode = int32(scriptsReturnCode)
-		response.AgentReturnCode = agentErrorCode
-
-		return response
+		seenPreSnapshotOperationIds.Add(request.GetOperationId(), request.GetOperationId())
+		scriptPath = filepath.Join(scriptsDir, "pre.sh")
+	case sspb.OperationType_POST_SNAPSHOT:
+		logger.Infof("Handling post snapshot request for operation id %d.", request.GetOperationId())
+		_, found := seenPostSnapshotOperationIds.Get(request.GetOperationId())
+		if found {
+			logger.Infof("Duplicate post snapshot request operation id %d.", request.GetOperationId())
+			return nil
+		}
+		seenPostSnapshotOperationIds.Add(request.GetOperationId(), request.GetOperationId())
+		scriptPath = filepath.Join(scriptsDir, "post.sh")
 	default:
+		logger.Errorf("Unhandled operation type %d.", request.GetType())
+		return nil
 	}
-	return nil
+
+	scriptsReturnCode, agentErrorCode := runScript(ctx, scriptPath, request.GetDiskList(), timeout)
+	response.ScriptsReturnCode = int32(scriptsReturnCode)
+	response.AgentReturnCode = agentErrorCode
+
+	return response
 }
 
-func handleSnapshotRequests(ctx context.Context, timeoutInSeconds int, address string, requestChan <-chan *sspb.GuestMessage) {
-	for {
+func handleSnapshotRequests(ctx context.Context, timeout time.Duration, address string, requestChan <-chan *sspb.GuestMessage) {
+	for context.Cause(ctx) == nil {
 		conn, err := grpc.Dial(address, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
 		if err != nil {
 			logger.Errorf("Failed to connect to snapshot service: %v.", err)
@@ -161,7 +155,7 @@ func handleSnapshotRequests(ctx context.Context, timeoutInSeconds int, address s
 		for {
 			// Listen on channel and respond
 			guestMessage := <-requestChan
-			response := getSnapshotResponse(ctx, timeoutInSeconds, guestMessage)
+			response := getSnapshotResponse(ctx, timeout, guestMessage)
 
 			// We either got a duplicated pre/post or an invalid request
 			// in both cases we want to ignore it.
@@ -169,22 +163,17 @@ func handleSnapshotRequests(ctx context.Context, timeoutInSeconds int, address s
 				continue
 			}
 
-			for i := 0; i < maxRequestHandleAttempts; i++ {
-				logger.Infof("Attempt %d/%d of handling snapshot request.", i+1, maxRequestHandleAttempts)
-
+			f := func() error {
 				c := sspb.NewSnapshotServiceClient(conn)
-				ctx, cancel := context.WithCancel(ctx)
-				defer cancel()
-
 				_, err = c.HandleResponsesFromGuest(ctx, response)
-				if err != nil {
-					logger.Errorf("Error sending response: %v.", err)
-					time.Sleep(1 * time.Second) // Avoid idle looping
-					continue
-				}
+				return err
+			}
 
-				logger.Debugf("Successfully handled snapshot request.")
+			if err := retry.Run(ctx, policy, f); err != nil {
+				logger.Warningf("Failed to send snapshot response: %v", err)
 				break
+			} else {
+				logger.Debugf("Successfully handled snapshot request.")
 			}
 		}
 	}
@@ -200,7 +189,7 @@ func startSnapshotListener(ctx context.Context, snapshotServiceIP string, snapsh
 		// Make the directory only readable/writable/executable by root.
 		os.MkdirAll(scriptsDir, 0700)
 	}
-
+	timeout := time.Duration(timeoutInSeconds) * time.Second
 	go listenForSnapshotRequests(ctx, address, requestChan)
-	go handleSnapshotRequests(ctx, timeoutInSeconds, address, requestChan)
+	go handleSnapshotRequests(ctx, timeout, address, requestChan)
 }
