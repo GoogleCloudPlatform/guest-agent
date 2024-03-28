@@ -17,6 +17,7 @@ package metadata
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"net/url"
 
@@ -27,20 +28,31 @@ import (
 const (
 	// WatcherID is the metadata watcher's ID.
 	WatcherID = "metadata-watcher"
+	// ReadyEvent notifies subscribers that metadata is ready and we've successfully
+	// got a first metadata descriptor - meaning metadata is ready.
+	ReadyEvent = "metadata-watcher,ready"
 	// LongpollEvent is the metadata's longpoll event type ID.
 	LongpollEvent = "metadata-watcher,longpoll"
 )
 
 // Watcher is the metadata event watcher implementation.
 type Watcher struct {
-	client         metadata.MDSClientInterface
+	// client is the metadata client interface.
+	client metadata.MDSClientInterface
+	// failedPrevious determines if we have already logged an error.
 	failedPrevious bool
+	// ready determines if ReadyEvent has already being emitted.
+	ready bool
+	// readyChan is the inter event communication mechanism.
+	readyChan chan bool
 }
 
 // New allocates and initializes a new Watcher.
 func New() *Watcher {
 	return &Watcher{
-		client: metadata.New(),
+		client:    metadata.New(),
+		ready:     false,
+		readyChan: make(chan bool),
 	}
 }
 
@@ -51,11 +63,42 @@ func (mp *Watcher) ID() string {
 
 // Events returns an slice with all implemented events.
 func (mp *Watcher) Events() []string {
-	return []string{LongpollEvent}
+	return []string{ReadyEvent, LongpollEvent}
 }
 
-// Run listens to metadata changes and report back the event.
-func (mp *Watcher) Run(ctx context.Context, evType string) (bool, interface{}, error) {
+func (mp *Watcher) runReadyWatcher(ctx context.Context, evType string) (bool, interface{}, error) {
+	descriptor, err := mp.client.Get(ctx)
+	if err != nil {
+		return false, nil, fmt.Errorf("Failed to get metadata descriptor: %+v", err)
+	}
+
+	logger.Debugf("Metadata watcher: we got a first metadata descriptor.")
+	// Syn up with longPoll event watcher.
+	mp.ready = true
+
+	// Make it doesn't block if runLongpollWatcher is not listening the channel.
+	select {
+	case mp.readyChan <- true:
+		logger.Debugf("Metadata watcher: notified longPoll watcher that metadata is ready.")
+	default:
+	}
+
+	// This is a single shot event, once ready a ready signal will never be emitted again.
+	return false, descriptor, nil
+}
+
+func (mp *Watcher) runLongpollWatcher(ctx context.Context, evType string) (bool, interface{}, error) {
+	// Wait until ReadyEvent has being emitted.
+	if !mp.ready {
+		logger.Debugf("Metadata watcher: waiting until we have a first descriptor ready.")
+		select {
+		case <-mp.readyChan:
+			break
+		case <-ctx.Done(): // Handle the case of context cancelation while waiting for readyChan.
+			break
+		}
+	}
+
 	descriptor, err := mp.client.Watch(ctx)
 	if err != nil {
 		// Only log error once to avoid transient errors and not to spam the log on network failures.
@@ -73,4 +116,16 @@ func (mp *Watcher) Run(ctx context.Context, evType string) (bool, interface{}, e
 	}
 
 	return true, descriptor, err
+}
+
+// Run listens to metadata changes and report back the event.
+func (mp *Watcher) Run(ctx context.Context, evType string) (bool, interface{}, error) {
+	switch evType {
+	case ReadyEvent:
+		return mp.runReadyWatcher(ctx, evType)
+	case LongpollEvent:
+		return mp.runLongpollWatcher(ctx, evType)
+	default:
+		return false, nil, fmt.Errorf("Metadata watcher: invalid event type: %s", evType)
+	}
 }
