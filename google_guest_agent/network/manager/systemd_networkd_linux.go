@@ -92,7 +92,7 @@ type systemdLinkConfig struct {
 // systemdNetworkConfig contains the actual interface rule's configuration.
 type systemdNetworkConfig struct {
 	// DHCP determines the ipv4/ipv6 protocol version for use with dhcp.
-	DHCP string
+	DHCP string `ini:"DHCP,omitempty"`
 
 	// DNSDefaultRoute is used to determine if the link's configured DNS servers are
 	// used for resolving domain names that do not match any link's domain.
