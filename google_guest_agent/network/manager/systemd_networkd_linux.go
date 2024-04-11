@@ -39,6 +39,10 @@ const (
 	// minSupportedVersion is the version from which we start supporting
 	// systemd-networkd.
 	minSupportedVersion = 252
+
+	// defaultSystemdNetworkdPriority is a value adjusted to be above netplan
+	// (usually set to 10) and low enough to be under the generic configurations.
+	defaultSystemdNetworkdPriority = 20
 )
 
 type systemdNetworkd struct {
@@ -59,7 +63,7 @@ func init() {
 	registerManager(&systemdNetworkd{
 		configDir:      "/usr/lib/systemd/network",
 		networkCtlKeys: []string{"AdministrativeState", "SetupState"},
-		priority:       1,
+		priority:       defaultSystemdNetworkdPriority,
 	}, false)
 }
 
