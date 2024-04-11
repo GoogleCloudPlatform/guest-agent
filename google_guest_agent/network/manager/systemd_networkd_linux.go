@@ -333,8 +333,14 @@ func (n systemdNetworkd) SetupVlanInterface(ctx context.Context, config *cfg.Sec
 
 	// Attempt to remove vlan interface configurations that are not known - i.e. they were previously
 	// added by users but are no longer present on their mds configuration.
-	if err := n.removeVlanInterfaces(keepMe); err != nil {
+	requiresRestart, err := n.removeVlanInterfaces(keepMe)
+	if err != nil {
 		return fmt.Errorf("failed to remove vlan interface configuration: %+v", err)
+	}
+
+	if !requiresRestart {
+		logger.Debugf("No changes applied to systemd-network's vlan config, skipping restart.")
+		return nil
 	}
 
 	// Apply network changes avoiding to restart systemd-networkd.
@@ -346,14 +352,15 @@ func (n systemdNetworkd) SetupVlanInterface(ctx context.Context, config *cfg.Sec
 }
 
 // removeVlanInterfaces removes vlan interfaces that are not present in keepMe slice.
-func (n systemdNetworkd) removeVlanInterfaces(keepMe []string) error {
+func (n systemdNetworkd) removeVlanInterfaces(keepMe []string) (bool, error) {
 	files, err := os.ReadDir(n.configDir)
 	if err != nil {
-		return fmt.Errorf("failed to read content from %s: %+v", n.configDir, err)
+		return false, fmt.Errorf("failed to read content from %s: %+v", n.configDir, err)
 	}
 
 	configExp := `(?P<priority>[0-9]+)-(?P<interface>.*\.[0-9]+)-(?P<suffix>.*)\.(?P<extension>network|netdev)`
 	configRegex := regexp.MustCompile(configExp)
+	requiresRestart := false
 
 	for _, file := range files {
 		var (
@@ -389,12 +396,12 @@ func (n systemdNetworkd) removeVlanInterfaces(keepMe []string) error {
 
 		ptr, foundPtr := ptrMap[extension]
 		if !foundPtr {
-			return fmt.Errorf("regex matching failed, invalid etension: %s", extension)
+			return requiresRestart, fmt.Errorf("regex matching failed, invalid etension: %s", extension)
 		}
 
 		filePath := path.Join(n.configDir, file.Name())
 		if err := readIniFile(filePath, ptr); err != nil {
-			return fmt.Errorf("failed to read .network file before removal: %+v", err)
+			return requiresRestart, fmt.Errorf("failed to read .network file before removal: %+v", err)
 		}
 
 		// Although the file name is following the same pattern we are assuming this is not
@@ -404,11 +411,13 @@ func (n systemdNetworkd) removeVlanInterfaces(keepMe []string) error {
 		}
 
 		if err := os.Remove(path.Join(n.configDir, file.Name())); err != nil {
-			return fmt.Errorf("failed to remove vlan interface config(%s): %+v", file.Name(), err)
+			return requiresRestart, fmt.Errorf("failed to remove vlan interface config(%s): %+v", file.Name(), err)
 		}
+
+		requiresRestart = true
 	}
 
-	return nil
+	return requiresRestart, nil
 }
 
 // netdevFile returns the systemd's .netdev file path.
@@ -514,13 +523,26 @@ func (n systemdNetworkd) Rollback(ctx context.Context, nics *Interfaces) error {
 		return fmt.Errorf("failed to get list of interface names: %v", err)
 	}
 
+	ethernetRequiresRestart := false
+
 	// Rollback ethernet interfaces.
 	for _, iface := range interfaces {
 		// Find expected files.
 		configFile := n.networkFile(iface)
 		sections := new(systemdConfig)
 
-		logger.Debugf("checking for %s", configFile)
+		logger.Debugf("Checking for %s", configFile)
+
+		_, err := os.Stat(configFile)
+		if err != nil {
+			if !os.IsNotExist(err) {
+				logger.Debugf("Failed to stat systemd-networkd configuration(%s): %v", configFile, err)
+			} else {
+				logger.Debugf("No systemd-networkd configuration found: %s", configFile)
+			}
+			continue
+		}
+
 		if err := readIniFile(configFile, sections); err != nil {
 			return fmt.Errorf("failed to read systemd's .network file: %+v", err)
 		}
@@ -528,20 +550,28 @@ func (n systemdNetworkd) Rollback(ctx context.Context, nics *Interfaces) error {
 		// Check that the guest section exists and the key is set to true.
 		if sections.isGuestAgentManaged() {
 			logger.Debugf("removing %s", configFile)
-			if err = os.Remove(configFile); err != nil && !os.IsNotExist(err) {
-				return err
+			if err = os.Remove(configFile); err != nil {
+				return fmt.Errorf("removing systemd-networkd config(%s): %w", configFile, err)
 			}
+			ethernetRequiresRestart = true
 		}
 	}
 
 	// Rollback vlan interfaces.
-	if err := n.removeVlanInterfaces(nil); err != nil {
-		return fmt.Errorf("failed to rollback vlan interfaces: %+v", err)
+	vlanRequiresRestart, err := n.removeVlanInterfaces(nil)
+	if err != nil {
+		logger.Warningf("Failed to rollback vlan interfaces: %v", err)
+	}
+
+	if !ethernetRequiresRestart && !vlanRequiresRestart {
+		logger.Debugf("No systemd-networkd's configuration rolled back, skipping restart.")
+		return nil
 	}
 
 	// Avoid restarting systemd-networkd.
 	if err := run.Quiet(ctx, "networkctl", "reload"); err != nil {
 		return fmt.Errorf("error reloading systemd-networkd network configs: %v", err)
 	}
+
 	return nil
 }

@@ -172,9 +172,9 @@ func (n dhclient) Name() string {
 func (n dhclient) Configure(ctx context.Context, config *cfg.Sections) {
 }
 
-// IsManaging checks if the dhclient CLI is available.
-func (n dhclient) IsManaging(ctx context.Context, iface string) (bool, error) {
-	// Check if the dhclient CLI exists.
+// isDhclientInstalled returns true if the dhclient binary/executable is
+// installed in the running system.
+func (n dhclient) isDhclientInstalled() (bool, error) {
 	if _, err := execLookPath("dhclient"); err != nil {
 		if errors.Is(err, exec.ErrNotFound) {
 			return false, nil
@@ -182,6 +182,11 @@ func (n dhclient) IsManaging(ctx context.Context, iface string) (bool, error) {
 		return false, fmt.Errorf("error looking up dhclient path: %v", err)
 	}
 	return true, nil
+}
+
+// IsManaging checks if the dhclient CLI is available.
+func (n dhclient) IsManaging(ctx context.Context, iface string) (bool, error) {
+	return n.isDhclientInstalled()
 }
 
 // SetupEthernetInterface sets up the non-primary interfaces with dhclient, having different setup procedures
@@ -490,6 +495,12 @@ func dhclientProcessExists(_ context.Context, iface string, ipVersion ipVersion)
 
 // Rollback releases all leases from DHClient, effectively undoing the dhclient configurations.
 func (n dhclient) Rollback(ctx context.Context, nics *Interfaces) error {
+	// Determine if we can even rollback dhclient processes.
+	if isInstalled, err := n.isDhclientInstalled(); !isInstalled || err != nil {
+		logger.Debugf("No preconditions met for dhclient roll back, skipping.")
+		return nil
+	}
+
 	googleInterfaces, googleIpv6Interfaces := interfaceListsIpv4Ipv6(nics.EthernetInterfaces)
 
 	// Release all the interface leases from dhclient.
