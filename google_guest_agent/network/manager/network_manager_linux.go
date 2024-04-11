@@ -234,24 +234,35 @@ func (n networkManager) writeNetworkManagerConfigs(ifaces []string) ([]string, e
 func (n networkManager) Rollback(ctx context.Context, nics *Interfaces) error {
 	ifaces, err := interfaceNames(nics.EthernetInterfaces)
 	if err != nil {
-		return fmt.Errorf("error getting interfaces: %v", err)
+		return fmt.Errorf("getting interfaces: %v", err)
 	}
 
 	for _, iface := range ifaces {
 		configFilePath := path.Join(n.configDir, fmt.Sprintf("google-guest-agent-%s.nmconnection", iface))
 
+		_, err := os.Stat(configFilePath)
+		if err != nil {
+			if !os.IsNotExist(err) {
+				logger.Debugf("Can't remove NetworkManager configuration(%s), %s", configFilePath, err)
+			} else {
+				logger.Debugf("NetworkManager's configuration file doesn't exist, ignoring.")
+			}
+			continue
+		}
+
 		config := new(nmConfig)
 		if err := readIniFile(configFilePath, config); err != nil {
-			return fmt.Errorf("error loading NetworkManager .nmconnection file: %v", err)
+			return fmt.Errorf("failed to load NetworkManager .nmconnection file: %v", err)
 		}
 
 		if config.GuestAgent.Managed {
-			logger.Debugf("removing %s", configFilePath)
+			logger.Debugf("Attempting to remove NetworkManager configuration %s", configFilePath)
 
 			if err = os.Remove(configFilePath); err != nil {
 				return fmt.Errorf("error deleting config file for %s: %v", iface, err)
 			}
 		}
 	}
+
 	return nil
 }
