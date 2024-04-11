@@ -59,7 +59,7 @@ func init() {
 	registerManager(&systemdNetworkd{
 		configDir:      "/usr/lib/systemd/network",
 		networkCtlKeys: []string{"AdministrativeState", "SetupState"},
-		priority:       1,
+		priority:       20,
 	}, false)
 }
 
