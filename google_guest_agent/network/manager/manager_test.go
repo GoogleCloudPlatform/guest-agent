@@ -19,6 +19,7 @@ package manager
 import (
 	"context"
 	"fmt"
+	"slices"
 	"testing"
 
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
@@ -149,7 +150,7 @@ func TestDetectNetworkManager(t *testing.T) {
 					isManaging: false,
 				},
 				{
-					isFallback: true,
+					isFallback: false,
 					isManaging: false,
 				},
 			},
@@ -208,7 +209,8 @@ func TestDetectNetworkManager(t *testing.T) {
 				registerManager(service, service.isFallback)
 			}
 
-			s, err := detectNetworkManager(context.Background(), "iface")
+			services, err := detectNetworkManager(context.Background(), "iface")
+
 			if err != nil {
 				if !test.expectErr {
 					t.Fatalf("unexpected error: %v", err)
@@ -221,11 +223,15 @@ func TestDetectNetworkManager(t *testing.T) {
 				return
 			}
 			if test.expectErr {
-				t.Fatalf("no error returned when error expected")
+				t.Fatalf("no error returned when error expected, expected error: %s", test.expectedErrorMessage)
 			}
 
-			if s != test.expectedManager {
-				t.Fatalf("did not get expected network manager. Expected: %v, Actual: %v", test.expectedManager, s)
+			contains := slices.ContainsFunc(services, func(svce serviceStatus) bool {
+				return svce.manager == test.expectedManager && svce.active
+			})
+
+			if !contains {
+				t.Fatalf("did not get expected network manager. Expected: %v, Actual: %v", test.expectedManager, services)
 			}
 		})
 	}
