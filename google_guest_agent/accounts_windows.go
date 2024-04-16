@@ -160,9 +160,14 @@ func createUser(ctx context.Context, username, pwd, _ string) error {
 		uintptr(unsafe.Pointer(&uInfo1)),
 		uintptr(0),
 	)
-	if ret != 0 {
+
+	// If Error 2236 = The user already belongs to this group.
+	// No action is required, see:
+	// https://learn.microsoft.com/en-us/troubleshoot/windows-server/remote/terminal-server-error-messages-2200-to-2299#error-2236
+	if ret != 0 && ret != 2236 {
 		return fmt.Errorf("nonzero return code from NetUserAdd: %s", syscall.Errno(ret))
 	}
+
 	return nil
 }
 
