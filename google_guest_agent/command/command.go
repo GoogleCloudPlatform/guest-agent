@@ -123,21 +123,21 @@ func SendCommand(ctx context.Context, req []byte) []byte {
 func SendCmdPipe(ctx context.Context, pipe string, req []byte) []byte {
 	conn, err := dialPipe(ctx, pipe)
 	if err != nil {
-		if b, err := json.Marshal(ConnError); err != nil {
+		if b, err := json.Marshal(ConnError); err == nil {
 			return b
 		}
 		return internalError
 	}
 	i, err := conn.Write(req)
 	if err != nil || i != len(req) {
-		if b, err := json.Marshal(ConnError); err != nil {
+		if b, err := json.Marshal(ConnError); err == nil {
 			return b
 		}
 		return internalError
 	}
 	data, err := io.ReadAll(conn)
 	if err != nil {
-		if b, err := json.Marshal(ConnError); err != nil {
+		if b, err := json.Marshal(ConnError); err == nil {
 			return b
 		}
 		return internalError
