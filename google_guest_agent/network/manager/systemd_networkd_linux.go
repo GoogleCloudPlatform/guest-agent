@@ -43,6 +43,10 @@ const (
 	// defaultSystemdNetworkdPriority is a value adjusted to be above netplan
 	// (usually set to 10) and low enough to be under the generic configurations.
 	defaultSystemdNetworkdPriority = 20
+
+	// deprecatedPriority is the priority previously supported by us and
+	// requires us to roll it back.
+	deprecatedPriority = 1
 )
 
 type systemdNetworkd struct {
@@ -56,14 +60,19 @@ type systemdNetworkd struct {
 	// priority dictates the priority with which guest-agent should write
 	// the configuration files.
 	priority int
+
+	// deprecatedPriority is the priority previously supported by us and
+	// requires us to roll it back.
+	deprecatedPriority int
 }
 
 // init adds this network manager service to the list of known network managers.
 func init() {
 	registerManager(&systemdNetworkd{
-		configDir:      "/usr/lib/systemd/network",
-		networkCtlKeys: []string{"AdministrativeState", "SetupState"},
-		priority:       defaultSystemdNetworkdPriority,
+		configDir:          "/usr/lib/systemd/network",
+		networkCtlKeys:     []string{"AdministrativeState", "SetupState"},
+		priority:           defaultSystemdNetworkdPriority,
+		deprecatedPriority: deprecatedPriority,
 	}, false)
 }
 
@@ -245,6 +254,18 @@ func (n systemdNetworkd) SetupEthernetInterface(ctx context.Context, config *cfg
 	// Write the config files.
 	if err := n.writeEthernetConfig(googleInterfaces, googleIpv6Interfaces); err != nil {
 		return fmt.Errorf("error writing network configs: %v", err)
+	}
+
+	// Make sure to rollback previously supported and now deprecated .network and .netdev
+	// config files.
+	for _, iface := range googleInterfaces {
+		if _, err := n.rollbackNetwork(n.deprecatedNetworkFile(iface)); err != nil {
+			logger.Infof("Failed to rollback .network file: %v", err)
+		}
+
+		if _, err := n.rollbackNetwork(n.deprecatedNetdevFile(iface)); err != nil {
+			logger.Infof("Failed to rollback .network file: %v", err)
+		}
 	}
 
 	// Avoid restarting systemd-networkd.
@@ -434,6 +455,12 @@ func (n systemdNetworkd) netdevFile(iface string) string {
 	return path.Join(n.configDir, fmt.Sprintf("%d-%s-google-guest-agent.netdev", n.priority, iface))
 }
 
+// deprecatedNetdevFile returns the older and deprecated networkd's netdev file. It's
+// present mainly to allow us to roll it back.
+func (n systemdNetworkd) deprecatedNetdevFile(iface string) string {
+	return path.Join(n.configDir, fmt.Sprintf("%d-%s-google-guest-agent.netdev", n.deprecatedPriority, iface))
+}
+
 // networkFile returns the systemd's .network file path.
 // Priority is lexicographically sorted in ascending order by file name. So a configuration
 // starting with '1-' takes priority over a configuration file starting with '10-'. Setting
@@ -442,6 +469,12 @@ func (n systemdNetworkd) netdevFile(iface string) string {
 // agent's own configurations.
 func (n systemdNetworkd) networkFile(iface string) string {
 	return path.Join(n.configDir, fmt.Sprintf("%d-%s-google-guest-agent.network", n.priority, iface))
+}
+
+// deprecatedNetworkFile returns the older and deprecated networkd's network file. It's
+// present mainly to allow us to roll it back.
+func (n systemdNetworkd) deprecatedNetworkFile(iface string) string {
+	return path.Join(n.configDir, fmt.Sprintf("%d-%s-google-guest-agent.network", n.deprecatedPriority, iface))
 }
 
 // write writes systemd's .netdev config file.
@@ -531,32 +564,39 @@ func (n systemdNetworkd) Rollback(ctx context.Context, nics *Interfaces) error {
 
 	// Rollback ethernet interfaces.
 	for _, iface := range interfaces {
-		// Find expected files.
-		configFile := n.networkFile(iface)
-		sections := new(systemdConfig)
-
-		logger.Debugf("Checking for %s", configFile)
-
-		_, err := os.Stat(configFile)
+		reqRestart, err := n.rollbackNetwork(n.networkFile(iface))
 		if err != nil {
-			if !os.IsNotExist(err) {
-				logger.Debugf("Failed to stat systemd-networkd configuration(%s): %v", configFile, err)
-			} else {
-				logger.Debugf("No systemd-networkd configuration found: %s", configFile)
-			}
-			continue
+			logger.Infof("Failed to rollback .network file: %v", err)
 		}
 
-		if err := readIniFile(configFile, sections); err != nil {
-			return fmt.Errorf("failed to read systemd's .network file: %+v", err)
+		if reqRestart {
+			ethernetRequiresRestart = true
 		}
 
-		// Check that the guest section exists and the key is set to true.
-		if sections.isGuestAgentManaged() {
-			logger.Debugf("removing %s", configFile)
-			if err = os.Remove(configFile); err != nil {
-				return fmt.Errorf("removing systemd-networkd config(%s): %w", configFile, err)
-			}
+		reqRestart, err = n.rollbackNetdev(n.networkFile(iface))
+		if err != nil {
+			logger.Infof("Failed to rollback .network file: %v", err)
+		}
+
+		if reqRestart {
+			ethernetRequiresRestart = true
+		}
+
+		reqRestart, err = n.rollbackNetwork(n.deprecatedNetworkFile(iface))
+		if err != nil {
+			logger.Infof("Failed to rollback .network file: %v", err)
+		}
+
+		if reqRestart {
+			ethernetRequiresRestart = true
+		}
+
+		reqRestart, err = n.rollbackNetdev(n.deprecatedNetdevFile(iface))
+		if err != nil {
+			logger.Infof("Failed to rollback .network file: %v", err)
+		}
+
+		if reqRestart {
 			ethernetRequiresRestart = true
 		}
 	}
@@ -578,4 +618,62 @@ func (n systemdNetworkd) Rollback(ctx context.Context, nics *Interfaces) error {
 	}
 
 	return nil
+}
+
+func (n systemdNetworkd) rollbackNetwork(configFile string) (bool, error) {
+	logger.Debugf("Checking for %s", configFile)
+
+	_, err := os.Stat(configFile)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return false, fmt.Errorf("Failed to stat systemd-networkd configuration(%s): %w", configFile, err)
+		}
+		logger.Debugf("No systemd-networkd configuration found: %s", configFile)
+		return false, nil
+	}
+
+	sections := new(systemdConfig)
+	if err := readIniFile(configFile, sections); err != nil {
+		return false, fmt.Errorf("failed to read systemd's .network file: %+v", err)
+	}
+
+	// Check that the guest section exists and the key is set to true.
+	if sections.isGuestAgentManaged() {
+		logger.Debugf("removing %s", configFile)
+		if err = os.Remove(configFile); err != nil {
+			return false, fmt.Errorf("removing systemd-networkd config(%s): %w", configFile, err)
+		}
+		return true, nil
+	}
+
+	return false, nil
+}
+
+func (n systemdNetworkd) rollbackNetdev(configFile string) (bool, error) {
+	logger.Debugf("Checking for %s", configFile)
+
+	_, err := os.Stat(configFile)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return false, fmt.Errorf("Failed to stat systemd-networkd configuration(%s): %w", configFile, err)
+		}
+		logger.Debugf("No systemd-networkd configuration found: %s", configFile)
+		return false, nil
+	}
+
+	sections := new(systemdNetdevConfig)
+	if err := readIniFile(configFile, sections); err != nil {
+		return false, fmt.Errorf("failed to read systemd's .netdev file: %+v", err)
+	}
+
+	// Check that the guest section exists and the key is set to true.
+	if sections.isGuestAgentManaged() {
+		logger.Debugf("removing %s", configFile)
+		if err = os.Remove(configFile); err != nil {
+			return false, fmt.Errorf("removing systemd-networkd config(%s): %w", configFile, err)
+		}
+		return true, nil
+	}
+
+	return false, nil
 }
