@@ -264,7 +264,7 @@ func (n systemdNetworkd) SetupEthernetInterface(ctx context.Context, config *cfg
 		}
 
 		if _, err := n.rollbackNetwork(n.deprecatedNetdevFile(iface)); err != nil {
-			logger.Infof("Failed to rollback .network file: %v", err)
+			logger.Infof("Failed to rollback .netdev file: %v", err)
 		}
 	}
 
@@ -298,7 +298,7 @@ func (n systemdNetworkd) SetupVlanInterface(ctx context.Context, config *cfg.Sec
 		// Create and setup .network file.
 		networkConfig := systemdConfig{
 			GuestAgent: guestAgentSection{
-				Managed: true,
+				ManagedByGuestAgent: true,
 			},
 			Match: systemdMatchConfig{
 				Name: iface,
@@ -320,7 +320,7 @@ func (n systemdNetworkd) SetupVlanInterface(ctx context.Context, config *cfg.Sec
 		// Create and setup .netdev file.
 		netdevConfig := systemdNetdevConfig{
 			GuestAgent: guestAgentSection{
-				Managed: true,
+				ManagedByGuestAgent: true,
 			},
 			NetDev: systemdNetdev{
 				Name: iface,
@@ -488,7 +488,7 @@ func (nd systemdNetdevConfig) write(n systemdNetworkd, iface string) error {
 // isGuestAgentManaged returns true if the netdev config file contains the
 // GuestAgent section and key.
 func (nd systemdNetdevConfig) isGuestAgentManaged() bool {
-	return nd.GuestAgent.Managed
+	return nd.GuestAgent.ManagedByGuestAgent
 }
 
 // write writes the systemd's configuration file to its destination.
@@ -502,7 +502,7 @@ func (sc systemdConfig) write(n systemdNetworkd, iface string) error {
 // isGuestAgentManaged returns true if the network config file contains the
 // GuestAgent section and key.
 func (sc systemdConfig) isGuestAgentManaged() bool {
-	return sc.GuestAgent.Managed
+	return sc.GuestAgent.ManagedByGuestAgent
 }
 
 // writeEthernetConfig writes the systemd config for all the provided interfaces in the
@@ -519,7 +519,7 @@ func (n systemdNetworkd) writeEthernetConfig(interfaces, ipv6Interfaces []string
 		// Create and setup ini file.
 		data := systemdConfig{
 			GuestAgent: guestAgentSection{
-				Managed: true,
+				ManagedByGuestAgent: true,
 			},
 			Match: systemdMatchConfig{
 				Name: iface,

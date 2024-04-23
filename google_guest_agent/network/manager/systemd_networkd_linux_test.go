@@ -519,7 +519,7 @@ func TestSystemdNetworkdConfig(t *testing.T) {
 				}
 
 				// Check for the GuestAgent section.
-				if !sections.GuestAgent.Managed {
+				if !sections.GuestAgent.ManagedByGuestAgent {
 					t.Errorf("%s missing guest agent section", file.Name())
 				}
 

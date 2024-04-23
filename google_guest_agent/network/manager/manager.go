@@ -94,8 +94,8 @@ type osConfigAction struct {
 // guestAgentSection is the section added to guest-agent-written ini files to indicate
 // that the ini file is managed by the agent.
 type guestAgentSection struct {
-	// Managed indicates whether this ini file is managed by the agent.
-	Managed bool
+	// ManagedByGuestAgent indicates whether this ini file is managed by the agent.
+	ManagedByGuestAgent bool
 }
 
 const (

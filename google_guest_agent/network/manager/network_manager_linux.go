@@ -187,7 +187,7 @@ func (n networkManager) writeNetworkManagerConfigs(ifaces []string) ([]string, e
 		// Create the ini file.
 		config := nmConfig{
 			GuestAgent: guestAgentSection{
-				Managed: true,
+				ManagedByGuestAgent: true,
 			},
 			Connection: nmConnectionSection{
 				InterfaceName: iface,
@@ -255,7 +255,7 @@ func (n networkManager) Rollback(ctx context.Context, nics *Interfaces) error {
 			return fmt.Errorf("failed to load NetworkManager .nmconnection file: %v", err)
 		}
 
-		if config.GuestAgent.Managed {
+		if config.GuestAgent.ManagedByGuestAgent {
 			logger.Debugf("Attempting to remove NetworkManager configuration %s", configFilePath)
 
 			if err = os.Remove(configFilePath); err != nil {

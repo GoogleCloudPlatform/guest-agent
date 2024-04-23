@@ -381,7 +381,7 @@ func TestWriteNetworkManagerConfigs(t *testing.T) {
 					t.Fatalf("error parsing config ini: %v", err)
 				}
 
-				if !config.GuestAgent.Managed {
+				if !config.GuestAgent.ManagedByGuestAgent {
 					t.Fatalf("guest-agent's managed key is set to false, expected true")
 				}
 
