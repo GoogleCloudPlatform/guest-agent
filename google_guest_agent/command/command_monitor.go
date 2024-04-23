@@ -56,10 +56,10 @@ func Init(ctx context.Context) {
 		logger.Errorf("commmand request timeout configuration is not a valid duration string, falling back to 10s timeout")
 		to = time.Duration(10) * time.Second
 	}
-	var pipemode int64 = 0770
-	pipemode, err = strconv.ParseInt(cfg.Get().Unstable.CommandPipeMode, 8, 32)
+	pipemode, err := strconv.ParseInt(cfg.Get().Unstable.CommandPipeMode, 8, 32)
 	if err != nil {
 		logger.Errorf("could not parse command_pipe_mode as octal integer: %v falling back to mode 0770", err)
+		pipemode = 0770
 	}
 	cmdMonitor.srv = &Server{
 		pipe:      pipe,
