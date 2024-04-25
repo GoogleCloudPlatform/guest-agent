@@ -33,6 +33,7 @@ require (
 	cloud.google.com/go/iam v1.1.1 // indirect
 	cloud.google.com/go/logging v1.7.0 // indirect
 	cloud.google.com/go/longrunning v0.5.1 // indirect
+	github.com/Microsoft/go-winio v0.6.1 // indirect
 	github.com/google/go-sev-guest v0.7.0 // indirect
 	github.com/google/logger v1.1.1 // indirect
 	github.com/google/s2a-go v0.1.4 // indirect

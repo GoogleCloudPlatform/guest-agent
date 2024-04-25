@@ -25,9 +25,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"os"
+	"reflect"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -61,6 +64,7 @@ func Init(ctx context.Context) {
 		logger.Errorf("could not parse command_pipe_mode as octal integer: %v falling back to mode 0770", err)
 		pipemode = 0770
 	}
+	cmdMonitor.RegisterHandler("agent.config.getoption", getOption)
 	cmdMonitor.srv = &Server{
 		pipe:      pipe,
 		pipeMode:  int(pipemode),
@@ -225,4 +229,37 @@ func (c *Server) start(ctx context.Context) error {
 	}()
 	c.srv = srv
 	return nil
+}
+
+type getOptionRequest struct {
+	Request
+	Option string
+}
+
+type getOptionResponse struct {
+	Response
+	Option string
+	Value  string
+}
+
+func getOption(b []byte) ([]byte, error) {
+	var req getOptionRequest
+	json.Unmarshal(b, &req)
+	var resp getOptionResponse
+	resp.Option = req.Option
+	if req.Option == "" {
+		resp.Status = 2
+		resp.StatusMessage = "No option specified"
+		return json.Marshal(resp)
+	}
+	var opt any
+	opt = cfg.Get()
+	for _, k := range strings.Split(resp.Option, ".") {
+		if k == "" {
+			continue
+		}
+		opt = reflect.Indirect(reflect.ValueOf(opt)).FieldByName(k).Interface()
+	}
+	resp.Value = fmt.Sprintf("%v", opt)
+	return json.Marshal(resp)
 }

@@ -7,7 +7,7 @@ Before=sshd.service
 #   SLES/EL7: network.service (SLES via wicked.service)
 #   EL8: NetworkManager.service
 #   COS/Ubuntu 18.04+: systemd-networkd.service
-After=network-online.target syslog.service
+After=network-online.target syslog.service systemd-hostnamed.service
 After=network.service networking.service NetworkManager.service systemd-networkd.service
 Wants=network-online.target
 PartOf=network.service networking.service NetworkManager.service systemd-networkd.service

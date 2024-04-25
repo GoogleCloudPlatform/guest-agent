@@ -249,6 +249,9 @@ func (n wicked) writeEthernetConfigs(ifaces []string) error {
 			"BOOTPROTO=dhcp",
 			fmt.Sprintf("DHCLIENT_ROUTE_PRIORITY=%d", priority),
 		}
+		if cfg.Get().Unstable.SetHostname || cfg.Get().Unstable.SetFqdn {
+			contents = append(contents, `POST_UP_SCRIPT="compat:suse:google_up.sh"`)
+		}
 		_, err = ifcfg.WriteString(strings.Join(contents, "\n"))
 		if err != nil {
 			return fmt.Errorf("error writing config file for %s: %v", iface, err)

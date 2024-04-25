@@ -17,6 +17,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -29,6 +30,7 @@ import (
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/command"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events"
 	mdsEvent "github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events/metadata"
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/hostname"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/osinfo"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/scheduler"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/telemetry"
@@ -217,6 +219,8 @@ func runAgent(ctx context.Context) {
 		return
 	}
 
+	hostname.Init(ctx, mdsClient)
+	defer hostname.Close()
 	if err := enableDisableOSLoginCertAuth(ctx); err != nil {
 		logger.Errorf("Failed to enable sshtrustedca watcher: %+v", err)
 		return
@@ -299,6 +303,19 @@ func main() {
 	if action == "noservice" {
 		runAgent(ctx)
 		os.Exit(0)
+	} else if action == "sendcmd" {
+		if len(os.Args) < 3 {
+			logger.Errorf("sendcmd called with no command")
+			os.Exit(1)
+		}
+		cmd := os.Args[2]
+		r := command.SendCommand(ctx, []byte(cmd))
+		fmt.Printf("%s\n", r)
+		var resp command.Response
+		if err := json.Unmarshal(r, &resp); err != nil {
+			resp.Status = -1
+		}
+		os.Exit(resp.Status)
 	}
 
 	if err := register(ctx, "GCEAgent", "GCEAgent", "", runAgent, action); err != nil {

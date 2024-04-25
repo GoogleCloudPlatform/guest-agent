@@ -107,6 +107,10 @@ command_pipe_group =
 command_request_timeout = 10s
 vlan_setup_enabled = false
 systemd_config_dir = /usr/lib/systemd/network
+set_fqdn = false
+set_hostname = false
+fqdn_as_hostname = false
+additional_aliases =
 `
 )
 
@@ -284,6 +288,10 @@ type Unstable struct {
 	CommandPipeGroup      string `ini:"command_pipe_group,omitempty"`
 	VlanSetupEnabled      bool   `ini:"vlan_setup_enabled,omitempty"`
 	SystemdConfigDir      string `ini:"systemd_config_dir,omitempty"`
+	SetFqdn               bool   `ini:"set_fqdn,omitempty"`
+	SetHostname           bool   `ini:"set_hostname,omitempty"`
+	AdditionalAliases     string `ini:"additional_aliases,omitempty"`
+	FqdnAsHostname        bool   `ini:"fqdn_as_hostname,omitempty"`
 }
 
 // WSFC contains the configurations of WSFC section.
