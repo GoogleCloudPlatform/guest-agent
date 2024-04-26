@@ -116,5 +116,5 @@ func overwrite(dst string, contents []byte) error {
 	if err != nil {
 		return err
 	}
-	return utils.SaferWriteFile(dst, contents, stat.Mode(), -1, -1)
+	return utils.SaferWriteFile(contents, dst, stat.Mode(), -1, -1)
 }
