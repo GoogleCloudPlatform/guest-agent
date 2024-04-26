@@ -36,14 +36,14 @@ func TestReconfigureHostname(t *testing.T) {
 	setHostnameOrig := setHostname
 	t.Cleanup(func() { setFqdn = setFqdnOrig; setHostname = setHostnameOrig })
 	testcases := []struct {
-		name         string
-		cfg          *cfg.Sections
-		lastHostname string
-		lastFqdn     string
-		setFqdn      func(string, string) error
-		setHostname  func(string) error
-		req          ReconfigureHostnameRequest
-		resp         ReconfigureHostnameResponse
+		name        string
+		cfg         *cfg.Sections
+		hostname    string
+		fqdn        string
+		setFqdn     func(string, string) error
+		setHostname func(string) error
+		req         ReconfigureHostnameRequest
+		resp        ReconfigureHostnameResponse
 	}{
 		{
 			name: "successful_reconfigure_all",
@@ -61,27 +61,8 @@ func TestReconfigureHostname(t *testing.T) {
 				Hostname: "host1",
 				Fqdn:     "host1.example.com",
 			},
-			lastHostname: "host1",
-			lastFqdn:     "host1.example.com",
-		},
-		{
-			name: "fqdn_as_hostname",
-			cfg: &cfg.Sections{
-				Unstable: &cfg.Unstable{
-					FqdnAsHostname: true,
-					SetHostname:    true,
-					SetFqdn:        true,
-				},
-			},
-			setFqdn:     func(string, string) error { return nil },
-			setHostname: func(string) error { return nil },
-			req:         ReconfigureHostnameRequest{},
-			resp: ReconfigureHostnameResponse{
-				Hostname: "host1.example.com",
-				Fqdn:     "host1.example.com",
-			},
-			lastHostname: "host1",
-			lastFqdn:     "host1.example.com",
+			hostname: "host1",
+			fqdn:     "host1.example.com",
 		},
 		{
 			name: "reconfigure_hostname",
@@ -98,8 +79,8 @@ func TestReconfigureHostname(t *testing.T) {
 			resp: ReconfigureHostnameResponse{
 				Hostname: "host1",
 			},
-			lastHostname: "host1",
-			lastFqdn:     "host1.example.com",
+			hostname: "host1",
+			fqdn:     "host1.example.com",
 		},
 		{
 			name: "reconfigure_fqdn",
@@ -116,8 +97,8 @@ func TestReconfigureHostname(t *testing.T) {
 			resp: ReconfigureHostnameResponse{
 				Fqdn: "host1.example.com",
 			},
-			lastHostname: "host1",
-			lastFqdn:     "host1.example.com",
+			hostname: "host1",
+			fqdn:     "host1.example.com",
 		},
 		{
 			name: "fail_to_reconfigure_hostname",
@@ -135,8 +116,8 @@ func TestReconfigureHostname(t *testing.T) {
 				Response: command.Response{Status: 1, StatusMessage: "hostname failure"},
 				Fqdn:     "host1.example.com",
 			},
-			lastHostname: "host1",
-			lastFqdn:     "host1.example.com",
+			hostname: "host1",
+			fqdn:     "host1.example.com",
 		},
 		{
 			name: "fail_to_reconfigure_fqdn",
@@ -154,8 +135,8 @@ func TestReconfigureHostname(t *testing.T) {
 				Response: command.Response{Status: 2, StatusMessage: "fqdn failure"},
 				Hostname: "host1",
 			},
-			lastHostname: "host1",
-			lastFqdn:     "host1.example.com",
+			hostname: "host1",
+			fqdn:     "host1.example.com",
 		},
 		{
 			name: "fail_to_reconfigure_hostname_and_fqdn",
@@ -172,8 +153,8 @@ func TestReconfigureHostname(t *testing.T) {
 			resp: ReconfigureHostnameResponse{
 				Response: command.Response{Status: 3, StatusMessage: "hostname failurefqdn failure"},
 			},
-			lastHostname: "host1",
-			lastFqdn:     "host1.example.com",
+			hostname: "host1",
+			fqdn:     "host1.example.com",
 		},
 		{
 			name: "empty_hostname",
@@ -191,8 +172,8 @@ func TestReconfigureHostname(t *testing.T) {
 				Response: command.Response{Status: 1, StatusMessage: "disallowed hostname: \"\""},
 				Fqdn:     "host1.example.com",
 			},
-			lastHostname: "",
-			lastFqdn:     "host1.example.com",
+			hostname: "",
+			fqdn:     "host1.example.com",
 		},
 		{
 			name: "empty_fqdn",
@@ -210,8 +191,8 @@ func TestReconfigureHostname(t *testing.T) {
 				Response: command.Response{Status: 2, StatusMessage: "disallowed fqdn: \"\""},
 				Hostname: "host1",
 			},
-			lastHostname: "host1",
-			lastFqdn:     "",
+			hostname: "host1",
+			fqdn:     "",
 		},
 		{
 			name: "mds_name_as_hostname",
@@ -228,8 +209,8 @@ func TestReconfigureHostname(t *testing.T) {
 			resp: ReconfigureHostnameResponse{
 				Response: command.Response{Status: 3, StatusMessage: "disallowed hostname: \"metadata.google.internal\"disallowed fqdn: \"metadata.google.internal\""},
 			},
-			lastHostname: "metadata.google.internal",
-			lastFqdn:     "metadata.google.internal",
+			hostname: "metadata.google.internal",
+			fqdn:     "metadata.google.internal",
 		},
 	}
 	for _, tc := range testcases {
@@ -237,8 +218,8 @@ func TestReconfigureHostname(t *testing.T) {
 			cfg.Get().Unstable = tc.cfg.Unstable
 			setFqdn = tc.setFqdn
 			setHostname = tc.setHostname
-			lastHostname = tc.lastHostname
-			lastFqdn = tc.lastFqdn
+			hostname = tc.hostname
+			fqdn = tc.fqdn
 			b, err := json.Marshal(tc.req)
 			if err != nil {
 				t.Fatal(err)
@@ -282,6 +263,8 @@ func TestCommandRoundTrip(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	cfg.Load(nil)
+	hostname = "host1"
+	fqdn = "host1.example.com"
 	setFqdnOrig := setFqdn
 	setHostnameOrig := setHostname
 	t.Cleanup(func() { setFqdn = setFqdnOrig; setHostname = setHostnameOrig })
@@ -331,100 +314,6 @@ func TestCommandRoundTrip(t *testing.T) {
 	}
 	if resp.Fqdn != "host1.example.com" {
 		t.Errorf("unexpected fqdn from reconfigurehostname, got %s want %s", resp.Fqdn, "host1.example.com")
-	}
-}
-
-func TestShouldReconfigure(t *testing.T) {
-	cfg.Load(nil)
-	testcases := []struct {
-		name               string
-		cfg                *cfg.Sections
-		lastHostname       string
-		lastFqdn           string
-		descriptor         mds.Descriptor
-		eventShouldTrigger bool
-	}{
-		{
-			name: "hostname_changed",
-			cfg: &cfg.Sections{
-				Unstable: &cfg.Unstable{
-					FqdnAsHostname: false,
-					SetHostname:    true,
-					SetFqdn:        false,
-				},
-			},
-			lastHostname:       "host1",
-			lastFqdn:           "host1.example.com",
-			descriptor:         mds.Descriptor{Instance: mds.Instance{Hostname: "host2.example.com"}},
-			eventShouldTrigger: true,
-		},
-		{
-			name: "fqdn_changed",
-			cfg: &cfg.Sections{
-				Unstable: &cfg.Unstable{
-					FqdnAsHostname: false,
-					SetHostname:    false,
-					SetFqdn:        true,
-				},
-			},
-			lastHostname:       "host1",
-			lastFqdn:           "host1.example.net",
-			descriptor:         mds.Descriptor{Instance: mds.Instance{Hostname: "host1.example.com"}},
-			eventShouldTrigger: true,
-		},
-		{
-			name: "no_change",
-			cfg: &cfg.Sections{
-				Unstable: &cfg.Unstable{
-					FqdnAsHostname: false,
-					SetHostname:    true,
-					SetFqdn:        true,
-				},
-			},
-			lastHostname:       "host1",
-			lastFqdn:           "host1.example.com",
-			descriptor:         mds.Descriptor{Instance: mds.Instance{Hostname: "host1.example.com"}},
-			eventShouldTrigger: false,
-		},
-		{
-			name: "ignore_changes",
-			cfg: &cfg.Sections{
-				Unstable: &cfg.Unstable{
-					FqdnAsHostname: false,
-					SetHostname:    false,
-					SetFqdn:        false,
-				},
-			},
-			lastHostname:       "host1",
-			lastFqdn:           "host1.example.net",
-			descriptor:         mds.Descriptor{Instance: mds.Instance{Hostname: "host2.example.com"}},
-			eventShouldTrigger: false,
-		},
-		{
-			name: "fqnashostname_changed",
-			cfg: &cfg.Sections{
-				Unstable: &cfg.Unstable{
-					FqdnAsHostname: true,
-					SetHostname:    true,
-					SetFqdn:        false,
-				},
-			},
-			lastHostname:       "host1",
-			lastFqdn:           "host1.example.net",
-			descriptor:         mds.Descriptor{Instance: mds.Instance{Hostname: "host1.example.net"}},
-			eventShouldTrigger: true,
-		},
-	}
-	for _, tc := range testcases {
-		t.Run(tc.name, func(t *testing.T) {
-			cfg.Get().Unstable = tc.cfg.Unstable
-			lastHostname = tc.lastHostname
-			lastFqdn = tc.lastFqdn
-			o := shouldReconfigure(tc.descriptor)
-			if o != tc.eventShouldTrigger {
-				t.Errorf("shouldReconfigure reported unexpected value, got %v want %v", o, tc.eventShouldTrigger)
-			}
-		})
 	}
 }
 

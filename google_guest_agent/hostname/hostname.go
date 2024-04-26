@@ -33,8 +33,6 @@ import (
 
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/command"
-	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events"
-	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events/metadata"
 	mds "github.com/GoogleCloudPlatform/guest-agent/metadata"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 )
@@ -45,8 +43,8 @@ var (
 	ReconfigureHostnameCommand = "agent.hostname.reconfigurehostname"
 	disallowedConfigurations   = map[string]bool{"": true, "metadata.google.internal": true}
 	hostnameFqdnMu             = new(sync.Mutex)
-	lastHostname               string //As retrieved from MDS
-	lastFqdn                   string //As retrieved from MDS
+	hostname                   string //As retrieved from MDS
+	fqdn                       string //As retrieved from MDS
 )
 
 // ReconfigureHostnameRequest is the structure of requests to the
@@ -79,41 +77,39 @@ func Init(ctx context.Context, mdsclient mds.MDSClientInterface) {
 	if !cfg.Get().Unstable.SetFqdn && !cfg.Get().Unstable.SetHostname {
 		return
 	}
-	fqdn, err := mdsclient.GetKey(ctx, path.Join("instance", "hostname"), nil)
+	mdshostname, err := mdsclient.GetKey(ctx, path.Join("instance", "hostname"), nil)
 	if err != nil {
 		logger.Errorf("could not get metadata hostname from MDS: %v", err)
-	} else if cfg.Get().Unstable.FqdnAsHostname {
-		lastHostname = fqdn
-		lastFqdn = fqdn
-	} else {
-		hostname, _, ok := strings.Cut(fqdn, ".")
+		return
+	}
+	hostname = mdshostname
+	fqdn = mdshostname
+	if !cfg.Get().Unstable.FqdnAsHostname {
+		mdsshorthostname, _, ok := strings.Cut(mdshostname, ".")
 		if !ok {
 			logger.Errorf("metadata hostname %s is not an fqdn", fqdn)
 		} else {
-			lastFqdn = fqdn
-			lastHostname = hostname
-		}
-		b, err := ReconfigureHostname(nil)
-		if err != nil {
-			logger.Errorf("failed to call reconfigurehostname during setup: %v", err)
-		} else {
-			var resp ReconfigureHostnameResponse
-			err := json.Unmarshal(b, &resp)
-			if err != nil {
-				logger.Errorf("malformed response from reconfigurehostname: %v", err)
-			} else if resp.Status != 0 {
-				logger.Errorf("error reconfiguring hostname: %s", resp.StatusMessage)
-			}
+			hostname = mdsshorthostname
 		}
 	}
-	events.Get().Subscribe(metadata.LongpollEvent, nil, processMdsEvent)
+	b, err := ReconfigureHostname(nil)
+	if err != nil {
+		logger.Errorf("failed to call reconfigurehostname during setup: %v", err)
+	} else {
+		var resp ReconfigureHostnameResponse
+		err := json.Unmarshal(b, &resp)
+		if err != nil {
+			logger.Errorf("malformed response from reconfigurehostname: %v", err)
+		} else if resp.Status != 0 {
+			logger.Errorf("error %d reconfiguring hostname: %s", resp.Status, resp.StatusMessage)
+		}
+	}
 	command.Get().RegisterHandler(ReconfigureHostnameCommand, ReconfigureHostname)
 	initPlatform(ctx)
 }
 
 // Close stops listening for events and unregisters command handlers
 func Close() {
-	events.Get().Unsubscribe(metadata.LongpollEvent, processMdsEvent)
 	command.Get().UnregisterHandler(ReconfigureHostnameCommand)
 }
 
@@ -127,13 +123,6 @@ func ReconfigureHostname(b []byte) ([]byte, error) {
 	err := json.Unmarshal(b, &req)
 	if err != nil {
 		return nil, err
-	}
-	var hostname, fqdn string
-	fqdn = lastFqdn
-	if !cfg.Get().Unstable.FqdnAsHostname {
-		hostname = lastHostname
-	} else {
-		hostname = lastFqdn
 	}
 
 	var resp ReconfigureHostnameResponse
@@ -149,6 +138,7 @@ func ReconfigureHostname(b []byte) ([]byte, error) {
 		}
 	}
 	if cfg.Get().Unstable.SetFqdn {
+		h := hostname
 		var err error
 		if runtime.GOOS != "windows" {
 			// Get the hostname from the OS in case we are configured to manage only the
@@ -157,13 +147,13 @@ func ReconfigureHostname(b []byte) ([]byte, error) {
 			// https://github.com/GoogleCloudPlatform/compute-image-windows/blob/master/sysprep/activate_instance.ps1)
 			// 2) Windows truncates hostnames to 15 characters when they are set so we
 			// cannot rely on the OS to report the full hostname.
-			hostname, err = os.Hostname()
+			h, err = os.Hostname()
 		}
 		if disallowedConfigurations[fqdn] {
 			err = fmt.Errorf("disallowed fqdn: %q", fqdn)
 		}
 		if err == nil {
-			err = setFqdn(hostname, fqdn)
+			err = setFqdn(h, fqdn)
 		}
 		if err != nil {
 			resp.Status += 2
@@ -173,46 +163,6 @@ func ReconfigureHostname(b []byte) ([]byte, error) {
 		}
 	}
 	return json.Marshal(resp)
-}
-
-func processMdsEvent(ctx context.Context, evType string, data interface{}, evData *events.EventData) bool {
-	descriptor, ok := data.(mds.Descriptor)
-	if !ok {
-		logger.Errorf("Bad descriptor from MDS longpoll event")
-	} else if shouldReconfigure(descriptor) {
-		_, err := ReconfigureHostname(nil)
-		if err != nil {
-			logger.Errorf("error reconfiguring hostname: %s", err)
-		}
-	}
-	return true // Always resubscribe to next descriptor change
-}
-
-func shouldReconfigure(descriptor mds.Descriptor) bool {
-	hostnameFqdnMu.Lock()
-	defer hostnameFqdnMu.Unlock()
-	var hostname, fqdn string
-	fqdn = descriptor.Instance.Hostname
-	if cfg.Get().Unstable.FqdnAsHostname {
-		hostname = fqdn
-	} else {
-		var ok bool
-		hostname, _, ok = strings.Cut(fqdn, ".")
-		if !ok {
-			logger.Errorf("metadata hostname %s is not an FQDN", fqdn)
-			return false
-		}
-	}
-	shouldReconfigure := false
-	if (hostname != lastHostname && cfg.Get().Unstable.SetHostname) || (fqdn != lastFqdn && cfg.Get().Unstable.SetFqdn) {
-		logger.Infof("hostname or fqdn changed in MDS and this change is managed by guest agent")
-		logger.Debugf("old hostname: %s new hostname: %s", lastHostname, hostname)
-		logger.Debugf("old fqdn: %s new fqdn: %s", lastFqdn, fqdn)
-		shouldReconfigure = true
-	}
-	lastHostname = hostname
-	lastFqdn = fqdn
-	return shouldReconfigure
 }
 
 var setFqdn = func(hostname, fqdn string) error {
@@ -251,6 +201,5 @@ func writeHosts(hostname, fqdn, hostsFile string, addrs []net.Addr) error {
 			gcehosts = append(gcehosts, []byte(fmt.Sprintf("%s %s %s %s # Added by Google%s", ip, fqdn, hostname, aliases, newline))...)
 		}
 	}
-	// Platform specific, overwrite file with contents as atomicly as possible.
 	return overwrite(hostsFile, gcehosts)
 }
