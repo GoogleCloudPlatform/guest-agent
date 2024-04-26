@@ -272,7 +272,13 @@ func getOption(b []byte) ([]byte, error) {
 			resp.StatusMessage = "Invalid option, key names must start with uppercase"
 			return json.Marshal(resp)
 		}
-		opt = reflect.Indirect(reflect.ValueOf(opt)).FieldByName(k).Interface()
+		field := reflect.Indirect(reflect.ValueOf(opt)).FieldByName(k)
+		if !field.IsValid() {
+			resp.Status = 1
+			resp.StatusMessage = "Option does not exist"
+			return json.Marshal(resp)
+		}
+		opt = field.Interface()
 	}
 	resp.Value = fmt.Sprintf("%v", opt)
 	return json.Marshal(resp)

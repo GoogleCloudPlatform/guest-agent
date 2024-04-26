@@ -228,7 +228,7 @@ func TestGetOption(t *testing.T) {
 		{
 			name: "non_existent_field",
 			req:  []byte(`{"Command":"agent.config.getoption","Option":"BadOption"}`),
-			resp: []byte(`{"Status":0,"StatusMessage":"","Option":"InstanceSetup.NetworkEnabled","Value":"true"}`),
+			resp: []byte(`{"Status":1,"StatusMessage":"Option does not exist","Option":"BadOption","Value":""}`),
 		},
 	}
 	for _, tc := range testcases {
