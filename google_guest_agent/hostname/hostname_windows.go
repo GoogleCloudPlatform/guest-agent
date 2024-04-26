@@ -23,6 +23,7 @@ import (
 	"unsafe"
 
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/command"
+	"github.com/GoogleCloudPlatform/guest-agent/utils"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 	"golang.org/x/sys/windows"
 )
@@ -110,12 +111,10 @@ func closePlatform() {
 	}
 }
 
-// Windows does not promise atomic moves so there is no point doing anything
-// but writing directly to the file.
 func overwrite(dst string, contents []byte) error {
 	stat, err := os.Stat(dst)
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(dst, contents, stat.Mode())
+	return utils.SaferWriteFile(dst, contents, stat.Mode(), -1, -1)
 }
