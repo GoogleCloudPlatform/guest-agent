@@ -46,7 +46,7 @@ func TestReconfigureHostname(t *testing.T) {
 		resp         ReconfigureHostnameResponse
 	}{
 		{
-			name: "successful reconfigure all",
+			name: "successful_reconfigure_all",
 			cfg: &cfg.Sections{
 				Unstable: &cfg.Unstable{
 					FqdnAsHostname: false,
@@ -65,7 +65,7 @@ func TestReconfigureHostname(t *testing.T) {
 			lastFqdn:     "host1.example.com",
 		},
 		{
-			name: "fqdn as hostname",
+			name: "fqdn_as_hostname",
 			cfg: &cfg.Sections{
 				Unstable: &cfg.Unstable{
 					FqdnAsHostname: true,
@@ -84,7 +84,7 @@ func TestReconfigureHostname(t *testing.T) {
 			lastFqdn:     "host1.example.com",
 		},
 		{
-			name: "reconfigure hostname",
+			name: "reconfigure_hostname",
 			cfg: &cfg.Sections{
 				Unstable: &cfg.Unstable{
 					FqdnAsHostname: false,
@@ -102,7 +102,7 @@ func TestReconfigureHostname(t *testing.T) {
 			lastFqdn:     "host1.example.com",
 		},
 		{
-			name: "reconfigure fqdn",
+			name: "reconfigure_fqdn",
 			cfg: &cfg.Sections{
 				Unstable: &cfg.Unstable{
 					FqdnAsHostname: false,
@@ -120,7 +120,7 @@ func TestReconfigureHostname(t *testing.T) {
 			lastFqdn:     "host1.example.com",
 		},
 		{
-			name: "fail to reconfigure hostname",
+			name: "fail_to_reconfigure_hostname",
 			cfg: &cfg.Sections{
 				Unstable: &cfg.Unstable{
 					FqdnAsHostname: false,
@@ -139,7 +139,7 @@ func TestReconfigureHostname(t *testing.T) {
 			lastFqdn:     "host1.example.com",
 		},
 		{
-			name: "fail to reconfigure fqdn",
+			name: "fail_to_reconfigure_fqdn",
 			cfg: &cfg.Sections{
 				Unstable: &cfg.Unstable{
 					FqdnAsHostname: false,
@@ -158,7 +158,7 @@ func TestReconfigureHostname(t *testing.T) {
 			lastFqdn:     "host1.example.com",
 		},
 		{
-			name: "fail to reconfigure hostname and fqdn",
+			name: "fail_to_reconfigure_hostname_and_fqdn",
 			cfg: &cfg.Sections{
 				Unstable: &cfg.Unstable{
 					FqdnAsHostname: false,
@@ -176,7 +176,7 @@ func TestReconfigureHostname(t *testing.T) {
 			lastFqdn:     "host1.example.com",
 		},
 		{
-			name: "empty hostname",
+			name: "empty_hostname",
 			cfg: &cfg.Sections{
 				Unstable: &cfg.Unstable{
 					FqdnAsHostname: false,
@@ -195,7 +195,7 @@ func TestReconfigureHostname(t *testing.T) {
 			lastFqdn:     "host1.example.com",
 		},
 		{
-			name: "empty fqdn",
+			name: "empty_fqdn",
 			cfg: &cfg.Sections{
 				Unstable: &cfg.Unstable{
 					FqdnAsHostname: false,
@@ -214,7 +214,7 @@ func TestReconfigureHostname(t *testing.T) {
 			lastFqdn:     "",
 		},
 		{
-			name: "mds name as hostname",
+			name: "mds_name_as_hostname",
 			cfg: &cfg.Sections{
 				Unstable: &cfg.Unstable{
 					FqdnAsHostname: false,
@@ -345,7 +345,7 @@ func TestShouldReconfigure(t *testing.T) {
 		eventShouldTrigger bool
 	}{
 		{
-			name: "hostname changed",
+			name: "hostname_changed",
 			cfg: &cfg.Sections{
 				Unstable: &cfg.Unstable{
 					FqdnAsHostname: false,
@@ -359,7 +359,7 @@ func TestShouldReconfigure(t *testing.T) {
 			eventShouldTrigger: true,
 		},
 		{
-			name: "fqdn changed",
+			name: "fqdn_changed",
 			cfg: &cfg.Sections{
 				Unstable: &cfg.Unstable{
 					FqdnAsHostname: false,
@@ -373,7 +373,7 @@ func TestShouldReconfigure(t *testing.T) {
 			eventShouldTrigger: true,
 		},
 		{
-			name: "no change",
+			name: "no_change",
 			cfg: &cfg.Sections{
 				Unstable: &cfg.Unstable{
 					FqdnAsHostname: false,
@@ -387,7 +387,7 @@ func TestShouldReconfigure(t *testing.T) {
 			eventShouldTrigger: false,
 		},
 		{
-			name: "ignore changes",
+			name: "ignore_changes",
 			cfg: &cfg.Sections{
 				Unstable: &cfg.Unstable{
 					FqdnAsHostname: false,
@@ -401,7 +401,7 @@ func TestShouldReconfigure(t *testing.T) {
 			eventShouldTrigger: false,
 		},
 		{
-			name: "fqnashostname changed",
+			name: "fqnashostname_changed",
 			cfg: &cfg.Sections{
 				Unstable: &cfg.Unstable{
 					FqdnAsHostname: true,
@@ -445,7 +445,7 @@ func TestWriteHosts(t *testing.T) {
 		output        string
 	}{
 		{
-			name:          "empty hosts",
+			name:          "empty_hosts",
 			cfg:           &cfg.Sections{Unstable: &cfg.Unstable{}},
 			inputhosts:    "",
 			inputhostname: "tc1",
@@ -454,7 +454,7 @@ func TestWriteHosts(t *testing.T) {
 			output:        "169.254.169.254 metadata.google.internal # Added by Google" + newline + "10.0.0.10 tc1.example.com tc1   # Added by Google" + newline,
 		},
 		{
-			name:          "loopback addresses",
+			name:          "loopback_addresses",
 			cfg:           &cfg.Sections{Unstable: &cfg.Unstable{}},
 			inputhosts:    "",
 			inputhostname: "tc1",
@@ -463,7 +463,7 @@ func TestWriteHosts(t *testing.T) {
 			output:        "169.254.169.254 metadata.google.internal # Added by Google" + newline + "10.0.0.10 tc1.example.com tc1   # Added by Google" + newline,
 		},
 		{
-			name:          "two addresses",
+			name:          "two_addresses",
 			cfg:           &cfg.Sections{Unstable: &cfg.Unstable{}},
 			inputhosts:    "",
 			inputhostname: "tc1",
@@ -472,7 +472,7 @@ func TestWriteHosts(t *testing.T) {
 			output:        "169.254.169.254 metadata.google.internal # Added by Google" + newline + "10.0.0.10 tc1.example.com tc1   # Added by Google" + newline + "10.0.0.20 tc1.example.com tc1   # Added by Google" + newline,
 		},
 		{
-			name:          "two aliases",
+			name:          "two_aliases",
 			cfg:           &cfg.Sections{Unstable: &cfg.Unstable{AdditionalAliases: "tc2,tc3"}},
 			inputhosts:    "",
 			inputhostname: "tc1",
@@ -481,7 +481,7 @@ func TestWriteHosts(t *testing.T) {
 			output:        "169.254.169.254 metadata.google.internal # Added by Google" + newline + "10.0.0.10 tc1.example.com tc1 tc2 tc3  # Added by Google" + newline,
 		},
 		{
-			name:          "existing hosts at beginning",
+			name:          "existing_hosts_at_beginning",
 			cfg:           &cfg.Sections{Unstable: &cfg.Unstable{}},
 			inputhosts:    "127.0.0.1 pre-existing.host.com" + newline + "12.12.12.12 tc1.example.com # Added by Google" + newline,
 			inputhostname: "tc1",
@@ -490,7 +490,7 @@ func TestWriteHosts(t *testing.T) {
 			output:        "127.0.0.1 pre-existing.host.com" + newline + "169.254.169.254 metadata.google.internal # Added by Google" + newline + "10.0.0.10 tc1.example.com tc1   # Added by Google" + newline,
 		},
 		{
-			name:          "existing hosts at end",
+			name:          "existing_hosts_at_end",
 			cfg:           &cfg.Sections{Unstable: &cfg.Unstable{}},
 			inputhosts:    "12.12.12.12 tc1.example.com # Added by Google" + newline + "127.0.0.1 pre-existing.host.com" + newline + "",
 			inputhostname: "tc1",
@@ -499,7 +499,7 @@ func TestWriteHosts(t *testing.T) {
 			output:        "127.0.0.1 pre-existing.host.com" + newline + "169.254.169.254 metadata.google.internal # Added by Google" + newline + "10.0.0.10 tc1.example.com tc1   # Added by Google" + newline,
 		},
 		{
-			name:          "two gce hosts blocks",
+			name:          "two_gce_hosts_blocks",
 			cfg:           &cfg.Sections{Unstable: &cfg.Unstable{}},
 			inputhosts:    "12.12.12.12 tc1.example.com # Added by Google" + newline + "127.0.0.1 pre-existing.host.com" + newline + "13.13.13.13 tc2.example.com # Added by Google" + newline,
 			inputhostname: "tc1",

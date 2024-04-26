@@ -29,6 +29,7 @@ import (
 	"net"
 	"os"
 	"reflect"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -231,20 +232,28 @@ func (c *Server) start(ctx context.Context) error {
 	return nil
 }
 
+// GetOptionRequest is a request to get a config value by name. Guest agent
+// code should use the cfg package, this is intended for use outside of the
+// agent by the guest environment.
 type getOptionRequest struct {
 	Request
 	Option string
 }
 
+// GetOptionRequest is a response to a GetOptionRequest with the config value.
 type getOptionResponse struct {
 	Response
 	Option string
 	Value  string
 }
 
+// GetOption processes GetOptionRequests encoded as json coming from the
+// command monitor.
 func getOption(b []byte) ([]byte, error) {
 	var req getOptionRequest
-	json.Unmarshal(b, &req)
+	if err := json.Unmarshal(b, &req); err != nil {
+		return nil, err
+	}
 	var resp getOptionResponse
 	resp.Option = req.Option
 	if req.Option == "" {
@@ -255,8 +264,13 @@ func getOption(b []byte) ([]byte, error) {
 	var opt any
 	opt = cfg.Get()
 	for _, k := range strings.Split(resp.Option, ".") {
-		if k == "" {
+		if len(k) < 1 {
 			continue
+		}
+		if !regexp.MustCompile("^[A-Z]").MatchString(k) {
+			resp.Status = 3
+			resp.StatusMessage = "Invalid option, key names must start with uppercase"
+			return json.Marshal(resp)
 		}
 		opt = reflect.Indirect(reflect.ValueOf(opt)).FieldByName(k).Interface()
 	}

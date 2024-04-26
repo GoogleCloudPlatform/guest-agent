@@ -12,7 +12,12 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-// Package hostname reconfigures the guest hostname (linux only) and fqdn as necessary. It will do so on a detected change to the metadata hostname, when a new interface is configured, or a new ip address is acquired. It does so by triggering the HostnameReconfigure event, which is also triggerable outside the guest agent through named pipes on windows and unix sockets on linux. All of this behavior is configurable in the guest agent configuration.
+// Package hostname reconfigures the guest hostname (linux only) and fqdn as
+// necessary. It will do so on a detected change to the metadata hostname, when
+// a new interface is configured, or a new ip address is acquired. It does so
+// by triggering the HostnameReconfigure event, which is also triggerable
+// outside the guest agent through named pipes on windows and unix sockets on
+// linux. All of this behavior is configurable in the guest agent configuration.
 package hostname
 
 import (
@@ -35,7 +40,8 @@ import (
 )
 
 var (
-	// ReconfigureHostnameCommand is the command id registered for hostname configuration
+	// ReconfigureHostnameCommand is the command id registered for hostname
+	// configuration.
 	ReconfigureHostnameCommand = "agent.hostname.reconfigurehostname"
 	disallowedConfigurations   = map[string]bool{"": true, "metadata.google.internal": true}
 	hostnameFqdnMu             = new(sync.Mutex)
@@ -43,13 +49,14 @@ var (
 	lastFqdn                   string //As retrieved from MDS
 )
 
-// ReconfigureHostnameRequest is the structure of requests to the ReconfigureHostnameCommand
-// Regardless of request options, guest agent will only set the hostname or fqdn if enabled in the MDS.
+// ReconfigureHostnameRequest is the structure of requests to the
+// ReconfigureHostnameCommand.
 type ReconfigureHostnameRequest struct {
 	command.Request
 }
 
-// ReconfigureHostnameResponse is the structure of responses from the ReconfigureHostnameCommand
+// ReconfigureHostnameResponse is the structure of responses from the
+// ReconfigureHostnameCommand.
 // Status code meanings:
 // 0: everything ok
 // 1: error setting hostname
@@ -57,46 +64,51 @@ type ReconfigureHostnameRequest struct {
 // 3: error setting hostname and fqdn
 type ReconfigureHostnameResponse struct {
 	command.Response
-	// Hostname is the hostname which was set. Empty if unset, either due to configuration or error.
+	// Hostname is the hostname which was set. Empty if unset, either due to
+	// configuration or error.
 	Hostname string
-	// Fqdn is the hostname which was set. Empty if unset, either due to configuration or error.
+	// Fqdn is the hostname which was set. Empty if unset, either due to
+	// configuration or error.
 	Fqdn string
 }
 
-// Init registers a hostname command handler and subscribes to the metadata longpoll event if the user has enabled network interface setup and either hostname or fqdn management.
+// Init registers a hostname command handler and subscribes to the metadata
+// longpoll event if the user has enabled network interface setup and either
+// hostname or fqdn management.
 func Init(ctx context.Context, mdsclient mds.MDSClientInterface) {
-	if cfg.Get().Unstable.SetFqdn || cfg.Get().Unstable.SetHostname {
-		fqdn, err := mdsclient.GetKey(ctx, path.Join("instance", "hostname"), nil)
-		if err != nil {
-			logger.Errorf("could not get metadata hostname from MDS: %v", err)
-		} else if cfg.Get().Unstable.FqdnAsHostname {
-			lastHostname = fqdn
-			lastFqdn = fqdn
+	if !cfg.Get().Unstable.SetFqdn && !cfg.Get().Unstable.SetHostname {
+		return
+	}
+	fqdn, err := mdsclient.GetKey(ctx, path.Join("instance", "hostname"), nil)
+	if err != nil {
+		logger.Errorf("could not get metadata hostname from MDS: %v", err)
+	} else if cfg.Get().Unstable.FqdnAsHostname {
+		lastHostname = fqdn
+		lastFqdn = fqdn
+	} else {
+		hostname, _, ok := strings.Cut(fqdn, ".")
+		if !ok {
+			logger.Errorf("metadata hostname %s is not an fqdn", fqdn)
 		} else {
-			hostname, _, ok := strings.Cut(fqdn, ".")
-			if !ok {
-				logger.Errorf("metadata hostname %s is not an fqdn", fqdn)
-			} else {
-				lastFqdn = fqdn
-				lastHostname = hostname
-			}
-			b, err := ReconfigureHostname(nil)
+			lastFqdn = fqdn
+			lastHostname = hostname
+		}
+		b, err := ReconfigureHostname(nil)
+		if err != nil {
+			logger.Errorf("failed to call reconfigurehostname during setup: %v", err)
+		} else {
+			var resp ReconfigureHostnameResponse
+			err := json.Unmarshal(b, &resp)
 			if err != nil {
-				logger.Errorf("failed to call reconfigurehostname during setup: %v", err)
-			} else {
-				var resp ReconfigureHostnameResponse
-				err := json.Unmarshal(b, &resp)
-				if err != nil {
-					logger.Errorf("malformed response from reconfigurehostname: %v", err)
-				} else if resp.Status != 0 {
-					logger.Errorf("error reconfiguring hostname: %s", resp.StatusMessage)
-				}
+				logger.Errorf("malformed response from reconfigurehostname: %v", err)
+			} else if resp.Status != 0 {
+				logger.Errorf("error reconfiguring hostname: %s", resp.StatusMessage)
 			}
 		}
-		events.Get().Subscribe(metadata.LongpollEvent, nil, processMdsEvent)
-		command.Get().RegisterHandler(ReconfigureHostnameCommand, ReconfigureHostname)
-		initPlatform(ctx)
 	}
+	events.Get().Subscribe(metadata.LongpollEvent, nil, processMdsEvent)
+	command.Get().RegisterHandler(ReconfigureHostnameCommand, ReconfigureHostname)
+	initPlatform(ctx)
 }
 
 // Close stops listening for events and unregisters command handlers
@@ -139,9 +151,12 @@ func ReconfigureHostname(b []byte) ([]byte, error) {
 	if cfg.Get().Unstable.SetFqdn {
 		var err error
 		if runtime.GOOS != "windows" {
-			// Get the hostname from the OS in case we are configured to manage only the fqdn. Don't do this on windows because:
-			// 1) The hostname is always managed on Windows (albeit not by the agent: see https://github.com/GoogleCloudPlatform/compute-image-windows/blob/master/sysprep/activate_instance.ps1)
-			// 2) Windows truncates hostnames to 15 characters when they are set so we cannot rely on the OS to report the full hostname
+			// Get the hostname from the OS in case we are configured to manage only the
+			// fqdn. Don't do this on windows because:
+			// 1) The hostname is always managed on Windows (albeit not by the agent: see
+			// https://github.com/GoogleCloudPlatform/compute-image-windows/blob/master/sysprep/activate_instance.ps1)
+			// 2) Windows truncates hostnames to 15 characters when they are set so we
+			// cannot rely on the OS to report the full hostname.
 			hostname, err = os.Hostname()
 		}
 		if disallowedConfigurations[fqdn] {

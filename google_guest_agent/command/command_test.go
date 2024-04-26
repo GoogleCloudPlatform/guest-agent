@@ -207,3 +207,39 @@ func TestListenTimeout(t *testing.T) {
 		t.Errorf("unexpected response from timed out connection, got %s but want %s", data, expect)
 	}
 }
+
+func TestGetOption(t *testing.T) {
+	cfg.Load(nil)
+	testcases := []struct {
+		name string
+		req  []byte
+		resp []byte
+	}{
+		{
+			name: "standard_case",
+			req:  []byte(`{"Command":"agent.config.getoption","Option":"InstanceSetup.NetworkEnabled"}`),
+			resp: []byte(`{"Status":0,"StatusMessage":"","Option":"InstanceSetup.NetworkEnabled","Value":"true"}`),
+		},
+		{
+			name: "unexported_field",
+			req:  []byte(`{"Command":"agent.config.getoption","Option":"InstanceSetup.networkEnabled"}`),
+			resp: []byte(`{"Status":3,"StatusMessage":"Invalid option, key names must start with uppercase","Option":"InstanceSetup.networkEnabled","Value":""}`),
+		},
+		{
+			name: "non_existent_field",
+			req:  []byte(`{"Command":"agent.config.getoption","Option":"BadOption"}`),
+			resp: []byte(`{"Status":0,"StatusMessage":"","Option":"InstanceSetup.NetworkEnabled","Value":"true"}`),
+		},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			b, err := getOption(tc.req)
+			if err != nil {
+				t.Errorf("error getting response from getOption(%s): %v", tc.req, err)
+			}
+			if string(b) != string(tc.resp) {
+				t.Errorf("unexpected response from getOption(%s), got %s want %s", tc.req, b, tc.resp)
+			}
+		})
+	}
+}

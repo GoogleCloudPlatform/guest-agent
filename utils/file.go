@@ -21,11 +21,12 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 )
 
 // SaferWriteFile writes to a temporary file and then replaces the expected output file.
 // This prevents other processes from reading partial content while the writer is still writing.
-func SaferWriteFile(content []byte, outputFile string, perm fs.FileMode) error {
+func SaferWriteFile(content []byte, outputFile string, perm fs.FileMode, uid, gid int) error {
 	dir := filepath.Dir(outputFile)
 	name := filepath.Base(outputFile)
 
@@ -36,6 +37,10 @@ func SaferWriteFile(content []byte, outputFile string, perm fs.FileMode) error {
 	tmp, err := os.CreateTemp(dir, name+"*")
 	if err != nil {
 		return fmt.Errorf("unable to create temporary file under %q: %w", dir, err)
+	}
+
+	if err := os.Chown(tmp.Name(), uid, gid); err != nil && runtime.GOOS != "windows" {
+		return fmt.Errorf("unable to set ownership on temporary file %q: %w", dir, err)
 	}
 
 	if err := os.Chmod(tmp.Name(), perm); err != nil {

@@ -21,6 +21,8 @@ import (
 	"os/exec"
 	"regexp"
 	"syscall"
+
+	"github.com/GoogleCloudPlatform/guest-agent/utils"
 )
 
 const (
@@ -60,33 +62,13 @@ var setHostname = func(hostname string) error {
 // Make the write as atomic as possible by creating a temp file, restoring
 // permissions & ownership, writing data, syncing, and then overwriting.
 func overwrite(dst string, contents []byte) error {
-	tmp, err := os.CreateTemp(os.TempDir(), "gcehosts")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(tmp.Name())
-	defer tmp.Close()
 	stat, err := os.Stat(dst)
 	if err != nil {
 		return err
 	}
-	if statT, ok := stat.Sys().(*syscall.Stat_t); !ok {
+	statT, ok := stat.Sys().(*syscall.Stat_t)
+	if !ok {
 		return fmt.Errorf("could not determine owner of %s", dst)
-	} else if err := os.Chown(tmp.Name(), int(statT.Uid), int(statT.Gid)); err != nil {
-		return err
 	}
-	if err := os.Chmod(tmp.Name(), stat.Mode()); err != nil {
-		return err
-	}
-	n, err := tmp.Write(contents)
-	if err != nil {
-		return err
-	}
-	if n != len(contents) {
-		return fmt.Errorf("Could not write entire hosts file, tried to write %d bytes but wrote %d", len(contents), n)
-	}
-	if err := tmp.Sync(); err != nil {
-		return err
-	}
-	return os.Rename(tmp.Name(), dst)
+	return utils.SaferWriteFile(contents, dst, stat.Mode(), int(statT.Uid), int(statT.Gid))
 }
