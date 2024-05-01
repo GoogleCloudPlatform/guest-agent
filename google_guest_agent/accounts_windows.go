@@ -111,7 +111,7 @@ func resetPwd(username, pwd string) error {
 	return nil
 }
 
-func addUserToGroup(ctx context.Context, username, group string) error {
+func addUserToGroup(_ context.Context, username, group string) error {
 	gPtr, err := syscall.UTF16PtrFromString(group)
 	if err != nil {
 		return fmt.Errorf("error encoding group to UTF16: %v", err)
@@ -138,7 +138,7 @@ func addUserToGroup(ctx context.Context, username, group string) error {
 	return nil
 }
 
-func createUser(ctx context.Context, username, pwd, _ string) error {
+func createUser(_ context.Context, username, pwd, _ string) error {
 	uPtr, err := syscall.UTF16PtrFromString(username)
 	if err != nil {
 		return fmt.Errorf("error encoding username to UTF16: %v", err)
@@ -189,6 +189,6 @@ func userExists(name string) (bool, error) {
 	return true, nil
 }
 
-func getUIDAndGID(path string) (string, string) {
+func getUIDAndGID(_ string) (string, string) {
 	return "", ""
 }
