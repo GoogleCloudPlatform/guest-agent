@@ -17,8 +17,9 @@
 package hostname
 
 import (
-	"syscall"
 	"testing"
+
+	"golang.org/x/sys/windows"
 )
 
 func TestNotifyIpInterfaceChange(t *testing.T) {
@@ -28,7 +29,7 @@ func TestNotifyIpInterfaceChange(t *testing.T) {
 		callbackExecuted = true
 		return 0
 	}
-	if err := notifyIpInterfaceChange(syscall.AF_UNSPEC, syscall.NewCallback(callback), nil, true, &handle); err != nil {
+	if err := notifyIpInterfaceChange(windows.AF_UNSPEC, windows.NewCallback(callback), nil, true, &handle); err != nil {
 		t.Errorf("failed to register callback: %v", err)
 	}
 	if handle == 0 {

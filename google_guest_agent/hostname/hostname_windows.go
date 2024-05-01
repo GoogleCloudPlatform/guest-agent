@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"os"
 	"sync"
-	"syscall"
 	"unsafe"
 
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/command"
@@ -89,8 +88,8 @@ func initPlatform(ctx context.Context) {
 		return 0 // Report success
 	}
 	err := notifyIpInterfaceChange(
-		syscall.AF_UNSPEC, //ipv4+6
-		syscall.NewCallback(callback),
+		windows.AF_UNSPEC, //ipv4+6
+		windows.NewCallback(callback),
 		nil, // Don't need to pass any caller context
 		false,
 		&ipcallbackHandle,
