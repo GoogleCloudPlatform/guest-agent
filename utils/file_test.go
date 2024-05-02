@@ -24,7 +24,7 @@ func TestSaferWriteFile(t *testing.T) {
 	f := filepath.Join(t.TempDir(), "file")
 	want := "test-data"
 
-	if err := SaferWriteFile([]byte(want), f, 0644, -1, -1); err != nil {
+	if err := SaferWriteFile([]byte(want), f, FileOptions{Perm: 0644}); err != nil {
 		t.Errorf("SaferWriteFile(%s, %s) failed unexpectedly with err: %+v", "test-data", f, err)
 	}
 

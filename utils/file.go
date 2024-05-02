@@ -24,13 +24,23 @@ import (
 	"runtime"
 )
 
+const preserveGUIDs = -1
+
+// FileOptions represent file permissions and ownership options for
+// SaferWriteFile.
+type FileOptions struct {
+	Perm fs.FileMode
+	UID  *int
+	GID  *int
+}
+
 // SaferWriteFile writes to a temporary file and then replaces the expected output file.
 // This prevents other processes from reading partial content while the writer is still writing.
-func SaferWriteFile(content []byte, outputFile string, perm fs.FileMode, uid, gid int) error {
+func SaferWriteFile(content []byte, outputFile string, opts FileOptions) error {
 	dir := filepath.Dir(outputFile)
 	name := filepath.Base(outputFile)
 
-	if err := os.MkdirAll(dir, perm); err != nil {
+	if err := os.MkdirAll(dir, opts.Perm); err != nil {
 		return fmt.Errorf("unable to create required directories %q: %w", dir, err)
 	}
 
@@ -39,11 +49,21 @@ func SaferWriteFile(content []byte, outputFile string, perm fs.FileMode, uid, gi
 		return fmt.Errorf("unable to create temporary file under %q: %w", dir, err)
 	}
 
-	if err := os.Chown(tmp.Name(), uid, gid); err != nil && runtime.GOOS != "windows" {
+	GID := preserveGUIDs
+	if opts.GID != nil {
+		GID = *opts.GID
+	}
+
+	UID := preserveGUIDs
+	if opts.UID != nil {
+		UID = *opts.UID
+	}
+
+	if err := os.Chown(tmp.Name(), UID, GID); err != nil && runtime.GOOS != "windows" {
 		return fmt.Errorf("unable to set ownership on temporary file %q: %w", dir, err)
 	}
 
-	if err := os.Chmod(tmp.Name(), perm); err != nil {
+	if err := os.Chmod(tmp.Name(), opts.Perm); err != nil {
 		return fmt.Errorf("unable to set permissions on temporary file %q: %w", dir, err)
 	}
 
@@ -51,7 +71,7 @@ func SaferWriteFile(content []byte, outputFile string, perm fs.FileMode, uid, gi
 		return fmt.Errorf("failed to close temporary file: %w", err)
 	}
 
-	if err := WriteFile(content, tmp.Name(), perm); err != nil {
+	if err := WriteFile(content, tmp.Name(), opts.Perm); err != nil {
 		return fmt.Errorf("unable to write to a temporary file %q: %w", tmp.Name(), err)
 	}
 

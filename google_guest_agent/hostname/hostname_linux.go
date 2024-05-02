@@ -72,5 +72,7 @@ func overwrite(dst string, contents []byte) error {
 	if !ok {
 		return fmt.Errorf("could not determine owner of %s", dst)
 	}
-	return utils.SaferWriteFile(contents, dst, stat.Mode(), int(statT.Uid), int(statT.Gid))
+	uid := int(statT.Uid)
+	gid := int(statT.Gid)
+	return utils.SaferWriteFile(contents, dst, utils.FileOptions{Perm: stat.Mode(), UID: &uid, GID: &gid})
 }

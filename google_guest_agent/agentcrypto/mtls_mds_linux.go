@@ -55,7 +55,7 @@ func (j *CredsJob) writeRootCACert(ctx context.Context, content []byte, outputFi
 	if err := os.MkdirAll(filepath.Dir(outputFile), 0655); err != nil {
 		return err
 	}
-	if err := utils.SaferWriteFile(content, outputFile, 0644, -1, -1); err != nil {
+	if err := utils.SaferWriteFile(content, outputFile, utils.FileOptions{Perm: 0644}); err != nil {
 		return err
 	}
 
@@ -73,7 +73,7 @@ func (j *CredsJob) writeClientCredentials(plaintext []byte, outputFile string) e
 	if err := os.MkdirAll(filepath.Dir(outputFile), 0655); err != nil {
 		return err
 	}
-	return utils.SaferWriteFile(plaintext, outputFile, 0644, -1, -1)
+	return utils.SaferWriteFile(plaintext, outputFile, utils.FileOptions{Perm: 0644})
 }
 
 // getCAStoreUpdater interates over known system trust store updaters and returns the first found.
