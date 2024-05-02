@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"sync"
+	"syscall"
 	"unsafe"
 
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/command"
@@ -52,7 +53,7 @@ func notifyIpInterfaceChange(family uint32, callbackPtr uintptr, callerContext u
 		notify = 1
 	}
 
-	r, _, e := procNotifyIpInterfaceChange.Call(
+	r, _, e := syscall.SyscallN(procNotifyIpInterfaceChange.Addr(),
 		uintptr(family),                 // Address family
 		callbackPtr,                     // callback ptr
 		uintptr(callerContext),          // caller context
@@ -66,7 +67,7 @@ func notifyIpInterfaceChange(family uint32, callbackPtr uintptr, callerContext u
 }
 
 func cancelMibChangeNotify2(handle uintptr) (err error) {
-	r, _, e := procCancelMibChangeNotify2.Call(handle)
+	r, _, e := syscall.SyscallN(procCancelMibChangeNotify2.Addr(), handle)
 	if r != 0 {
 		return e
 	}
