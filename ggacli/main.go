@@ -26,6 +26,7 @@ import (
 
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/command"
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/hostname"
 )
 
 // Action is an action to be invoked by the user.
@@ -70,9 +71,20 @@ var (
 			helpmsg: "check that the configured command monitor socket is being listened on",
 			fn:      checksocket,
 		},
+		"sethostname": {
+			helpmsg: "set the hostname and fqdn to the value found the the MDS",
+			fn:      sethostname,
+		},
+		"getoption": {
+			helpmsg: "get the value of a config option from the running guest agent. -section and -key flags specify what option",
+			fn: getoption,
+		}
 	}
 
 	timeout                      = flag.Duration("timeout", 10*time.Second, "timeout for connections to command monitor. zero or less is infinite.")
+	jsonPayload                  = flag.String("json", "", "json payload for sendcmd")
+	configSection = flag.String("section", "", "config section for getoption")
+	configKey = flag.String("key", "", "config key for getoption")
 	jsonPayload                  = flag.String("json", "", "json payload for sendcmd")
 	help                         = flag.Bool("help", false, "print usage information")
 	noopWhenCmdMonitorIsDisabled = flag.Bool("noop_when_cmdmonitor_is_disabled", true, "do nothing if the command monitor is disabled in the instance configuration")
@@ -88,6 +100,64 @@ func sendcmd(ctx context.Context) (string, int) {
 		return string(r), 1
 	}
 	return string(r), resp.Status
+}
+
+func sethostname(ctx context.Context) (string, int) {
+	msg := []byte(fmt.Sprintf(`{"Command":"%s"}`, hostname.ReconfigureHostnameCommand))
+	r := command.SendCommand(ctx, msg)
+	var resp hostname.ReconfigureHostnameResponse
+	if err := json.Unmarshal(r, &resp); err != nil {
+		return string(r), 1
+	}
+	var out strings.Builder
+	out.WriteString(fmt.Sprintf("hostname was set to %s\n", resp.Hostname))
+	out.WriteString(fmt.Sprintf("fqdn was set to %s\n", resp.Fqdn))
+	if resp.Status != 0 {
+		out.WriteString(fmt.Sprintf("%s\n", resp.StatusMessage))
+	}
+	return out.String(), resp.Status
+}
+
+func getoption(ctx context.Context) (string, int) {
+	section := *configSection
+	key := *configKey
+	key, section = transformConfigNames(section,key)
+	msg := []byte(fmt.Sprintf(`{"Command":"agent.config.getoption","Option":"%s.%s"}`, section, key))
+	r := command.SendCommand(ctx, msg)
+	var resp hostname.ReconfigureHostnameResponse
+	if err := json.Unmarshal(r, &resp); err != nil {
+		return fmt.Sprintf("could not unmarshal response %s: %v", r, err), 1
+	}
+	return resp.StatusMessage, resp.Status
+}
+
+// Turn the ini representation (section: IpForwarding, key: ip_aliases) into
+// the struct representation (section: IPForwarding, key: IPAliases)
+func transformConfigNames(section, key) (string, string) {
+	// Split section name into words
+	var sectionwords, keywords []string
+	sectionwords = regexp.MustCompile(`[A-Z]+[a-z]*`).FindAllString(section, -1)
+	keywords = strings.Split(key, "_")
+	fixInitialisms := func(s string) string {
+		s = regexp.MustCompile("^[iI]p$").ReplaceAllString(s, "IP")
+		s = regexp.MustCompile("^[iI]ps$").ReplaceAllString(s, "IPs")
+		s = regexp.MustCompile("^[iI]d$").ReplaceAllString(s, "ID")
+		s = strings.ReplaceAll(s, "dhcp", "DHCP")
+		s = strings.ReplaceAll(s, "mds", "MDS")
+		s = strings.ReplaceAll(s, "mtls", "MTLS")
+		s = strings.ReplaceAll(s, "fqdn", "FQDN")
+		return s
+	)}
+	for i := range sectionwords {
+		s = fixInitialisms(sectionwords[i])
+		s = strings.ToUpper(s[0]) + s[1:]
+		sectionwords[i] = s
+	}
+	for i := range keywords {
+		s = fixInitialisms(keywords[i])
+		s = strings.ToUpper(s[0]) + s[1:]
+		keywords[i] = s
+	}
 }
 
 func checksocket(ctx context.Context) (string, int) {

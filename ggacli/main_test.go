@@ -22,6 +22,7 @@ import (
 
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/command"
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/hostname"
 )
 
 func pipePathForTest(t *testing.T) string {
@@ -82,6 +83,22 @@ func TestSendcmd(t *testing.T) {
 	}
 	if code != 2 {
 		t.Errorf("unexpected exit code from sendcmd, got %d want 2", code)
+	}
+}
+
+func TestSethostname(t *testing.T) {
+	resp := []byte(`{"Status":2}`)
+	handler := func([]byte) ([]byte, error) {
+		return resp, nil
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	setupCommandServerForTest(ctx, t)
+	command.Get().RegisterHandler(hostname.ReconfigureHostnameCommand, handler)
+	t.Cleanup(func() { command.Get().UnregisterHandler(hostname.ReconfigureHostnameCommand) })
+	_, code := sethostname(ctx)
+	if code != 2 {
+		t.Errorf("unexpected exit code from sethostname, got %d want 2", code)
 	}
 }
 
