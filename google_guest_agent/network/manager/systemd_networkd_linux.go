@@ -23,7 +23,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strconv"
@@ -424,7 +424,7 @@ func (n systemdNetworkd) removeVlanInterfaces(keepMe []string) (bool, error) {
 			return requiresRestart, fmt.Errorf("regex matching failed, invalid etension: %s", extension)
 		}
 
-		filePath := path.Join(n.configDir, file.Name())
+		filePath := filepath.Join(n.configDir, file.Name())
 		if err := readIniFile(filePath, ptr); err != nil {
 			return requiresRestart, fmt.Errorf("failed to read .network file before removal: %+v", err)
 		}
@@ -435,7 +435,7 @@ func (n systemdNetworkd) removeVlanInterfaces(keepMe []string) (bool, error) {
 			continue
 		}
 
-		if err := os.Remove(path.Join(n.configDir, file.Name())); err != nil {
+		if err := os.Remove(filepath.Join(n.configDir, file.Name())); err != nil {
 			return requiresRestart, fmt.Errorf("failed to remove vlan interface config(%s): %+v", file.Name(), err)
 		}
 
@@ -452,13 +452,13 @@ func (n systemdNetworkd) removeVlanInterfaces(keepMe []string) (bool, error) {
 // while also allowing users the freedom of using priorities of '0...' to override the
 // agent's own configurations.
 func (n systemdNetworkd) netdevFile(iface string) string {
-	return path.Join(n.configDir, fmt.Sprintf("%d-%s-google-guest-agent.netdev", n.priority, iface))
+	return filepath.Join(n.configDir, fmt.Sprintf("%d-%s-google-guest-agent.netdev", n.priority, iface))
 }
 
 // deprecatedNetdevFile returns the older and deprecated networkd's netdev file. It's
 // present mainly to allow us to roll it back.
 func (n systemdNetworkd) deprecatedNetdevFile(iface string) string {
-	return path.Join(n.configDir, fmt.Sprintf("%d-%s-google-guest-agent.netdev", n.deprecatedPriority, iface))
+	return filepath.Join(n.configDir, fmt.Sprintf("%d-%s-google-guest-agent.netdev", n.deprecatedPriority, iface))
 }
 
 // networkFile returns the systemd's .network file path.
@@ -468,13 +468,13 @@ func (n systemdNetworkd) deprecatedNetdevFile(iface string) string {
 // while also allowing users the freedom of using priorities of '0...' to override the
 // agent's own configurations.
 func (n systemdNetworkd) networkFile(iface string) string {
-	return path.Join(n.configDir, fmt.Sprintf("%d-%s-google-guest-agent.network", n.priority, iface))
+	return filepath.Join(n.configDir, fmt.Sprintf("%d-%s-google-guest-agent.network", n.priority, iface))
 }
 
 // deprecatedNetworkFile returns the older and deprecated networkd's network file. It's
 // present mainly to allow us to roll it back.
 func (n systemdNetworkd) deprecatedNetworkFile(iface string) string {
-	return path.Join(n.configDir, fmt.Sprintf("%d-%s-google-guest-agent.network", n.deprecatedPriority, iface))
+	return filepath.Join(n.configDir, fmt.Sprintf("%d-%s-google-guest-agent.network", n.deprecatedPriority, iface))
 }
 
 // write writes systemd's .netdev config file.
@@ -564,39 +564,27 @@ func (n systemdNetworkd) Rollback(ctx context.Context, nics *Interfaces) error {
 
 	// Rollback ethernet interfaces.
 	for _, iface := range interfaces {
-		reqRestart, err := n.rollbackNetwork(n.networkFile(iface))
+		reqRestart1, err := n.rollbackNetwork(n.networkFile(iface))
 		if err != nil {
 			logger.Infof("Failed to rollback .network file: %v", err)
 		}
 
-		if reqRestart {
-			ethernetRequiresRestart = true
-		}
-
-		reqRestart, err = n.rollbackNetdev(n.networkFile(iface))
+		reqRestart2, err := n.rollbackNetdev(n.networkFile(iface))
 		if err != nil {
-			logger.Infof("Failed to rollback .network file: %v", err)
+			logger.Warningf("Failed to rollback .network file: %v", err)
 		}
 
-		if reqRestart {
-			ethernetRequiresRestart = true
-		}
-
-		reqRestart, err = n.rollbackNetwork(n.deprecatedNetworkFile(iface))
+		reqRestart3, err := n.rollbackNetwork(n.deprecatedNetworkFile(iface))
 		if err != nil {
-			logger.Infof("Failed to rollback .network file: %v", err)
+			logger.Warningf("Failed to rollback .network file: %v", err)
 		}
 
-		if reqRestart {
-			ethernetRequiresRestart = true
-		}
-
-		reqRestart, err = n.rollbackNetdev(n.deprecatedNetdevFile(iface))
+		reqRestart4, err := n.rollbackNetdev(n.deprecatedNetdevFile(iface))
 		if err != nil {
-			logger.Infof("Failed to rollback .network file: %v", err)
+			logger.Warningf("Failed to rollback .network file: %v", err)
 		}
 
-		if reqRestart {
+		if reqRestart1 || reqRestart2 || reqRestart3 || reqRestart4 {
 			ethernetRequiresRestart = true
 		}
 	}
