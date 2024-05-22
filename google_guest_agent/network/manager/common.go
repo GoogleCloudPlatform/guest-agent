@@ -19,6 +19,7 @@ package manager
 import (
 	"fmt"
 	"net"
+	"os"
 	"os/exec"
 	"regexp"
 	"strconv"
@@ -27,6 +28,8 @@ import (
 	"github.com/GoogleCloudPlatform/guest-agent/utils"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 	"github.com/go-ini/ini"
+
+	"gopkg.in/yaml.v3"
 )
 
 var (
@@ -149,5 +152,17 @@ func writeIniFile(filePath string, ptr any) error {
 		return fmt.Errorf("error saving config: %v", err)
 	}
 
+	return nil
+}
+
+// writeYamlFile writes ptr data into filePath file marshalled as a yaml file format.
+func writeYamlFile(filePath string, ptr any) error {
+	data, err := yaml.Marshal(ptr)
+	if err != nil {
+		return fmt.Errorf("error marshalling yaml file: %w", err)
+	}
+	if err := os.WriteFile(filePath, data, 0600); err != nil {
+		return fmt.Errorf("error writing yaml file: %w", err)
+	}
 	return nil
 }

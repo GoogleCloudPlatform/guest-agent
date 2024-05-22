@@ -52,6 +52,14 @@ type Service interface {
 	Rollback(ctx context.Context, nics *Interfaces) error
 }
 
+// serviceStatus is an internal wrapper of a service implementation and its status.
+type serviceStatus struct {
+	// manager is the network manager implementation.
+	manager Service
+	// active indicates this service is active/present in the system.
+	active bool
+}
+
 // Interfaces wraps both ethernet and vlan interfaces.
 type Interfaces struct {
 	// EthernetInterfaces are the regular ethernet interfaces descriptors offered by metadata.
@@ -86,8 +94,8 @@ type osConfigAction struct {
 // guestAgentSection is the section added to guest-agent-written ini files to indicate
 // that the ini file is managed by the agent.
 type guestAgentSection struct {
-	// Managed indicates whether this ini file is managed by the agent.
-	Managed bool
+	// ManagedByGuestAgent indicates whether this ini file is managed by the agent.
+	ManagedByGuestAgent bool
 }
 
 const (
@@ -103,9 +111,6 @@ var (
 	// fallbackNetworkManager is the network manager service to be assumed if
 	// none of the known network managers returned true from IsManaging()
 	fallbackNetworkManager Service
-
-	// currManager is the Service implementation currently managing the interfaces.
-	currManager Service
 
 	// defaultOSRules lists the rules for applying interface configurations for primary
 	// and secondary interfaces.
@@ -176,7 +181,7 @@ func registerManager(s Service, fallback bool) {
 
 // detectNetworkManager detects the network manager managing the primary network interface.
 // This network manager will be used to set up primary and secondary network interfaces.
-func detectNetworkManager(ctx context.Context, iface string) (Service, error) {
+func detectNetworkManager(ctx context.Context, iface string) ([]serviceStatus, error) {
 	logger.Infof("Detecting network manager...")
 
 	networkManagers := knownNetworkManagers
@@ -184,17 +189,26 @@ func detectNetworkManager(ctx context.Context, iface string) (Service, error) {
 		networkManagers = append(networkManagers, fallbackNetworkManager)
 	}
 
+	var res []serviceStatus
 	for _, curr := range networkManagers {
-		ok, err := curr.IsManaging(ctx, iface)
+		active, err := curr.IsManaging(ctx, iface)
 		if err != nil {
 			return nil, err
 		}
-		if ok {
-			logger.Infof("Network manager detected: %s", curr.Name())
-			return curr, nil
+
+		if active {
+			res = append(res, serviceStatus{manager: curr, active: active})
 		}
 	}
-	return nil, fmt.Errorf("no network manager impl found for %s", iface)
+
+	if len(res) == 0 {
+		if fallbackNetworkManager != nil {
+			return append(res, serviceStatus{manager: fallbackNetworkManager, active: true}), nil
+		}
+		return nil, fmt.Errorf("no network manager impl found for %s", iface)
+	}
+
+	return res, nil
 }
 
 // findOSRule finds the osConfigRule that applies to the current system.
@@ -254,35 +268,40 @@ func SetupInterfaces(ctx context.Context, config *cfg.Sections, mds *metadata.De
 	primaryInterface := interfaces[0]
 
 	// Get the network manager.
-	nm, err := detectNetworkManager(ctx, primaryInterface)
+	services, err := detectNetworkManager(ctx, primaryInterface)
 	if err != nil {
 		return fmt.Errorf("error detecting network manager service: %v", err)
 	}
 
-	nm.Configure(ctx, config)
-
-	// Since the manager is different, undo all the changes of the old manager.
-	if currManager != nil && nm != currManager {
-		logger.Infof("Rolling back %s", currManager.Name())
-		if err = currManager.Rollback(ctx, nics); err != nil {
-			return fmt.Errorf("error rolling back config for %s: %v", currManager.Name(), err)
+	// Attempt to rollback any left over configuration of non active network managers.
+	for _, svc := range services {
+		logger.Infof("Rolling back %s", svc.manager.Name())
+		if err = svc.manager.Rollback(ctx, nics); err != nil {
+			logger.Errorf("Failed to roll back config for %s: %v", svc.manager.Name(), err)
 		}
 	}
 
-	currManager = nm
-
-	logger.Infof("Setting up %s", nm.Name())
-	if err = nm.SetupEthernetInterface(ctx, config, nics); err != nil {
-		return fmt.Errorf("manager(%s): error setting up ethernet interfaces: %v", nm.Name(), err)
-	}
-
-	if config.Unstable.VlanSetupEnabled {
-		if err = nm.SetupVlanInterface(ctx, config, nics); err != nil {
-			return fmt.Errorf("manager(%s): error setting up vlan interfaces: %v", nm.Name(), err)
+	// Attempt to configure all present/active network managers.
+	for _, svc := range services {
+		if !svc.active {
+			continue
 		}
-	}
 
-	logger.Infof("Finished setting up %s", nm.Name())
+		svc.manager.Configure(ctx, config)
+
+		logger.Infof("Setting up %s", svc.manager.Name())
+		if err = svc.manager.SetupEthernetInterface(ctx, config, nics); err != nil {
+			return fmt.Errorf("manager(%s): error setting up ethernet interfaces: %v", svc.manager.Name(), err)
+		}
+
+		if config.Unstable.VlanSetupEnabled {
+			if err = svc.manager.SetupVlanInterface(ctx, config, nics); err != nil {
+				return fmt.Errorf("manager(%s): error setting up vlan interfaces: %v", svc.manager.Name(), err)
+			}
+		}
+
+		logger.Infof("Finished setting up %s", svc.manager.Name())
+	}
 
 	return nil
 }

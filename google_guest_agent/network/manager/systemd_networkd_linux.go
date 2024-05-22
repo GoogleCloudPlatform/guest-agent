@@ -23,7 +23,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strconv"
@@ -39,6 +39,14 @@ const (
 	// minSupportedVersion is the version from which we start supporting
 	// systemd-networkd.
 	minSupportedVersion = 252
+
+	// defaultSystemdNetworkdPriority is a value adjusted to be above netplan
+	// (usually set to 10) and low enough to be under the generic configurations.
+	defaultSystemdNetworkdPriority = 20
+
+	// deprecatedPriority is the priority previously supported by us and
+	// requires us to roll it back.
+	deprecatedPriority = 1
 )
 
 type systemdNetworkd struct {
@@ -52,14 +60,19 @@ type systemdNetworkd struct {
 	// priority dictates the priority with which guest-agent should write
 	// the configuration files.
 	priority int
+
+	// deprecatedPriority is the priority previously supported by us and
+	// requires us to roll it back.
+	deprecatedPriority int
 }
 
 // init adds this network manager service to the list of known network managers.
 func init() {
 	registerManager(&systemdNetworkd{
-		configDir:      "/usr/lib/systemd/network",
-		networkCtlKeys: []string{"AdministrativeState", "SetupState"},
-		priority:       1,
+		configDir:          "/usr/lib/systemd/network",
+		networkCtlKeys:     []string{"AdministrativeState", "SetupState"},
+		priority:           defaultSystemdNetworkdPriority,
+		deprecatedPriority: deprecatedPriority,
 	}, false)
 }
 
@@ -92,7 +105,7 @@ type systemdLinkConfig struct {
 // systemdNetworkConfig contains the actual interface rule's configuration.
 type systemdNetworkConfig struct {
 	// DHCP determines the ipv4/ipv6 protocol version for use with dhcp.
-	DHCP string
+	DHCP string `ini:"DHCP,omitempty"`
 
 	// DNSDefaultRoute is used to determine if the link's configured DNS servers are
 	// used for resolving domain names that do not match any link's domain.
@@ -243,6 +256,18 @@ func (n systemdNetworkd) SetupEthernetInterface(ctx context.Context, config *cfg
 		return fmt.Errorf("error writing network configs: %v", err)
 	}
 
+	// Make sure to rollback previously supported and now deprecated .network and .netdev
+	// config files.
+	for _, iface := range googleInterfaces {
+		if _, err := n.rollbackNetwork(n.deprecatedNetworkFile(iface)); err != nil {
+			logger.Infof("Failed to rollback .network file: %v", err)
+		}
+
+		if _, err := n.rollbackNetwork(n.deprecatedNetdevFile(iface)); err != nil {
+			logger.Infof("Failed to rollback .netdev file: %v", err)
+		}
+	}
+
 	// Avoid restarting systemd-networkd.
 	if err := run.Quiet(ctx, "networkctl", "reload"); err != nil {
 		return fmt.Errorf("error reloading systemd-networkd network configs: %v", err)
@@ -273,7 +298,7 @@ func (n systemdNetworkd) SetupVlanInterface(ctx context.Context, config *cfg.Sec
 		// Create and setup .network file.
 		networkConfig := systemdConfig{
 			GuestAgent: guestAgentSection{
-				Managed: true,
+				ManagedByGuestAgent: true,
 			},
 			Match: systemdMatchConfig{
 				Name: iface,
@@ -295,7 +320,7 @@ func (n systemdNetworkd) SetupVlanInterface(ctx context.Context, config *cfg.Sec
 		// Create and setup .netdev file.
 		netdevConfig := systemdNetdevConfig{
 			GuestAgent: guestAgentSection{
-				Managed: true,
+				ManagedByGuestAgent: true,
 			},
 			NetDev: systemdNetdev{
 				Name: iface,
@@ -333,8 +358,14 @@ func (n systemdNetworkd) SetupVlanInterface(ctx context.Context, config *cfg.Sec
 
 	// Attempt to remove vlan interface configurations that are not known - i.e. they were previously
 	// added by users but are no longer present on their mds configuration.
-	if err := n.removeVlanInterfaces(keepMe); err != nil {
+	requiresRestart, err := n.removeVlanInterfaces(keepMe)
+	if err != nil {
 		return fmt.Errorf("failed to remove vlan interface configuration: %+v", err)
+	}
+
+	if !requiresRestart {
+		logger.Debugf("No changes applied to systemd-network's vlan config, skipping restart.")
+		return nil
 	}
 
 	// Apply network changes avoiding to restart systemd-networkd.
@@ -346,14 +377,15 @@ func (n systemdNetworkd) SetupVlanInterface(ctx context.Context, config *cfg.Sec
 }
 
 // removeVlanInterfaces removes vlan interfaces that are not present in keepMe slice.
-func (n systemdNetworkd) removeVlanInterfaces(keepMe []string) error {
+func (n systemdNetworkd) removeVlanInterfaces(keepMe []string) (bool, error) {
 	files, err := os.ReadDir(n.configDir)
 	if err != nil {
-		return fmt.Errorf("failed to read content from %s: %+v", n.configDir, err)
+		return false, fmt.Errorf("failed to read content from %s: %+v", n.configDir, err)
 	}
 
 	configExp := `(?P<priority>[0-9]+)-(?P<interface>.*\.[0-9]+)-(?P<suffix>.*)\.(?P<extension>network|netdev)`
 	configRegex := regexp.MustCompile(configExp)
+	requiresRestart := false
 
 	for _, file := range files {
 		var (
@@ -389,12 +421,12 @@ func (n systemdNetworkd) removeVlanInterfaces(keepMe []string) error {
 
 		ptr, foundPtr := ptrMap[extension]
 		if !foundPtr {
-			return fmt.Errorf("regex matching failed, invalid etension: %s", extension)
+			return requiresRestart, fmt.Errorf("regex matching failed, invalid etension: %s", extension)
 		}
 
-		filePath := path.Join(n.configDir, file.Name())
+		filePath := filepath.Join(n.configDir, file.Name())
 		if err := readIniFile(filePath, ptr); err != nil {
-			return fmt.Errorf("failed to read .network file before removal: %+v", err)
+			return requiresRestart, fmt.Errorf("failed to read .network file before removal: %+v", err)
 		}
 
 		// Although the file name is following the same pattern we are assuming this is not
@@ -403,12 +435,14 @@ func (n systemdNetworkd) removeVlanInterfaces(keepMe []string) error {
 			continue
 		}
 
-		if err := os.Remove(path.Join(n.configDir, file.Name())); err != nil {
-			return fmt.Errorf("failed to remove vlan interface config(%s): %+v", file.Name(), err)
+		if err := os.Remove(filepath.Join(n.configDir, file.Name())); err != nil {
+			return requiresRestart, fmt.Errorf("failed to remove vlan interface config(%s): %+v", file.Name(), err)
 		}
+
+		requiresRestart = true
 	}
 
-	return nil
+	return requiresRestart, nil
 }
 
 // netdevFile returns the systemd's .netdev file path.
@@ -418,7 +452,13 @@ func (n systemdNetworkd) removeVlanInterfaces(keepMe []string) error {
 // while also allowing users the freedom of using priorities of '0...' to override the
 // agent's own configurations.
 func (n systemdNetworkd) netdevFile(iface string) string {
-	return path.Join(n.configDir, fmt.Sprintf("%d-%s-google-guest-agent.netdev", n.priority, iface))
+	return filepath.Join(n.configDir, fmt.Sprintf("%d-%s-google-guest-agent.netdev", n.priority, iface))
+}
+
+// deprecatedNetdevFile returns the older and deprecated networkd's netdev file. It's
+// present mainly to allow us to roll it back.
+func (n systemdNetworkd) deprecatedNetdevFile(iface string) string {
+	return filepath.Join(n.configDir, fmt.Sprintf("%d-%s-google-guest-agent.netdev", n.deprecatedPriority, iface))
 }
 
 // networkFile returns the systemd's .network file path.
@@ -428,7 +468,13 @@ func (n systemdNetworkd) netdevFile(iface string) string {
 // while also allowing users the freedom of using priorities of '0...' to override the
 // agent's own configurations.
 func (n systemdNetworkd) networkFile(iface string) string {
-	return path.Join(n.configDir, fmt.Sprintf("%d-%s-google-guest-agent.network", n.priority, iface))
+	return filepath.Join(n.configDir, fmt.Sprintf("%d-%s-google-guest-agent.network", n.priority, iface))
+}
+
+// deprecatedNetworkFile returns the older and deprecated networkd's network file. It's
+// present mainly to allow us to roll it back.
+func (n systemdNetworkd) deprecatedNetworkFile(iface string) string {
+	return filepath.Join(n.configDir, fmt.Sprintf("%d-%s-google-guest-agent.network", n.deprecatedPriority, iface))
 }
 
 // write writes systemd's .netdev config file.
@@ -442,7 +488,7 @@ func (nd systemdNetdevConfig) write(n systemdNetworkd, iface string) error {
 // isGuestAgentManaged returns true if the netdev config file contains the
 // GuestAgent section and key.
 func (nd systemdNetdevConfig) isGuestAgentManaged() bool {
-	return nd.GuestAgent.Managed
+	return nd.GuestAgent.ManagedByGuestAgent
 }
 
 // write writes the systemd's configuration file to its destination.
@@ -456,7 +502,7 @@ func (sc systemdConfig) write(n systemdNetworkd, iface string) error {
 // isGuestAgentManaged returns true if the network config file contains the
 // GuestAgent section and key.
 func (sc systemdConfig) isGuestAgentManaged() bool {
-	return sc.GuestAgent.Managed
+	return sc.GuestAgent.ManagedByGuestAgent
 }
 
 // writeEthernetConfig writes the systemd config for all the provided interfaces in the
@@ -473,7 +519,7 @@ func (n systemdNetworkd) writeEthernetConfig(interfaces, ipv6Interfaces []string
 		// Create and setup ini file.
 		data := systemdConfig{
 			GuestAgent: guestAgentSection{
-				Managed: true,
+				ManagedByGuestAgent: true,
 			},
 			Match: systemdMatchConfig{
 				Name: iface,
@@ -514,34 +560,108 @@ func (n systemdNetworkd) Rollback(ctx context.Context, nics *Interfaces) error {
 		return fmt.Errorf("failed to get list of interface names: %v", err)
 	}
 
+	ethernetRequiresRestart := false
+
 	// Rollback ethernet interfaces.
 	for _, iface := range interfaces {
-		// Find expected files.
-		configFile := n.networkFile(iface)
-		sections := new(systemdConfig)
-
-		logger.Debugf("checking for %s", configFile)
-		if err := readIniFile(configFile, sections); err != nil {
-			return fmt.Errorf("failed to read systemd's .network file: %+v", err)
+		reqRestart1, err := n.rollbackNetwork(n.networkFile(iface))
+		if err != nil {
+			logger.Infof("Failed to rollback .network file: %v", err)
 		}
 
-		// Check that the guest section exists and the key is set to true.
-		if sections.isGuestAgentManaged() {
-			logger.Debugf("removing %s", configFile)
-			if err = os.Remove(configFile); err != nil && !os.IsNotExist(err) {
-				return err
-			}
+		reqRestart2, err := n.rollbackNetdev(n.networkFile(iface))
+		if err != nil {
+			logger.Warningf("Failed to rollback .network file: %v", err)
+		}
+
+		reqRestart3, err := n.rollbackNetwork(n.deprecatedNetworkFile(iface))
+		if err != nil {
+			logger.Warningf("Failed to rollback .network file: %v", err)
+		}
+
+		reqRestart4, err := n.rollbackNetdev(n.deprecatedNetdevFile(iface))
+		if err != nil {
+			logger.Warningf("Failed to rollback .network file: %v", err)
+		}
+
+		if reqRestart1 || reqRestart2 || reqRestart3 || reqRestart4 {
+			ethernetRequiresRestart = true
 		}
 	}
 
 	// Rollback vlan interfaces.
-	if err := n.removeVlanInterfaces(nil); err != nil {
-		return fmt.Errorf("failed to rollback vlan interfaces: %+v", err)
+	vlanRequiresRestart, err := n.removeVlanInterfaces(nil)
+	if err != nil {
+		logger.Warningf("Failed to rollback vlan interfaces: %v", err)
+	}
+
+	if !ethernetRequiresRestart && !vlanRequiresRestart {
+		logger.Debugf("No systemd-networkd's configuration rolled back, skipping restart.")
+		return nil
 	}
 
 	// Avoid restarting systemd-networkd.
 	if err := run.Quiet(ctx, "networkctl", "reload"); err != nil {
 		return fmt.Errorf("error reloading systemd-networkd network configs: %v", err)
 	}
+
 	return nil
+}
+
+func (n systemdNetworkd) rollbackNetwork(configFile string) (bool, error) {
+	logger.Debugf("Checking for %s", configFile)
+
+	_, err := os.Stat(configFile)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return false, fmt.Errorf("Failed to stat systemd-networkd configuration(%s): %w", configFile, err)
+		}
+		logger.Debugf("No systemd-networkd configuration found: %s", configFile)
+		return false, nil
+	}
+
+	sections := new(systemdConfig)
+	if err := readIniFile(configFile, sections); err != nil {
+		return false, fmt.Errorf("failed to read systemd's .network file: %+v", err)
+	}
+
+	// Check that the guest section exists and the key is set to true.
+	if sections.isGuestAgentManaged() {
+		logger.Debugf("removing %s", configFile)
+		if err = os.Remove(configFile); err != nil {
+			return false, fmt.Errorf("removing systemd-networkd config(%s): %w", configFile, err)
+		}
+		return true, nil
+	}
+
+	return false, nil
+}
+
+func (n systemdNetworkd) rollbackNetdev(configFile string) (bool, error) {
+	logger.Debugf("Checking for %s", configFile)
+
+	_, err := os.Stat(configFile)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return false, fmt.Errorf("Failed to stat systemd-networkd configuration(%s): %w", configFile, err)
+		}
+		logger.Debugf("No systemd-networkd configuration found: %s", configFile)
+		return false, nil
+	}
+
+	sections := new(systemdNetdevConfig)
+	if err := readIniFile(configFile, sections); err != nil {
+		return false, fmt.Errorf("failed to read systemd's .netdev file: %+v", err)
+	}
+
+	// Check that the guest section exists and the key is set to true.
+	if sections.isGuestAgentManaged() {
+		logger.Debugf("removing %s", configFile)
+		if err = os.Remove(configFile); err != nil {
+			return false, fmt.Errorf("removing systemd-networkd config(%s): %w", configFile, err)
+		}
+		return true, nil
+	}
+
+	return false, nil
 }
