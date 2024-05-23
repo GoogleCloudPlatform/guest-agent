@@ -162,6 +162,7 @@ type NetworkInterfaces struct {
 	IPAliases         []string
 	Mac               string
 	DHCPv6Refresh     string
+	MTU               int
 }
 
 // VlanInterface describes the instances vlan network interfaces configurations.

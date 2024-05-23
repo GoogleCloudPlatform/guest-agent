@@ -88,6 +88,9 @@ type netplanEthernet struct {
 	// Match is the interface's matching rule.
 	Match netplanMatch `yaml:"match"`
 
+	// MTU defines the interface's MTU configuration.
+	MTU *int
+
 	// DHCPv4 determines if DHCPv4 support must be enabled to such an interface.
 	DHCPv4 *bool `yaml:"dhcp4,omitempty"`
 
@@ -157,8 +160,13 @@ func (n netplan) SetupEthernetInterface(ctx context.Context, config *cfg.Section
 	// Create a network configuration file with default configurations for each network interface.
 	googleInterfaces, googleIpv6Interfaces := interfaceListsIpv4Ipv6(nics.EthernetInterfaces)
 
+	mtuMap, err := interfacesMTUMap(nics.EthernetInterfaces)
+	if err != nil {
+		return fmt.Errorf("error listing interface's MTU configuration: %w", err)
+	}
+
 	// Write the config files.
-	if err := n.writeNetplanEthernetDropin(googleInterfaces, googleIpv6Interfaces); err != nil {
+	if err := n.writeNetplanEthernetDropin(mtuMap, googleInterfaces, googleIpv6Interfaces); err != nil {
 		return fmt.Errorf("error writing network configs: %v", err)
 	}
 
@@ -258,7 +266,7 @@ func (nd networkdNetplanDropin) write(n netplan, iface string) error {
 
 // writeNetplanEthernetDropin selects the ethernet configuration, transforms it
 // into a netplan dropin format and writes it down to the netplan's drop-in directory.
-func (n netplan) writeNetplanEthernetDropin(interfaces, ipv6Interfaces []string) error {
+func (n netplan) writeNetplanEthernetDropin(mtuMap map[string]int, interfaces, ipv6Interfaces []string) error {
 	dropin := netplanDropin{
 		Network: netplanNetwork{
 			Version:   netplanConfigVersion,
@@ -273,6 +281,10 @@ func (n netplan) writeNetplanEthernetDropin(interfaces, ipv6Interfaces []string)
 		ne := netplanEthernet{
 			Match:  netplanMatch{Name: iface},
 			DHCPv4: &trueVal,
+		}
+
+		if mtu, found := mtuMap[iface]; found {
+			ne.MTU = &mtu
 		}
 
 		if slices.Contains(ipv6Interfaces, iface) {

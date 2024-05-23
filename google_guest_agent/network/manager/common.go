@@ -76,6 +76,26 @@ func interfaceListsIpv4Ipv6(nics []metadata.NetworkInterfaces) ([]string, []stri
 	return googleInterfaces, googleIpv6Interfaces
 }
 
+// interfacesMTUMap returns a map indexes by the interface's name with the MTU value
+// provided by the metadata descriptor.
+func interfacesMTUMap(nics []metadata.NetworkInterfaces) (map[string]int, error) {
+	res := make(map[string]int)
+
+	for _, ni := range nics {
+		iface, err := GetInterfaceByMAC(ni.Mac)
+		if err != nil {
+			if _, found := badMAC[ni.Mac]; !found {
+				logger.Errorf("error getting interface: %s", err)
+				badMAC[ni.Mac] = iface
+			}
+			continue
+		}
+		res[iface.Name] = ni.MTU
+	}
+
+	return res, nil
+}
+
 // GetInterfaceByMAC gets the interface given the mac string.
 func GetInterfaceByMAC(mac string) (net.Interface, error) {
 	hwaddr, err := net.ParseMAC(mac)
