@@ -156,12 +156,6 @@ type ipVersion struct {
 // dhclient implements the manager.Service interface for dhclient use cases.
 type dhclient struct{}
 
-// init adds this network manager service to the list of known network managers.
-// DHClient will be the default fallback.
-func init() {
-	registerManager(&dhclient{}, true)
-}
-
 // Name returns the name of the network manager service.
 func (n dhclient) Name() string {
 	return "dhclient"
@@ -431,12 +425,7 @@ func partitionInterfaces(ctx context.Context, interfaces, ipv6Interfaces []strin
 	var obtainIpv6Interfaces []string
 	var releaseIpv6Interfaces []string
 
-	for i, iface := range interfaces {
-		if !shouldManageInterface(i == 0) {
-			// Do not setup anything for this interface to avoid duplicate processes.
-			continue
-		}
-
+	for _, iface := range interfaces {
 		// Check for IPv4 interfaces for which to obtain a lease.
 		processExists, err := dhclientProcessExists(ctx, iface, ipv4)
 		if err != nil {

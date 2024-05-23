@@ -66,16 +66,6 @@ type systemdNetworkd struct {
 	deprecatedPriority int
 }
 
-// init adds this network manager service to the list of known network managers.
-func init() {
-	registerManager(&systemdNetworkd{
-		configDir:          "/usr/lib/systemd/network",
-		networkCtlKeys:     []string{"AdministrativeState", "SetupState"},
-		priority:           defaultSystemdNetworkdPriority,
-		deprecatedPriority: deprecatedPriority,
-	}, false)
-}
-
 // guestAgentManaged define an interface for configurations to identify if
 // they are managed by Guest Agent.
 type guestAgentManaged interface {
