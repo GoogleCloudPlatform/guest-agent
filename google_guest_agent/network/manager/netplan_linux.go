@@ -122,6 +122,9 @@ type netplanVlan struct {
 // networkdNetplanDropin maps systemd-networkd's overriding drop-in if networkd
 // is present.
 type networkdNetplanDropin struct {
+	// Match is the systemd-networkd ini file's [Match] section.
+	Match systemdMatchConfig
+
 	// Network is the systemd-networkd ini file's [Network] section.
 	Network systemdNetworkConfig `ini:"Network"`
 
@@ -172,7 +175,7 @@ func (n netplan) SetupEthernetInterface(ctx context.Context, config *cfg.Section
 
 	// If we are running netplan+systemd-networkd we try to write networkd's drop-in for configs
 	// not mapped/supported by netplan.
-	if err := n.writeNetworkdDropin(googleInterfaces); err != nil {
+	if err := n.writeNetworkdDropin(googleInterfaces, googleIpv6Interfaces); err != nil {
 		return fmt.Errorf("error writing systemd-networkd's drop-in: %v", err)
 	}
 
@@ -195,7 +198,7 @@ func (n netplan) SetupEthernetInterface(ctx context.Context, config *cfg.Section
 
 // writeNetworkdDropin writes the overloading network-manager's drop-in file for the configurations
 // not supported by netplan.
-func (n netplan) writeNetworkdDropin(interfaces []string) error {
+func (n netplan) writeNetworkdDropin(interfaces, ipv6Interfaces []string) error {
 	stat, err := os.Stat(n.networkdDropinDir)
 	if err != nil {
 		return fmt.Errorf("failed to stat systemd-networkd's drop-in root dir: %w", err)
@@ -208,10 +211,19 @@ func (n netplan) writeNetworkdDropin(interfaces []string) error {
 	for i, iface := range interfaces {
 		logger.Debugf("writing systemd-networkd drop-in config for %s", iface)
 
+		var dhcp = "ipv4"
+		if slices.Contains(ipv6Interfaces, iface) {
+			dhcp = "yes"
+		}
+
 		// Create and setup ini file.
 		data := networkdNetplanDropin{
+			Match: systemdMatchConfig{
+				Name: iface,
+			},
 			Network: systemdNetworkConfig{
 				DNSDefaultRoute: true,
+				DHCP:            dhcp,
 			},
 		}
 
@@ -242,7 +254,7 @@ func (n netplan) networkdDropinFile(iface string) string {
 	// We are hardcoding the netplan priority to 10 since we are deriving the netplan
 	// networkd configuration name based on the interface name only - aligning with
 	// the commonly used value for netplan.
-	return filepath.Join(n.networkdDropinDir, fmt.Sprintf("10-netplan-%s.d", iface), "override.conf")
+	return filepath.Join(n.networkdDropinDir, fmt.Sprintf("10-netplan-%s.network.d", iface), "override.conf")
 }
 
 // write writes systemd's drop-in config file.
@@ -252,7 +264,7 @@ func (nd networkdNetplanDropin) write(n netplan, iface string) error {
 	logger.Infof("writing systemd drop in to: %s", dropinFile)
 
 	dropinDir := filepath.Dir(dropinFile)
-	err := os.MkdirAll(dropinDir, 0750)
+	err := os.MkdirAll(dropinDir, 0755)
 	if err != nil {
 		return fmt.Errorf("failed to create networkd dropin dir: %w", err)
 	}
