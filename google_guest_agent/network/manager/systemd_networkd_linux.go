@@ -73,7 +73,7 @@ func init() {
 		networkCtlKeys:     []string{"AdministrativeState", "SetupState"},
 		priority:           defaultSystemdNetworkdPriority,
 		deprecatedPriority: deprecatedPriority,
-	}, false)
+	})
 }
 
 // guestAgentManaged define an interface for configurations to identify if

@@ -59,7 +59,7 @@ func init() {
 	registerManager(&wicked{
 		configDir:     defaultWickedConfigDir,
 		wickedCommand: wickedCommand,
-	}, false)
+	})
 }
 
 // Name returns the name of this network manager service.

@@ -62,7 +62,7 @@ func init() {
 		netplanConfigDir:  "/etc/netplan/",
 		networkdDropinDir: "/etc/systemd/network/",
 		priority:          20,
-	}, false)
+	})
 }
 
 // netplanDropin maps the netplan dropin configuration yaml entries/data

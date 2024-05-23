@@ -108,10 +108,6 @@ var (
 	// network interface.
 	knownNetworkManagers []Service
 
-	// fallbackNetworkManager is the network manager service to be assumed if
-	// none of the known network managers returned true from IsManaging()
-	fallbackNetworkManager Service
-
 	// defaultOSRules lists the rules for applying interface configurations for primary
 	// and secondary interfaces.
 	defaultOSRules = []osConfigRule{
@@ -165,18 +161,9 @@ var (
 )
 
 // registerManager registers the provided network manager service to the list of known
-// network manager services. Fallback specifies whether the provided service should be
-// marked as a fallback service.
-func registerManager(s Service, fallback bool) {
-	if !fallback {
-		knownNetworkManagers = append(knownNetworkManagers, s)
-	} else {
-		if fallbackNetworkManager != nil {
-			panic("trying to register second fallback network manager")
-		} else {
-			fallbackNetworkManager = s
-		}
-	}
+// network manager services.
+func registerManager(s Service) {
+	knownNetworkManagers = append(knownNetworkManagers, s)
 }
 
 // detectNetworkManager detects the network manager managing the primary network interface.
@@ -185,9 +172,6 @@ func detectNetworkManager(ctx context.Context, iface string) ([]serviceStatus, e
 	logger.Infof("Detecting network manager...")
 
 	networkManagers := knownNetworkManagers
-	if fallbackNetworkManager != nil {
-		networkManagers = append(networkManagers, fallbackNetworkManager)
-	}
 
 	var res []serviceStatus
 	for _, curr := range networkManagers {
@@ -202,9 +186,6 @@ func detectNetworkManager(ctx context.Context, iface string) ([]serviceStatus, e
 	}
 
 	if len(res) == 0 {
-		if fallbackNetworkManager != nil {
-			return append(res, serviceStatus{manager: fallbackNetworkManager, active: true}), nil
-		}
 		return nil, fmt.Errorf("no network manager impl found for %s", iface)
 	}
 

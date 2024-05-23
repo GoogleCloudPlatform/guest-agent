@@ -86,7 +86,7 @@ func init() {
 	registerManager(&networkManager{
 		configDir:         defaultNetworkManagerConfigDir,
 		networkScriptsDir: defaultNetworkScriptsDir,
-	}, false)
+	})
 }
 
 // Name is the name of this network manager service.

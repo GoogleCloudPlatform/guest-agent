@@ -159,7 +159,7 @@ type dhclient struct{}
 // init adds this network manager service to the list of known network managers.
 // DHClient will be the default fallback.
 func init() {
-	registerManager(&dhclient{}, true)
+	registerManager(&dhclient{})
 }
 
 // Name returns the name of the network manager service.
