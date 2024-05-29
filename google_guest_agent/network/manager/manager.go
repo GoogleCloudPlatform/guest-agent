@@ -255,12 +255,12 @@ func SetupInterfaces(ctx context.Context, config *cfg.Sections, mds *metadata.De
 	}
 
 	// Attempt to rollback any left over configuration of non active network managers.
-	for _, svc := range services {
-		logger.Infof("Rolling back %s", svc.manager.Name())
-		if err = svc.manager.Rollback(ctx, nics); err != nil {
-			logger.Errorf("Failed to roll back config for %s: %v", svc.manager.Name(), err)
-		}
-	}
+	// for _, svc := range services {
+	// 	logger.Infof("Rolling back %s", svc.manager.Name())
+	// 	if err = svc.manager.Rollback(ctx, nics); err != nil {
+	// 		logger.Errorf("Failed to roll back config for %s: %v", svc.manager.Name(), err)
+	// 	}
+	// }
 
 	// Attempt to configure all present/active network managers.
 	for _, svc := range services {
