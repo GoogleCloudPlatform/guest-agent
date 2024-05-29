@@ -77,7 +77,9 @@ func Init(ctx context.Context) {
 // Close will close the internally managed command server, if it was initialized.
 func Close() error {
 	if cmdMonitor.srv != nil {
-		return cmdMonitor.srv.Close()
+		err := cmdMonitor.srv.Close()
+		cmdMonitor.srv = nil
+		return err
 	}
 	return nil
 }
