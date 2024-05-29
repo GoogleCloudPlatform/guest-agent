@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path"
 	"regexp"
 	"slices"
@@ -47,20 +46,6 @@ const (
 	// defaultWickedCommand is the expected path to the wicked CLI.
 	defaultWickedCommand = "/usr/sbin/wicked"
 )
-
-// init adds this network manager service to the list of known managers.
-func init() {
-	wickedCommand, err := exec.LookPath("wicked")
-	if err != nil {
-		logger.Infof("failed to find wicked path, falling back to default: %+v", err)
-		wickedCommand = defaultWickedCommand
-	}
-
-	registerManager(&wicked{
-		configDir:     defaultWickedConfigDir,
-		wickedCommand: wickedCommand,
-	})
-}
 
 // Name returns the name of this network manager service.
 func (n wicked) Name() string {

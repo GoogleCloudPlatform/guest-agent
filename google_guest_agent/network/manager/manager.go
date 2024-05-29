@@ -19,7 +19,6 @@ package manager
 import (
 	"context"
 	"fmt"
-	"slices"
 
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/osinfo"
@@ -108,72 +107,18 @@ var (
 	// network interface.
 	knownNetworkManagers []Service
 
-	// defaultOSRules lists the rules for applying interface configurations for primary
-	// and secondary interfaces.
-	defaultOSRules = []osConfigRule{
-		// Debian rules.
-		{
-			osNames: []string{"debian"},
-			majorVersions: map[int]bool{
-				10: true,
-				11: true,
-				12: true,
-			},
-			action: osConfigAction{
-				ignorePrimary:   true,
-				ignoreSecondary: true,
-			},
-		},
-		// RHEL rules.
-		{
-			osNames: []string{"rhel", "centos", "rocky"},
-			majorVersions: map[int]bool{
-				7: true,
-				8: true,
-				9: true,
-			},
-			action: osConfigAction{
-				ignorePrimary: true,
-			},
-		},
-		// Ubuntu rules
-		{
-			osNames: []string{"ubuntu"},
-			majorVersions: map[int]bool{
-				18: true,
-				20: true,
-				22: true,
-				23: true,
-			},
-			action: osConfigAction{
-				ignorePrimary: true,
-			},
-		},
-	}
-
 	// osinfoGet points to the function to use for getting osInfo.
 	// Primarily used for testing.
 	osinfoGet = osinfo.Get
-
-	// osRules points to the rules to use for finding relevant ignore rules.
-	// Primarily used for testing.
-	osRules = defaultOSRules
 )
-
-// registerManager registers the provided network manager service to the list of known
-// network manager services.
-func registerManager(s Service) {
-	knownNetworkManagers = append(knownNetworkManagers, s)
-}
 
 // detectNetworkManager detects the network manager managing the primary network interface.
 // This network manager will be used to set up primary and secondary network interfaces.
-func detectNetworkManager(ctx context.Context, iface string) ([]serviceStatus, error) {
+func detectNetworkManager(ctx context.Context, iface string) (*serviceStatus, error) {
 	logger.Infof("Detecting network manager...")
 
 	networkManagers := knownNetworkManagers
 
-	var res []serviceStatus
 	for _, curr := range networkManagers {
 		active, err := curr.IsManaging(ctx, iface)
 		if err != nil {
@@ -181,44 +126,11 @@ func detectNetworkManager(ctx context.Context, iface string) ([]serviceStatus, e
 		}
 
 		if active {
-			res = append(res, serviceStatus{manager: curr, active: active})
+			return &serviceStatus{manager: curr, active: active}, nil
 		}
 	}
 
-	if len(res) == 0 {
-		return nil, fmt.Errorf("no network manager impl found for %s", iface)
-	}
-
-	return res, nil
-}
-
-// findOSRule finds the osConfigRule that applies to the current system.
-func findOSRule() *osConfigRule {
-	osInfo := osinfoGet()
-	for _, curr := range osRules {
-		if !slices.Contains(curr.osNames, osInfo.OS) {
-			continue
-		}
-
-		if curr.majorVersions[osInfo.Version.Major] {
-			return &curr
-		}
-	}
-	return nil
-}
-
-// shouldManageInterface returns whether the guest agent should manage an interface
-// provided whether the interface of interest is the primary interface or not.
-func shouldManageInterface(isPrimary bool) bool {
-	rule := findOSRule()
-	if rule != nil {
-		if isPrimary {
-			return !rule.action.ignorePrimary
-		}
-		return !rule.action.ignoreSecondary
-	}
-	// Assume setup for anything not specified.
-	return true
+	return nil, fmt.Errorf("no network manager impl found for %s", iface)
 }
 
 // SetupInterfaces sets up all the network interfaces on the system, applying rules described
@@ -249,7 +161,7 @@ func SetupInterfaces(ctx context.Context, config *cfg.Sections, mds *metadata.De
 	primaryInterface := interfaces[0]
 
 	// Get the network manager.
-	services, err := detectNetworkManager(ctx, primaryInterface)
+	svc, err := detectNetworkManager(ctx, primaryInterface)
 	if err != nil {
 		return fmt.Errorf("error detecting network manager service: %v", err)
 	}
@@ -263,26 +175,21 @@ func SetupInterfaces(ctx context.Context, config *cfg.Sections, mds *metadata.De
 	// }
 
 	// Attempt to configure all present/active network managers.
-	for _, svc := range services {
-		if !svc.active {
-			continue
-		}
 
-		svc.manager.Configure(ctx, config)
+	svc.manager.Configure(ctx, config)
 
-		logger.Infof("Setting up %s", svc.manager.Name())
-		if err = svc.manager.SetupEthernetInterface(ctx, config, nics); err != nil {
-			return fmt.Errorf("manager(%s): error setting up ethernet interfaces: %v", svc.manager.Name(), err)
-		}
-
-		if config.Unstable.VlanSetupEnabled {
-			if err = svc.manager.SetupVlanInterface(ctx, config, nics); err != nil {
-				return fmt.Errorf("manager(%s): error setting up vlan interfaces: %v", svc.manager.Name(), err)
-			}
-		}
-
-		logger.Infof("Finished setting up %s", svc.manager.Name())
+	logger.Infof("Setting up %s", svc.manager.Name())
+	if err = svc.manager.SetupEthernetInterface(ctx, config, nics); err != nil {
+		return fmt.Errorf("manager(%s): error setting up ethernet interfaces: %v", svc.manager.Name(), err)
 	}
+
+	if config.Unstable.VlanSetupEnabled {
+		if err = svc.manager.SetupVlanInterface(ctx, config, nics); err != nil {
+			return fmt.Errorf("manager(%s): error setting up vlan interfaces: %v", svc.manager.Name(), err)
+		}
+	}
+
+	logger.Infof("Finished setting up %s", svc.manager.Name())
 
 	return nil
 }

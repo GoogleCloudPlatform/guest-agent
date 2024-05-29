@@ -56,15 +56,6 @@ type netplan struct {
 	priority int
 }
 
-// init adds this network manager service to the list of known network managers.
-func init() {
-	registerManager(&netplan{
-		netplanConfigDir:  "/etc/netplan/",
-		networkdDropinDir: "/etc/systemd/network/",
-		priority:          20,
-	})
-}
-
 // netplanDropin maps the netplan dropin configuration yaml entries/data
 // structure.
 type netplanDropin struct {
@@ -186,6 +177,11 @@ func (n netplan) SetupEthernetInterface(ctx context.Context, config *cfg.Section
 		if err := os.Remove("/etc/netplan/90-default.yaml"); err != nil {
 			logger.Debugf("Failed to remove default netplan config: %s", err)
 		}
+	}
+
+	// Avoid restarting systemd-networkd.
+	if err := run.Quiet(ctx, "networkctl", "reload"); err != nil {
+		return fmt.Errorf("error reloading systemd-networkd network configs: %v", err)
 	}
 
 	// Avoid restarting systemd-networkd.
