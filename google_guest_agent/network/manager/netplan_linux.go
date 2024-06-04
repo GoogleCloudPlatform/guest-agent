@@ -85,8 +85,16 @@ type netplanEthernet struct {
 	// DHCPv4 determines if DHCPv4 support must be enabled to such an interface.
 	DHCPv4 *bool `yaml:"dhcp4,omitempty"`
 
+	DHCP4Overrides *netplanDHCPOverrides `yaml:"dhcp4-overrides,omitempty"`
+
 	// DHCPv6 determines if DHCPv6 support must be enabled to such an interface.
 	DHCPv6 *bool `yaml:"dhcp6,omitempty"`
+
+	DHCP6Overrides *netplanDHCPOverrides `yaml:"dhcp6-overrides,omitempty"`
+}
+
+type netplanDHCPOverrides struct {
+	UseDomains bool `yaml:"use-domains,omitempty"`
 }
 
 // netplanMatch contains the keys uses to match an interface.
@@ -289,6 +297,9 @@ func (n netplan) writeNetplanEthernetDropin(mtuMap map[string]int, interfaces, i
 		ne := netplanEthernet{
 			Match:  netplanMatch{Name: iface},
 			DHCPv4: &trueVal,
+			DHCP4Overrides: &netplanDHCPOverrides{
+				UseDomains: true,
+			},
 		}
 
 		if mtu, found := mtuMap[iface]; found {
@@ -297,6 +308,9 @@ func (n netplan) writeNetplanEthernetDropin(mtuMap map[string]int, interfaces, i
 
 		if slices.Contains(ipv6Interfaces, iface) {
 			ne.DHCPv6 = &trueVal
+			ne.DHCP6Overrides = &netplanDHCPOverrides{
+				UseDomains: true,
+			}
 		}
 
 		dropin.Network.Ethernets[iface] = ne
