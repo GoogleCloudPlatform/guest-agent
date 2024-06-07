@@ -117,9 +117,7 @@ var (
 func detectNetworkManager(ctx context.Context, iface string) (*serviceStatus, error) {
 	logger.Infof("Detecting network manager...")
 
-	networkManagers := knownNetworkManagers
-
-	for _, curr := range networkManagers {
+	for _, curr := range knownNetworkManagers {
 		active, err := curr.IsManaging(ctx, iface)
 		if err != nil {
 			return nil, err
@@ -161,35 +159,39 @@ func SetupInterfaces(ctx context.Context, config *cfg.Sections, mds *metadata.De
 	primaryInterface := interfaces[0]
 
 	// Get the network manager.
-	svc, err := detectNetworkManager(ctx, primaryInterface)
+	activeService, err := detectNetworkManager(ctx, primaryInterface)
 	if err != nil {
 		return fmt.Errorf("error detecting network manager service: %v", err)
 	}
 
 	// Attempt to rollback any left over configuration of non active network managers.
-	for _, svc := range services {
-		logger.Infof("Rolling back %s", svc.manager.Name())
-		if err = svc.manager.Rollback(ctx, nics); err != nil {
-			logger.Errorf("Failed to roll back config for %s: %v", svc.manager.Name(), err)
+	for _, svc := range knownNetworkManagers {
+		if svc == activeService.manager {
+			continue
+		}
+
+		logger.Infof("Rolling back %s", svc.Name())
+		if err = svc.Rollback(ctx, nics); err != nil {
+			logger.Errorf("Failed to roll back config for %s: %v", svc.Name(), err)
 		}
 	}
 
 	// Attempt to configure all present/active network managers.
 
-	svc.manager.Configure(ctx, config)
+	activeService.manager.Configure(ctx, config)
 
-	logger.Infof("Setting up %s", svc.manager.Name())
-	if err = svc.manager.SetupEthernetInterface(ctx, config, nics); err != nil {
-		return fmt.Errorf("manager(%s): error setting up ethernet interfaces: %v", svc.manager.Name(), err)
+	logger.Infof("Setting up %s", activeService.manager.Name())
+	if err = activeService.manager.SetupEthernetInterface(ctx, config, nics); err != nil {
+		return fmt.Errorf("manager(%s): error setting up ethernet interfaces: %v", activeService.manager.Name(), err)
 	}
 
 	if config.Unstable.VlanSetupEnabled {
-		if err = svc.manager.SetupVlanInterface(ctx, config, nics); err != nil {
-			return fmt.Errorf("manager(%s): error setting up vlan interfaces: %v", svc.manager.Name(), err)
+		if err = activeService.manager.SetupVlanInterface(ctx, config, nics); err != nil {
+			return fmt.Errorf("manager(%s): error setting up vlan interfaces: %v", activeService.manager.Name(), err)
 		}
 	}
 
-	logger.Infof("Finished setting up %s", svc.manager.Name())
+	logger.Infof("Finished setting up %s", activeService.manager.Name())
 
 	return nil
 }
