@@ -99,14 +99,6 @@ func enableDisableOSLoginCertAuth(ctx context.Context) error {
 			}
 			sshca.Init()
 		}
-	} else {
-		if trustedCAWatcher != nil {
-			if err := eventManager.RemoveWatcher(ctx, trustedCAWatcher); err != nil {
-				return err
-			}
-			sshca.Close()
-			trustedCAWatcher = nil
-		}
 	}
 
 	return nil
