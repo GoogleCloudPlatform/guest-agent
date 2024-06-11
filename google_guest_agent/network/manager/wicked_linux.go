@@ -48,20 +48,6 @@ const (
 	defaultWickedCommand = "/usr/sbin/wicked"
 )
 
-// init adds this network manager service to the list of known managers.
-func init() {
-	wickedCommand, err := exec.LookPath("wicked")
-	if err != nil {
-		logger.Infof("failed to find wicked path, falling back to default: %+v", err)
-		wickedCommand = defaultWickedCommand
-	}
-
-	registerManager(&wicked{
-		configDir:     defaultWickedConfigDir,
-		wickedCommand: wickedCommand,
-	}, false)
-}
-
 // Name returns the name of this network manager service.
 func (n wicked) Name() string {
 	return "wicked"
@@ -70,6 +56,12 @@ func (n wicked) Name() string {
 // Configure gives the opportunity for the Service implementation to adjust its configuration
 // based on the Guest Agent configuration.
 func (n wicked) Configure(ctx context.Context, config *cfg.Sections) {
+	wickedCommand, err := exec.LookPath("wicked")
+	if err != nil {
+		logger.Infof("failed to find wicked path, falling back to default: %+v", err)
+		wickedCommand = defaultWickedCommand
+	}
+	n.wickedCommand = wickedCommand
 }
 
 // IsManaging checks whether wicked is managing the provided interface.

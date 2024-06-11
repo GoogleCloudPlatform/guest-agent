@@ -81,14 +81,6 @@ type networkManager struct {
 	networkScriptsDir string
 }
 
-// init registers this network manager service to the list of known network managers.
-func init() {
-	registerManager(&networkManager{
-		configDir:         defaultNetworkManagerConfigDir,
-		networkScriptsDir: defaultNetworkScriptsDir,
-	}, false)
-}
-
 // Name is the name of this network manager service.
 func (n networkManager) Name() string {
 	return "NetworkManager"

@@ -19,7 +19,6 @@ package manager
 import (
 	"context"
 	"fmt"
-	"slices"
 	"testing"
 
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
@@ -83,7 +82,6 @@ func (n mockService) Rollback(ctx context.Context, nics *Interfaces) error {
 func managerTestSetup() {
 	// Clear the known network managers and fallbacks.
 	knownNetworkManagers = []Service{}
-	fallbackNetworkManager = nil
 
 	// Create our own osinfo function for testing.
 	osinfoGet = func() osinfo.OSInfo {
@@ -202,14 +200,21 @@ func TestDetectNetworkManager(t *testing.T) {
 		},
 	}
 
+	prevKnownNetworkManager := knownNetworkManagers
+	t.Cleanup(func() {
+		knownNetworkManagers = prevKnownNetworkManager
+	})
+
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			managerTestSetup()
+
+			knownNetworkManagers = nil
 			for _, service := range test.services {
-				registerManager(service, service.isFallback)
+				knownNetworkManagers = append(knownNetworkManagers, service)
 			}
 
-			services, err := detectNetworkManager(context.Background(), "iface")
+			activeService, err := detectNetworkManager(context.Background(), "iface")
 
 			if err != nil {
 				if !test.expectErr {
@@ -226,12 +231,8 @@ func TestDetectNetworkManager(t *testing.T) {
 				t.Fatalf("no error returned when error expected, expected error: %s", test.expectedErrorMessage)
 			}
 
-			contains := slices.ContainsFunc(services, func(svce serviceStatus) bool {
-				return svce.manager == test.expectedManager && svce.active
-			})
-
-			if !contains {
-				t.Fatalf("did not get expected network manager. Expected: %v, Actual: %v", test.expectedManager, services)
+			if activeService.manager != test.expectedManager {
+				t.Fatalf("did not get expected network manager. Expected: %v, Actual: %v", test.expectedManager, activeService)
 			}
 		})
 	}
@@ -286,18 +287,6 @@ func TestFindOSRule(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			managerTestSetup()
-
-			osRules = test.rules
-			osRule := findOSRule()
-
-			if osRule == nil && !test.expectedNil {
-				t.Errorf("findOSRule() returned nil when non-nil expected")
-			}
-			if osRule != nil && test.expectedNil {
-				t.Errorf("findOSRule() returned non-nil when nil expected: %+v", osRule)
-			}
-
-			osRules = defaultOSRules
 		})
 	}
 }

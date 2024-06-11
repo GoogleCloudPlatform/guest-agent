@@ -56,15 +56,6 @@ type netplan struct {
 	priority int
 }
 
-// init adds this network manager service to the list of known network managers.
-func init() {
-	registerManager(&netplan{
-		netplanConfigDir:  "/etc/netplan/",
-		networkdDropinDir: "/etc/systemd/network/",
-		priority:          20,
-	}, false)
-}
-
 // netplanDropin maps the netplan dropin configuration yaml entries/data
 // structure.
 type netplanDropin struct {
@@ -88,11 +79,25 @@ type netplanEthernet struct {
 	// Match is the interface's matching rule.
 	Match netplanMatch `yaml:"match"`
 
+	// MTU defines the interface's MTU configuration.
+	MTU *int
+
 	// DHCPv4 determines if DHCPv4 support must be enabled to such an interface.
 	DHCPv4 *bool `yaml:"dhcp4,omitempty"`
 
+	DHCP4Overrides *netplanDHCPOverrides `yaml:"dhcp4-overrides,omitempty"`
+
 	// DHCPv6 determines if DHCPv6 support must be enabled to such an interface.
 	DHCPv6 *bool `yaml:"dhcp6,omitempty"`
+
+	DHCP6Overrides *netplanDHCPOverrides `yaml:"dhcp6-overrides,omitempty"`
+}
+
+// netplanDHCPOverrides sets the netplan dhcp-overrides configuration.
+type netplanDHCPOverrides struct {
+	// When true, the domain name received from the DHCP server will be used as DNS
+	// search domain over this link.
+	UseDomains bool `yaml:"use-domains,omitempty"`
 }
 
 // netplanMatch contains the keys uses to match an interface.
@@ -119,6 +124,9 @@ type netplanVlan struct {
 // networkdNetplanDropin maps systemd-networkd's overriding drop-in if networkd
 // is present.
 type networkdNetplanDropin struct {
+	// Match is the systemd-networkd ini file's [Match] section.
+	Match systemdMatchConfig
+
 	// Network is the systemd-networkd ini file's [Network] section.
 	Network systemdNetworkConfig `ini:"Network"`
 
@@ -157,14 +165,19 @@ func (n netplan) SetupEthernetInterface(ctx context.Context, config *cfg.Section
 	// Create a network configuration file with default configurations for each network interface.
 	googleInterfaces, googleIpv6Interfaces := interfaceListsIpv4Ipv6(nics.EthernetInterfaces)
 
+	mtuMap, err := interfacesMTUMap(nics.EthernetInterfaces)
+	if err != nil {
+		return fmt.Errorf("error listing interface's MTU configuration: %w", err)
+	}
+
 	// Write the config files.
-	if err := n.writeNetplanEthernetDropin(googleInterfaces, googleIpv6Interfaces); err != nil {
+	if err := n.writeNetplanEthernetDropin(mtuMap, googleInterfaces, googleIpv6Interfaces); err != nil {
 		return fmt.Errorf("error writing network configs: %v", err)
 	}
 
 	// If we are running netplan+systemd-networkd we try to write networkd's drop-in for configs
 	// not mapped/supported by netplan.
-	if err := n.writeNetworkdDropin(googleInterfaces); err != nil {
+	if err := n.writeNetworkdDropin(googleInterfaces, googleIpv6Interfaces); err != nil {
 		return fmt.Errorf("error writing systemd-networkd's drop-in: %v", err)
 	}
 
@@ -178,6 +191,11 @@ func (n netplan) SetupEthernetInterface(ctx context.Context, config *cfg.Section
 	}
 
 	// Avoid restarting systemd-networkd.
+	if err := run.Quiet(ctx, "networkctl", "reload"); err != nil {
+		return fmt.Errorf("error reloading systemd-networkd network configs: %v", err)
+	}
+
+	// Avoid restarting systemd-networkd.
 	if err := run.Quiet(ctx, "netplan", "apply"); err != nil {
 		return fmt.Errorf("error applying netplan changes: %w", err)
 	}
@@ -187,7 +205,7 @@ func (n netplan) SetupEthernetInterface(ctx context.Context, config *cfg.Section
 
 // writeNetworkdDropin writes the overloading network-manager's drop-in file for the configurations
 // not supported by netplan.
-func (n netplan) writeNetworkdDropin(interfaces []string) error {
+func (n netplan) writeNetworkdDropin(interfaces, ipv6Interfaces []string) error {
 	stat, err := os.Stat(n.networkdDropinDir)
 	if err != nil {
 		return fmt.Errorf("failed to stat systemd-networkd's drop-in root dir: %w", err)
@@ -200,10 +218,19 @@ func (n netplan) writeNetworkdDropin(interfaces []string) error {
 	for i, iface := range interfaces {
 		logger.Debugf("writing systemd-networkd drop-in config for %s", iface)
 
+		var dhcp = "ipv4"
+		if slices.Contains(ipv6Interfaces, iface) {
+			dhcp = "yes"
+		}
+
 		// Create and setup ini file.
 		data := networkdNetplanDropin{
+			Match: systemdMatchConfig{
+				Name: iface,
+			},
 			Network: systemdNetworkConfig{
 				DNSDefaultRoute: true,
+				DHCP:            dhcp,
 			},
 		}
 
@@ -234,7 +261,7 @@ func (n netplan) networkdDropinFile(iface string) string {
 	// We are hardcoding the netplan priority to 10 since we are deriving the netplan
 	// networkd configuration name based on the interface name only - aligning with
 	// the commonly used value for netplan.
-	return filepath.Join(n.networkdDropinDir, fmt.Sprintf("10-netplan-%s.d", iface), "override.conf")
+	return filepath.Join(n.networkdDropinDir, fmt.Sprintf("10-netplan-%s.network.d", iface), "override.conf")
 }
 
 // write writes systemd's drop-in config file.
@@ -244,7 +271,7 @@ func (nd networkdNetplanDropin) write(n netplan, iface string) error {
 	logger.Infof("writing systemd drop in to: %s", dropinFile)
 
 	dropinDir := filepath.Dir(dropinFile)
-	err := os.MkdirAll(dropinDir, 0750)
+	err := os.MkdirAll(dropinDir, 0755)
 	if err != nil {
 		return fmt.Errorf("failed to create networkd dropin dir: %w", err)
 	}
@@ -258,7 +285,7 @@ func (nd networkdNetplanDropin) write(n netplan, iface string) error {
 
 // writeNetplanEthernetDropin selects the ethernet configuration, transforms it
 // into a netplan dropin format and writes it down to the netplan's drop-in directory.
-func (n netplan) writeNetplanEthernetDropin(interfaces, ipv6Interfaces []string) error {
+func (n netplan) writeNetplanEthernetDropin(mtuMap map[string]int, interfaces, ipv6Interfaces []string) error {
 	dropin := netplanDropin{
 		Network: netplanNetwork{
 			Version:   netplanConfigVersion,
@@ -273,10 +300,20 @@ func (n netplan) writeNetplanEthernetDropin(interfaces, ipv6Interfaces []string)
 		ne := netplanEthernet{
 			Match:  netplanMatch{Name: iface},
 			DHCPv4: &trueVal,
+			DHCP4Overrides: &netplanDHCPOverrides{
+				UseDomains: true,
+			},
+		}
+
+		if mtu, found := mtuMap[iface]; found {
+			ne.MTU = &mtu
 		}
 
 		if slices.Contains(ipv6Interfaces, iface) {
 			ne.DHCPv6 = &trueVal
+			ne.DHCP6Overrides = &netplanDHCPOverrides{
+				UseDomains: true,
+			}
 		}
 
 		dropin.Network.Ethernets[iface] = ne
