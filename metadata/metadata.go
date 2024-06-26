@@ -138,6 +138,9 @@ type Instance struct {
 	// ID is the instance ID.
 	ID json.Number
 
+	// Hostname is the instance fqdn
+	Hostname string
+
 	// MachineType represents the instance's machine type.
 	MachineType string
 
