@@ -356,7 +356,7 @@ func updateNSSwitchConfig(nsswitch string, enable bool) string {
 			if enable && !present {
 				line += oslogin
 			} else if !enable && present {
-				line = strings.TrimSuffix(line, oslogin)
+				line = strings.Replace(line, oslogin, "", 1)
 			}
 
 			if runtime.GOOS == "freebsd" {
