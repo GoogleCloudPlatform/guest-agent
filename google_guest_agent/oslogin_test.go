@@ -173,6 +173,19 @@ func TestUpdateNSSwitchConfig(t *testing.T) {
 			},
 			enable: true,
 		},
+		{
+			contents: []string{
+				"line1",
+				"passwd: line2" + oslogin + " some_other_service",
+				"group: line3" + oslogin + " another_service",
+			},
+			want: []string{
+				"line1",
+				"passwd: line2 some_other_service",
+				"group: line3 another_service",
+			},
+			enable: false,
+		},
 	}
 
 	for idx, tt := range tests {
