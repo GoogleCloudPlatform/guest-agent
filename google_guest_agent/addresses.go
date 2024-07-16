@@ -382,7 +382,14 @@ func (a *addressMgr) Set(ctx context.Context) error {
 			if runtime.GOOS == "windows" {
 				// Don't addAddress if this is already configured.
 				if !slices.Contains(configuredIPs, ip) {
-					err = addAddress(net.ParseIP(ip), net.IPv4Mask(255, 255, 255, 255), uint32(iface.Index))
+					// In case of forwardedIpv6 we get IPV6 CIDR and Parse IP will return nil.
+					netip := net.ParseIP(ip)
+					if netip != nil && !isIPv6(netip) {
+						// Retains existing behavior for ipv4 addresses.
+						err = addAddress(netip, net.IPv4Mask(255, 255, 255, 255), uint32(iface.Index))
+					} else {
+						err = addIpv6Address(ip, uint32(iface.Index))
+					}
 				}
 			} else {
 				err = addLocalRoute(ctx, config, ip, iface.Name)
@@ -400,7 +407,14 @@ func (a *addressMgr) Set(ctx context.Context) error {
 				if !slices.Contains(configuredIPs, ip) {
 					continue
 				}
-				err = removeAddress(net.ParseIP(ip), uint32(iface.Index))
+				netip := net.ParseIP(ip)
+				// In case of forwardedIpv6 we get IPV6 CIDR and Parse IP will return nil.
+				if netip != nil && !isIPv6(netip) {
+					// Retains existing behavior for ipv4 addresses.
+					err = removeAddress(netip, net.IPv4Mask(255, 255, 255, 255), uint32(iface.Index))
+				} else {
+					err = removeIpv6Address(ip, uint32(iface.Index))
+				}
 			} else {
 				err = removeLocalRoute(ctx, config, ip, iface.Name)
 			}
@@ -417,6 +431,30 @@ func (a *addressMgr) Set(ctx context.Context) error {
 			}
 		}
 	}
+	logger.Infof("Completed adding/removing routes for aliases, forwarded IP and target-instance IPs")
 
 	return nil
+}
+
+// isIPv6 returns true if the IP address is an IPv6 address.
+func isIPv6(ip net.IP) bool {
+	return ip.To4() == nil
+}
+
+// addIpv6Address adds given IP on the provided network interface.
+func addIpv6Address(s string, idx uint32) error {
+	ip, n, err := net.ParseCIDR(s)
+	if err != nil {
+		return err
+	}
+	return addAddress(ip, n.Mask, idx)
+}
+
+// removeIpv6Address removes the given IP on the network interface.
+func removeIpv6Address(s string, idx uint32) error {
+	ip, n, err := net.ParseCIDR(s)
+	if err != nil {
+		return err
+	}
+	return removeAddress(ip, n.Mask, idx)
 }
