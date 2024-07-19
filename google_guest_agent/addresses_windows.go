@@ -25,6 +25,7 @@ import (
 	"syscall"
 	"unsafe"
 
+	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 	"golang.org/x/sys/windows"
 )
 
@@ -120,20 +121,118 @@ type (
 )
 
 func addAddress(ip net.IP, mask net.IPMask, index uint32) error {
+	logger.Infof("Adding %q ip address", ip.String())
+	subnet, _ := mask.Size()
 	// CreateUnicastIpAddressEntry only available Vista onwards.
-	if err := procCreateUnicastIpAddressEntry.Find(); err != nil {
+	// AddIPAddress api supports only ipv4 address.
+	if isIPv6(ip) {
+		return createUnicastIpAddressEntry6(ip, uint8(subnet), index)
+	}
+
+	// https://learn.microsoft.com/en-us/windows/win32/api/iphlpapi/nf-iphlpapi-addipaddress
+	if err := procCreateUnicastIpAddressEntry.Find(); err != nil && !isIPv6(ip) {
 		return addIPAddress(ip, mask, index)
 	}
-	subnet, _ := mask.Size()
 	return createUnicastIpAddressEntry(ip, uint8(subnet), index)
 }
 
-func removeAddress(ip net.IP, index uint32) error {
+func removeAddress(ip net.IP, mask net.IPMask, index uint32) error {
+	logger.Infof("Removing %q ip address", ip.String())
+	subnet, _ := mask.Size()
+	if isIPv6(ip) {
+		// Unlike ipv4 that can be added either by addIPAddress or createUnicastIpAddressEntry
+		// ipv6 addresses can only be added by createUnicastIpAddressEntry6.
+		// Try removing them by deleteUnicastIpAddressEntry6 only as deleteIPAddress deletes
+		// IP address previously added using AddIPAddress only.
+		return deleteUnicastIpAddressEntry6(ip, uint8(subnet), index)
+	}
+
 	// DeleteUnicastIpAddressEntry only available Vista onwards.
 	if err := procDeleteUnicastIpAddressEntry.Find(); err != nil {
 		return deleteIPAddress(ip)
 	}
 	return deleteUnicastIpAddressEntry(ip, index)
+}
+
+// LUID represents the locally unique identifier (LUID) for a network interface.
+// https://learn.microsoft.com/en-us/windows/win32/api/ifdef/ns-ifdef-net_luid_lh
+type LUID uint64
+
+// RawSockaddrInet represents an IPv4/IPv6 address and family.
+// https://learn.microsoft.com/en-us/windows/win32/api/ws2ipdef/ns-ws2ipdef-sockaddr_inet
+type RawSockaddrInet struct {
+	Family uint16
+	data   [26]byte
+}
+
+// MIBUnicastIPAddressRow6 stores unicast IP address information used with for
+// ipforwarding addresses.
+// https://learn.microsoft.com/en-us/windows/win32/api/netioapi/ns-netioapi-mib_unicastipaddress_row
+type MIBUnicastIPAddressRow6 struct {
+	Address            RawSockaddrInet
+	InterfaceLuid      LUID
+	InterfaceIndex     uint32
+	PrefixOrigin       uint32
+	SuffixOrigin       uint32
+	ValidLifetime      uint32
+	PreferredLifetime  uint32
+	OnLinkPrefixLength uint8
+	SkipAsSource       bool
+}
+
+// setAddr is helper function to set net.IP in a structure windows syscalls understand.
+func (addr *RawSockaddrInet) setAddr(ip net.IP) {
+	addr6 := (*windows.RawSockaddrInet6)(unsafe.Pointer(addr))
+	addr6.Family = windows.AF_INET6
+	copy(addr6.Addr[:], ip)
+}
+
+// initIpRow6 initializes the MIB_UNICASTIPADDRESS_ROW6 struct based on Ip, prefix length
+// and the index.
+func initIpRow6(ip net.IP, prefix uint8, index uint32) (*MIBUnicastIPAddressRow6, error) {
+	ipRow := new(MIBUnicastIPAddressRow6)
+	// No return value.
+	procInitializeUnicastIpAddressEntry.Call(uintptr(unsafe.Pointer(ipRow)))
+
+	ipRow.InterfaceIndex = index
+	ipRow.OnLinkPrefixLength = prefix
+	// https://blogs.technet.microsoft.com/rmilne/2012/02/08/fine-grained-control-when-registering-multiple-ip-addresses-on-a-network-card/
+	ipRow.SkipAsSource = true
+
+	addr := RawSockaddrInet{}
+	addr.setAddr(ip)
+	ipRow.Address = addr
+	return ipRow, nil
+}
+
+// createUnicastIpAddressEntry6 adds a new unicast IPv6 address entry on local machine.
+func createUnicastIpAddressEntry6(ip net.IP, prefix uint8, index uint32) error {
+	logger.Infof("CreateUnicastIpAddressEntry6 %v, with prefix %d on interface %d", ip, prefix, index)
+
+	ipRow, err := initIpRow6(ip, prefix, index)
+	if err != nil {
+		return fmt.Errorf("initialize MIB_UNICASTIPADDRESS_ROW failed: %w", err)
+	}
+
+	if ret, _, err := procCreateUnicastIpAddressEntry.Call(uintptr(unsafe.Pointer(ipRow))); ret != 0 {
+		return fmt.Errorf("nonzero return code from CreateUnicastIpAddressEntry: %s, last err: %w", syscall.Errno(ret), err)
+	}
+	return nil
+}
+
+// deleteUnicastIpAddressEntry6 removes a unicast IPv6 address entry from local machine.
+func deleteUnicastIpAddressEntry6(ip net.IP, prefix uint8, index uint32) error {
+	logger.Infof("DeleteUnicastIpAddressEntry6 %v, with prefix %d on interface %d", ip, prefix, index)
+
+	ipRow, err := initIpRow6(ip, prefix, index)
+	if err != nil {
+		return fmt.Errorf("initialize MIB_UNICASTIPADDRESS_ROW failed: %w", err)
+	}
+
+	if ret, _, err := procDeleteUnicastIpAddressEntry.Call(uintptr(unsafe.Pointer(ipRow))); ret != 0 {
+		return fmt.Errorf("nonzero return code from DeleteUnicastIpAddressEntry: %s, last err: %w", syscall.Errno(ret), err)
+	}
+	return nil
 }
 
 func createUnicastIpAddressEntry(ip net.IP, prefix uint8, index uint32) error {

@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"reflect"
 	"testing"
 
@@ -211,6 +212,33 @@ func TestWsfcFlagTriggerAddressDiff(t *testing.T) {
 
 			if !diff {
 				t.Errorf("old: %v new: %v doesn't trigger diff.", tt.oldMetadata, tt.newMetadata)
+			}
+		})
+	}
+}
+
+func TestIsIPv6(t *testing.T) {
+	tests := []struct {
+		ip   net.IP
+		want bool
+		name string
+	}{
+		{
+			name: "valid_ipv4",
+			ip:   net.ParseIP("1.2.3.4"),
+			want: false,
+		},
+		{
+			name: "valid_ipv6",
+			ip:   net.ParseIP("fd20:b8f:5d95:2000:0:2::"),
+			want: true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := isIPv6(test.ip); got != test.want {
+				t.Errorf("isIPv6(%s) = %t, want %t", test.ip.String(), got, test.want)
 			}
 		})
 	}
