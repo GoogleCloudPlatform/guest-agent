@@ -58,9 +58,12 @@ The guest agent has the following behaviors:
     `google-sudoers` group.
 *   The daemon stores a file in the guest to record which user accounts are
     managed by Google.
-*   User accounts not managed by Google are not touched by the accounts daemon.
+*   User accounts not managed by the agent are not touched by the accounts daemon.
 *   The authorized keys file for a Google managed user is deleted when all SSH
     keys for the user are removed from metadata.
+*   Users accounts managed by the agent will be added to the `groups` config
+    line in the `Accounts` section. If these groups do not exist, the agent
+    will not create them.
 
 #### OS Login
 
@@ -78,6 +81,9 @@ otherwise called 'enabling' OS Login. This consists of:
 
 If the user disables OS login via metadata, the configuration changes will be
 removed.
+
+Note that options under the `Accounts` section of the configuration do not apply
+to oslogin users.
 
 #### Clock Skew
 
@@ -183,7 +189,7 @@ The following are valid user configuration options.
 Section           | Option                 | Value
 ----------------- | ---------------------- | -----
 Accounts          | deprovision\_remove    | `true` makes deprovisioning a user destructive.
-Accounts          | groups                 | Comma separated list of groups for newly provisioned users.
+Accounts          | groups                 | Comma separated list of groups for newly provisioned users created from metadata ssh keys.
 Accounts          | useradd\_cmd           | Command string to create a new user.
 Accounts          | userdel\_cmd           | Command string to delete a user.
 Accounts          | usermod\_cmd           | Command string to modify a user's groups.
