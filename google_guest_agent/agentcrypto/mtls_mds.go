@@ -19,6 +19,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"sync/atomic"
 	"time"
 
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/uefi"
@@ -52,7 +53,15 @@ var (
 
 // CredsJob implements job scheduler interface for generating/rotating credentials.
 type CredsJob struct {
+	// client is the client used for communicating with MDS.
 	client metadata.MDSClientInterface
+	// rootCertsInstalled tracks if MDS root certificates were installed successfully
+	// atleast once. This allows to skip unnecessary work of refreshing root certs
+	// which are updated only when instance stops/starts which will restart agent
+	// as well. Allowing refresh on agent restarts regardless of instance reboots allows
+	// to fix any issues encountered with root certificate without having to restart
+	// compute instance.
+	rootCertsInstalled atomic.Bool
 }
 
 // New initializer new job.
@@ -160,16 +169,19 @@ func (j *CredsJob) fetchClientCredentials(ctx context.Context, rootCA string) ([
 // $cert = Get-ChildItem Cert:\LocalMachine\My | Where-Object { $_.Issuer -like "*google.internal*" }
 // Invoke-RestMethod -Uri https://169.254.169.254 -Method Get -Headers @{"Metadata-Flavor"="Google"} -Certificate $cert
 func (j *CredsJob) Run(ctx context.Context) (bool, error) {
-	logger.Infof("Fetching Root CA cert...")
+	if !j.rootCertsInstalled.Load() {
+		logger.Infof("Fetching Root CA cert...")
+		v, err := j.readRootCACert(googleRootCACertUEFIVar)
+		if err != nil {
+			return true, fmt.Errorf("failed to read Root CA cert with an error: %w", err)
+		}
 
-	v, err := j.readRootCACert(googleRootCACertUEFIVar)
-	if err != nil {
-		return true, fmt.Errorf("failed to read Root CA cert with an error: %w", err)
+		if err := j.writeRootCACert(ctx, v.Content, filepath.Join(defaultCredsDir, rootCACertFileName)); err != nil {
+			return true, fmt.Errorf("failed to store Root CA cert with an error: %w", err)
+		}
 	}
-
-	if err := j.writeRootCACert(ctx, v.Content, filepath.Join(defaultCredsDir, rootCACertFileName)); err != nil {
-		return true, fmt.Errorf("failed to store Root CA cert with an error: %w", err)
-	}
+	// Set only when agent has atleast one successful run for installing root certs.
+	j.rootCertsInstalled.Store(true)
 
 	logger.Infof("Fetching client credentials...")
 
