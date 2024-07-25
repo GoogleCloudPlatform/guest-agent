@@ -494,7 +494,7 @@ func (n dhclient) Rollback(ctx context.Context, nics *Interfaces) error {
 
 	// Release all the interface leases from dhclient.
 	for _, iface := range googleInterfaces {
-		ipv4Exists, err := dhclientProcessExists(ctx, iface, ipv4);
+		ipv4Exists, err := dhclientProcessExists(ctx, iface, ipv4)
 		if err != nil {
 			return fmt.Errorf("error checking if ipv4 dhclient process for %s exists: %v", iface, err)
 		}
@@ -505,7 +505,7 @@ func (n dhclient) Rollback(ctx context.Context, nics *Interfaces) error {
 		}
 	}
 	for _, iface := range googleIpv6Interfaces {
-		ipv6Exists, err := dhclientProcessExists(ctx, iface, ipv6);
+		ipv6Exists, err := dhclientProcessExists(ctx, iface, ipv6)
 		if err != nil {
 			return fmt.Errorf("error checking if ipv6 dhclient process for %s exists: %v", iface, err)
 		}
