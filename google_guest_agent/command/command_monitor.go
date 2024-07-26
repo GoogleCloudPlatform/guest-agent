@@ -25,9 +25,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"os"
+	"reflect"
+	"regexp"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -61,6 +65,7 @@ func Init(ctx context.Context) {
 		logger.Errorf("could not parse command_pipe_mode as octal integer: %v falling back to mode 0770", err)
 		pipemode = 0770
 	}
+	cmdMonitor.RegisterHandler("agent.config.getoption", getOption)
 	cmdMonitor.srv = &Server{
 		pipe:      pipe,
 		pipeMode:  int(pipemode),
@@ -225,4 +230,56 @@ func (c *Server) start(ctx context.Context) error {
 	}()
 	c.srv = srv
 	return nil
+}
+
+// GetOptionRequest is a request to get a config value by name. Guest agent
+// code should use the cfg package, this is intended for use outside of the
+// agent by the guest environment.
+type getOptionRequest struct {
+	Request
+	Option string
+}
+
+// GetOptionRequest is a response to a GetOptionRequest with the config value.
+type getOptionResponse struct {
+	Response
+	Option string
+	Value  string
+}
+
+// GetOption processes GetOptionRequests encoded as json coming from the
+// command monitor.
+func getOption(b []byte) ([]byte, error) {
+	var req getOptionRequest
+	if err := json.Unmarshal(b, &req); err != nil {
+		return nil, err
+	}
+	var resp getOptionResponse
+	resp.Option = req.Option
+	if req.Option == "" {
+		resp.Status = 2
+		resp.StatusMessage = "No option specified"
+		return json.Marshal(resp)
+	}
+	var opt any
+	opt = cfg.Get()
+	for _, k := range strings.Split(resp.Option, ".") {
+		if len(k) < 1 {
+			continue
+		}
+		if !regexp.MustCompile("^[A-Z]").MatchString(k) {
+			resp.Status = 3
+			resp.StatusMessage = "Invalid option, key names must start with uppercase"
+			return json.Marshal(resp)
+		}
+		field := reflect.Indirect(reflect.ValueOf(opt)).FieldByName(k)
+		if !field.IsValid() {
+			resp.Status = 1
+			resp.StatusMessage = "Option does not exist"
+			return json.Marshal(resp)
+		}
+		opt = field.Interface()
+	}
+	resp.Value = fmt.Sprintf("%v", opt)
+	return json.Marshal(resp)
 }
