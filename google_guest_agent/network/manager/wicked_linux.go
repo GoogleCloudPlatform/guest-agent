@@ -55,7 +55,7 @@ func (n wicked) Name() string {
 
 // Configure gives the opportunity for the Service implementation to adjust its configuration
 // based on the Guest Agent configuration.
-func (n wicked) Configure(ctx context.Context, config *cfg.Sections) {
+func (n *wicked) Configure(ctx context.Context, config *cfg.Sections) {
 	wickedCommand, err := exec.LookPath("wicked")
 	if err != nil {
 		logger.Infof("failed to find wicked path, falling back to default: %+v", err)

@@ -40,10 +40,16 @@ type mockService struct {
 
 	// managingError indicates whether isManaging() should return an error.
 	managingError bool
+
+	// rollbackError indicates whether Rollback() should return an error.
+	rollbackError bool
+
+	// rolledBack indicates whether the network config was rolled back
+	rolledBack bool
 }
 
 // Name implements the Service interface.
-func (n mockService) Name() string {
+func (n *mockService) Name() string {
 	if n.isFallback {
 		return "fallback"
 	}
@@ -52,11 +58,11 @@ func (n mockService) Name() string {
 
 // Configure gives the opportunity for the Service implementation to adjust its configuration
 // based on the Guest Agent configuration.
-func (n mockService) Configure(ctx context.Context, config *cfg.Sections) {
+func (n *mockService) Configure(context.Context, *cfg.Sections) {
 }
 
 // IsManaging implements the Service interface.
-func (n mockService) IsManaging(ctx context.Context, iface string) (bool, error) {
+func (n *mockService) IsManaging(context.Context, string) (bool, error) {
 	if n.managingError {
 		return false, fmt.Errorf("mock error")
 	}
@@ -64,17 +70,21 @@ func (n mockService) IsManaging(ctx context.Context, iface string) (bool, error)
 }
 
 // SetupEthernetInterface implements the Service interface.
-func (n mockService) SetupEthernetInterface(ctx context.Context, config *cfg.Sections, nics *Interfaces) error {
+func (n *mockService) SetupEthernetInterface(context.Context, *cfg.Sections, *Interfaces) error {
 	return nil
 }
 
 // SetupVlanInterface implements the Service interface.
-func (n mockService) SetupVlanInterface(ctx context.Context, config *cfg.Sections, nics *Interfaces) error {
+func (n *mockService) SetupVlanInterface(context.Context, *cfg.Sections, *Interfaces) error {
 	return nil
 }
 
 // Rollback implements the Service interface.
-func (n mockService) Rollback(ctx context.Context, nics *Interfaces) error {
+func (n *mockService) Rollback(context.Context, *Interfaces) error {
+	n.rolledBack = true
+	if n.rollbackError {
+		return fmt.Errorf("mock error")
+	}
 	return nil
 }
 
@@ -109,7 +119,7 @@ func TestDetectNetworkManager(t *testing.T) {
 		name string
 
 		// managers are the list of mock services to register.
-		services []mockService
+		services []*mockService
 
 		// expectedManager is the manager expected to be returned.
 		expectedManager mockService
@@ -123,7 +133,7 @@ func TestDetectNetworkManager(t *testing.T) {
 		// Base test case testing if it works.
 		{
 			name: "no-error",
-			services: []mockService{
+			services: []*mockService{
 				{
 					isFallback: false,
 					isManaging: true,
@@ -142,7 +152,7 @@ func TestDetectNetworkManager(t *testing.T) {
 		// Test if an error is returned if no network manager is found.
 		{
 			name: "no-manager-found",
-			services: []mockService{
+			services: []*mockService{
 				{
 					isFallback: false,
 					isManaging: false,
@@ -158,7 +168,7 @@ func TestDetectNetworkManager(t *testing.T) {
 		// Test if an error is returned if IsManaging() fails.
 		{
 			name: "is-managing-fail",
-			services: []mockService{
+			services: []*mockService{
 				{
 					isFallback:    false,
 					managingError: true,
@@ -174,7 +184,7 @@ func TestDetectNetworkManager(t *testing.T) {
 		// Test if the fallback service is returned if all other services are not detected.
 		{
 			name: "fallback",
-			services: []mockService{
+			services: []*mockService{
 				{
 					isFallback: false,
 					isManaging: false,
@@ -231,62 +241,77 @@ func TestDetectNetworkManager(t *testing.T) {
 				t.Fatalf("no error returned when error expected, expected error: %s", test.expectedErrorMessage)
 			}
 
-			if activeService.manager != test.expectedManager {
+			if *activeService.manager.(*mockService) != test.expectedManager {
 				t.Fatalf("did not get expected network manager. Expected: %v, Actual: %v", test.expectedManager, activeService)
 			}
 		})
 	}
 }
 
-// TestFindOSRule tests whether findOSRule() correctly returns the expected values
-// depending on whether a matching rule exists or not.
-func TestFindOSRule(t *testing.T) {
+// TestRollbackToDefault ensures that all network managers are rolled back,
+// including the active manager.
+func TestFallbackToDefault(t *testing.T) {
 	managerTestSetup()
+	ctx := context.Background()
 
-	tests := []struct {
-		// name is the name of the test.
-		name string
-
-		// rules are mock OSConfig rules.
-		rules []osConfigRule
-
-		// expectedNil indicates to expect a nil return when set to true.
-		expectedNil bool
-	}{
-		// ignoreRule exists.
-		{
-			name: "ignore-exist",
-			rules: []osConfigRule{
-				{
-					osNames: []string{"test"},
-					majorVersions: map[int]bool{
-						testOSVersion: true,
-					},
-					action: osConfigAction{},
-				},
-			},
-			expectedNil: false,
+	prevKnownNetworkManager := knownNetworkManagers
+	t.Cleanup(func() {
+		knownNetworkManagers = prevKnownNetworkManager
+	})
+	knownNetworkManagers = []Service{
+		&mockService{
+			isManaging: true,
 		},
-		// ignoreRule does not exist.
-		{
-			name: "ignore-no-exist",
-			rules: []osConfigRule{
-				{
-					osNames: []string{"non-test"},
-					majorVersions: map[int]bool{
-						0: true,
-					},
-					action: osConfigAction{},
-				},
-			},
-			expectedNil: true,
+		&mockService{
+			isManaging:    true,
+			rollbackError: true,
+		},
+		&mockService{
+			isManaging: false,
 		},
 	}
 
-	// Run the tests.
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			managerTestSetup()
-		})
+	if err := FallbackToDefault(ctx); err != nil {
+		t.Fatalf("FallbackToDefault(ctx) = %v, want nil", err)
+	}
+
+	for i, svc := range knownNetworkManagers {
+		if !svc.(*mockService).rolledBack {
+			t.Errorf("knownNetworkManagers[%d].rolledBack = %t, want true", i, svc.(*mockService).rolledBack)
+		}
+	}
+}
+
+func TestBuildInterfacesFromAllPhysicalNICs(t *testing.T) {
+	nics, err := buildInterfacesFromAllPhysicalNICs()
+	if err != nil {
+		t.Fatalf("buildInterfacesFromAllPhysicalNICs() = %v, want nil", err)
+	}
+
+	for _, nic := range nics.EthernetInterfaces {
+		if _, err := GetInterfaceByMAC(nic.Mac); err != nil {
+			t.Errorf("GetInterfaceByMAC(%q) = %v, want nil)", nic.Mac, err)
+		}
+	}
+}
+
+func TestShouldManageInterface(t *testing.T) {
+	if err := cfg.Load(nil); err != nil {
+		t.Fatalf("cfg.Load(nil) = %v, want nil", err)
+	}
+	if shouldManageInterface(true) {
+		t.Error("with default config, shouldManageInterface(isPrimary = true) = true, want false")
+	}
+	if !shouldManageInterface(false) {
+		t.Error("with default config, shouldManageInterface(isPrimary = false) = false, want true")
+	}
+	if err := cfg.Load([]byte("[NetworkInterfaces]\nmanage_primary_nic=true")); err != nil {
+		t.Fatalf("cfg.Load(%q) = %v, want nil", "[NetworkInterfaces]\nmanage_primary_nic=true", err)
+	}
+	if !shouldManageInterface(true) {
+		t.Error("with manage_primary_nic=false, shouldManageInterface(isPrimary = true) = false, want true")
+	}
+	if !shouldManageInterface(false) {
+		t.Error("with manage_primary_nic=false, shouldManageInterface(isPrimary = false) = false, want true")
 	}
 }

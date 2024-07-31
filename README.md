@@ -214,6 +214,7 @@ MetadataScripts   | startup                | `false` disables startup script exe
 MetadataScripts   | shutdown               | `false` disables shutdown script execution.
 NetworkInterfaces | setup                  | `false` skips network interface setup.
 NetworkInterfaces | ip\_forwarding         | `false` skips IP forwarding.
+NetworkInterfaces | manage\_primary\_nic   | `true` will start managing the primary NIC in addition to the secondary NICs.
 NetworkInterfaces | dhcp\_command          | String path for alternate dhcp executable used to enable network interfaces.
 OSLogin           | cert_authentication    | `false` prevents guest-agent from setting up sshd's `TrustedUserCAKeys`, `AuthorizedPrincipalsCommand` and `AuthorizedPrincipalsCommandUser` configuration keys. Default value: `true`.
 

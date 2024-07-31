@@ -25,6 +25,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/osinfo"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/ps"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/run"
@@ -135,6 +136,9 @@ type dhclientProcessOpts struct {
 // dhclientTestSetup sets up the test.
 func dhclientTestSetup(t *testing.T, opts dhclientTestOpts) {
 	t.Helper()
+	if err := cfg.Load(nil); err != nil {
+		t.Fatalf("cfg.Load(nil) = %v, nil", err)
+	}
 
 	// We have to mock dhclientProcessExists as we cannot mock where the ps
 	// package checks for processes here.
@@ -276,42 +280,42 @@ func TestPartitionInterfaces(t *testing.T) {
 	}{
 		{
 			name:                "all-ipv4",
-			testInterfaces:      []string{"obtain1", "obtain2"},
+			testInterfaces:      []string{"primary1", "obtain2"},
 			testIpv6Interfaces:  []string{},
 			existFlags:          []bool{false, false},
 			ipVersions:          []ipVersion{ipv4, ipv4},
-			expectedObtainIpv4:  []string{"obtain1", "obtain2"},
+			expectedObtainIpv4:  []string{"obtain2"},
 			expectedObtainIpv6:  []string{},
 			expectedReleaseIpv6: []string{},
 		},
 		{
 			name:                "all-ipv6",
-			testInterfaces:      []string{"obtain1", "obtain2"},
-			testIpv6Interfaces:  []string{"obtain1", "obtain2"},
+			testInterfaces:      []string{"primary1", "obtain2"},
+			testIpv6Interfaces:  []string{"primary1", "obtain2"},
 			existFlags:          []bool{false, false},
 			ipVersions:          []ipVersion{ipv6, ipv6},
-			expectedObtainIpv4:  []string{"obtain1", "obtain2"},
-			expectedObtainIpv6:  []string{"obtain1", "obtain2"},
+			expectedObtainIpv4:  []string{"obtain2"},
+			expectedObtainIpv6:  []string{"obtain2"},
 			expectedReleaseIpv6: []string{},
 		},
 		{
 			name:                "ipv4-ipv6",
-			testInterfaces:      []string{"obtain1", "obtain2"},
+			testInterfaces:      []string{"primary1", "obtain2"},
 			testIpv6Interfaces:  []string{"obtain2"},
 			existFlags:          []bool{false, false},
 			ipVersions:          []ipVersion{ipv4, ipv6},
-			expectedObtainIpv4:  []string{"obtain1", "obtain2"},
+			expectedObtainIpv4:  []string{"obtain2"},
 			expectedObtainIpv6:  []string{"obtain2"},
 			expectedReleaseIpv6: []string{},
 		},
 		{
 			name:                "release-ipv6",
-			testInterfaces:      []string{"obtain1", "release1"},
-			testIpv6Interfaces:  []string{"obtain1"},
+			testInterfaces:      []string{"primary1", "release1"},
+			testIpv6Interfaces:  []string{"primary1"},
 			existFlags:          []bool{false, true},
 			ipVersions:          []ipVersion{ipv4, ipv6},
-			expectedObtainIpv4:  []string{"obtain1", "release1"},
-			expectedObtainIpv6:  []string{"obtain1"},
+			expectedObtainIpv4:  []string{"release1"},
+			expectedObtainIpv6:  []string{},
 			expectedReleaseIpv6: []string{"release1"},
 		},
 	}

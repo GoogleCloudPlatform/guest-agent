@@ -18,7 +18,7 @@ func init() {
 	// knownNetworkManagers is a list of supported/available network managers.
 	knownNetworkManagers = []Service{
 		&netplan{
-			netplanConfigDir:  "/etc/netplan/",
+			netplanConfigDir:  "/run/netplan/",
 			networkdDropinDir: "/etc/systemd/network/",
 			priority:          20,
 		},
