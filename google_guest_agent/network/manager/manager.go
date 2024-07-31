@@ -19,6 +19,7 @@ package manager
 import (
 	"context"
 	"fmt"
+	"net"
 
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/osinfo"
@@ -68,28 +69,6 @@ type Interfaces struct {
 	VlanInterfaces map[int]metadata.VlanInterface
 }
 
-// osConfigRule describes matching rules for OS's, used for specifying either
-// network interfaces to ignore during setup or native config hookups.
-type osConfigRule struct {
-	// osNames is a list of OS's names matching the rule (as described by osInfo)
-	osNames []string
-
-	// majorVersions is a map of this OS's versions to ignore.
-	majorVersions map[int]bool
-
-	// action defines what action or exception to perform for this rule.
-	action osConfigAction
-}
-
-// osConfigAction defines the action to be taken in an osConfigRule.
-type osConfigAction struct {
-	// ignorePrimary determines whether to ignore the primary network interface.
-	ignorePrimary bool
-
-	// ignoreSecondary determines whether to ignore all non-primary network interfaces.
-	ignoreSecondary bool
-}
-
 // guestAgentSection is the section added to guest-agent-written ini files to indicate
 // that the ini file is managed by the agent.
 type guestAgentSection struct {
@@ -131,9 +110,9 @@ func detectNetworkManager(ctx context.Context, iface string) (*serviceStatus, er
 	return nil, fmt.Errorf("no network manager impl found for %s", iface)
 }
 
-// SetupInterfaces sets up all the network interfaces on the system, applying rules described
-// by osRules and using the native network manager service detected to be managing the primary
-// network interface.
+// SetupInterfaces sets up all secondary network interfaces on the system, and primary network
+// interface if enabled in the configuration using the native network manager service detected
+// to be managing the primary network interface.
 func SetupInterfaces(ctx context.Context, config *cfg.Sections, mds *metadata.Descriptor) error {
 	// User may have disabled network interface setup entirely.
 	if !config.NetworkInterfaces.Setup {
@@ -194,4 +173,57 @@ func SetupInterfaces(ctx context.Context, config *cfg.Sections, mds *metadata.De
 	logger.Infof("Finished setting up %s", activeService.manager.Name())
 
 	return nil
+}
+
+// FallbackToDefault will attempt to rescue broken networking by rolling back
+// all guest-agent modifications to the network configuration.
+func FallbackToDefault(ctx context.Context) error {
+	nics, err := buildInterfacesFromAllPhysicalNICs()
+	if err != nil {
+		return fmt.Errorf("could not build list of NICs for fallback: %v", err)
+	}
+
+	// Rollback every NIC with every known network manager.
+	for _, svc := range knownNetworkManagers {
+		logger.Infof("Rolling back %s", svc.Name())
+		if err := svc.Rollback(ctx, nics); err != nil {
+			logger.Errorf("Failed to roll back config for %s: %v", svc.Name(), err)
+		}
+	}
+
+	return nil
+}
+
+// Build a *Interfaces from all physical interfaces rather than the MDS.
+func buildInterfacesFromAllPhysicalNICs() (*Interfaces, error) {
+	nics := &Interfaces{
+		EthernetInterfaces: nil,
+		VlanInterfaces:     map[int]metadata.VlanInterface{},
+	}
+
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get interfaces: %v", err)
+	}
+
+	for _, iface := range interfaces {
+		mac := iface.HardwareAddr.String()
+		if mac == "" {
+			continue
+		}
+		nics.EthernetInterfaces = append(nics.EthernetInterfaces, metadata.NetworkInterfaces{
+			Mac: mac,
+		})
+	}
+
+	return nics, nil
+}
+
+// shouldManageInterface returns whether the guest agent should manage an interface
+// provided whether the interface of interest is the primary interface or not.
+func shouldManageInterface(isPrimary bool) bool {
+	if isPrimary {
+		return cfg.Get().NetworkInterfaces.ManagePrimaryNIC
+	}
+	return true
 }

@@ -27,6 +27,7 @@ import (
 
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/agentcrypto"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
+	network "github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/network/manager"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/run"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/scheduler"
 	"github.com/GoogleCloudPlatform/guest-agent/retry"
@@ -157,7 +158,17 @@ func agentInit(ctx context.Context) {
 			newMetadata, err = mdsClient.Get(ctx)
 			if err != nil {
 				logger.Errorf("Failed to reach MDS(all retries exhausted): %+v", err)
-				os.Exit(1)
+				logger.Infof("Falling to OS default network configuration to attempt to recover.")
+				if err := network.FallbackToDefault(ctx); err != nil {
+					// Just log error and attempt to continue anyway, if we can't reach MDS
+					// we can't do anything.
+					logger.Errorf("Failed to rollback guest-agent network configuration: %v", err)
+				}
+				newMetadata, err = mdsClient.Get(ctx)
+				if err != nil {
+					logger.Errorf("Failed to reach MDS after attempt to recover network configuration(all retries exhausted): %+v", err)
+					os.Exit(1)
+				}
 			}
 		}
 

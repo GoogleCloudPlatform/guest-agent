@@ -425,7 +425,12 @@ func partitionInterfaces(ctx context.Context, interfaces, ipv6Interfaces []strin
 	var obtainIpv6Interfaces []string
 	var releaseIpv6Interfaces []string
 
-	for _, iface := range interfaces {
+	for i, iface := range interfaces {
+		if !shouldManageInterface(i == 0) {
+			// Do not setup anything for this interface to avoid duplicate processes.
+			continue
+		}
+
 		// Check for IPv4 interfaces for which to obtain a lease.
 		processExists, err := dhclientProcessExists(ctx, iface, ipv4)
 		if err != nil {

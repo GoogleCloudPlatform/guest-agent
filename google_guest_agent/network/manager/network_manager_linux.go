@@ -256,5 +256,8 @@ func (n networkManager) Rollback(ctx context.Context, nics *Interfaces) error {
 		}
 	}
 
+	if err := run.Quiet(ctx, "nmcli", "conn", "reload"); err != nil {
+		return fmt.Errorf("error reloading NetworkManager config cache: %v", err)
+	}
 	return nil
 }
