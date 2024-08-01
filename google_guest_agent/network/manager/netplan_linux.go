@@ -154,7 +154,7 @@ func (n netplan) IsManaging(ctx context.Context, iface string) (bool, error) {
 		if errors.Is(err, exec.ErrNotFound) {
 			return false, nil
 		}
-		return false, fmt.Errorf("error looking up dhclient path: %v", err)
+		return false, fmt.Errorf("error looking up netplan path: %v", err)
 	}
 	return true, nil
 }
@@ -186,7 +186,7 @@ func (n netplan) SetupEthernetInterface(ctx context.Context, config *cfg.Section
 		return fmt.Errorf("error reloading systemd-networkd network configs: %v", err)
 	}
 
-	// Avoid restarting systemd-networkd.
+	// Avoid restarting netplan.
 	if err := run.Quiet(ctx, "netplan", "apply"); err != nil {
 		return fmt.Errorf("error applying netplan changes: %w", err)
 	}
