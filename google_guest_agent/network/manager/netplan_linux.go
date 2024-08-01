@@ -97,7 +97,7 @@ type netplanEthernet struct {
 type netplanDHCPOverrides struct {
 	// When true, the domain name received from the DHCP server will be used as DNS
 	// search domain over this link.
-	UseDomains bool `yaml:"use-domains,omitempty"`
+	UseDomains *bool `yaml:"use-domains,omitempty"`
 }
 
 // netplanMatch contains the keys uses to match an interface.
@@ -207,6 +207,9 @@ func (n netplan) writeNetworkdDropin(interfaces, ipv6Interfaces []string) error 
 	}
 
 	for i, iface := range interfaces {
+		if !shouldManageInterface(i == 0) {
+			continue
+		}
 		logger.Debugf("writing systemd-networkd drop-in config for %s", iface)
 
 		var dhcp = "ipv4"
@@ -274,6 +277,12 @@ func (nd networkdNetplanDropin) write(n netplan, iface string) error {
 	return nil
 }
 
+// shouldUseDomains returns true if interface index is 0.
+func shouldUseDomains(idx int) *bool {
+	res := idx == 0
+	return &res
+}
+
 // writeNetplanEthernetDropin selects the ethernet configuration, transforms it
 // into a netplan dropin format and writes it down to the netplan's drop-in directory.
 func (n netplan) writeNetplanEthernetDropin(mtuMap map[string]int, interfaces, ipv6Interfaces []string) error {
@@ -295,7 +304,7 @@ func (n netplan) writeNetplanEthernetDropin(mtuMap map[string]int, interfaces, i
 			Match:  netplanMatch{Name: iface},
 			DHCPv4: &trueVal,
 			DHCP4Overrides: &netplanDHCPOverrides{
-				UseDomains: (i == 0),
+				UseDomains: shouldUseDomains(i),
 			},
 		}
 
@@ -306,7 +315,7 @@ func (n netplan) writeNetplanEthernetDropin(mtuMap map[string]int, interfaces, i
 		if slices.Contains(ipv6Interfaces, iface) {
 			ne.DHCPv6 = &trueVal
 			ne.DHCP6Overrides = &netplanDHCPOverrides{
-				UseDomains: (i == 0),
+				UseDomains: shouldUseDomains(i),
 			}
 		}
 
