@@ -63,7 +63,12 @@ func writeFile(ctx context.Context, evType string, data interface{}, evData *eve
 	}
 
 	// Make sure we close the pipe after we've done writing to it.
-	pipeData := evData.Data.(*sshtrustedca.PipeData)
+	pipeData, ok := evData.Data.(*sshtrustedca.PipeData)
+	if !ok {
+		logger.Errorf("Received invalid event data (%+v), ignoring this event and un-subscribing %s", evData.Data, evType)
+		return false
+	}
+
 	defer func() {
 		if err := pipeData.File.Close(); err != nil {
 			logger.Errorf("Failed to close pipe: %+v", err)

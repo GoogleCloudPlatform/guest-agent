@@ -20,6 +20,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -78,7 +79,7 @@ func (mp *Watcher) setWaitingWrite(val bool) {
 
 // Run listens to ssh_trusted_ca's pipe open calls and report back the event.
 func (mp *Watcher) Run(ctx context.Context, evType string) (bool, interface{}, error) {
-	var canceled bool
+	var canceled atomic.Bool
 
 	for mp.isWaitingWrite() {
 		time.Sleep(10 * time.Millisecond)
@@ -95,7 +96,7 @@ func (mp *Watcher) Run(ctx context.Context, evType string) (bool, interface{}, e
 		case <-cancelContext:
 			break
 		case <-ctx.Done():
-			canceled = true
+			canceled.Store(true)
 
 			// Open the pipe as O_RDONLY to release the blocking open O_WRONLY.
 			pipeFile, err := os.OpenFile(mp.pipePath, os.O_RDONLY, 0644)
@@ -127,7 +128,7 @@ func (mp *Watcher) Run(ctx context.Context, evType string) (bool, interface{}, e
 
 	// Have we got a ctx.Done()? if so lets just return from here and unregister
 	// the watcher.
-	if canceled {
+	if canceled.Load() {
 		if err := pipeFile.Close(); err != nil {
 			logger.Errorf("Failed to close readonly pipe: %+v", err)
 		}
