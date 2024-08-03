@@ -10,7 +10,6 @@ require (
 	github.com/Microsoft/go-winio v0.6.1
 	github.com/go-ini/ini v1.66.6
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da
-	github.com/golang/protobuf v1.5.3
 	github.com/google/go-cmp v0.5.9
 	github.com/google/go-tpm v0.9.0
 	github.com/google/go-tpm-tools v0.4.0
@@ -34,6 +33,7 @@ require (
 	cloud.google.com/go/iam v1.1.1 // indirect
 	cloud.google.com/go/logging v1.7.0 // indirect
 	cloud.google.com/go/longrunning v0.5.1 // indirect
+	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/google/go-sev-guest v0.7.0 // indirect
 	github.com/google/logger v1.1.1 // indirect
 	github.com/google/s2a-go v0.1.4 // indirect

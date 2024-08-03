@@ -16,6 +16,8 @@ syntax = "proto3";
 
 package cloud.vmm;
 
+option go_package = "/cloud_vmm";
+
 enum OperationType {
   NOT_SET = 0;
   PRE_SNAPSHOT = 1;

@@ -23,7 +23,7 @@ import (
 	"time"
 
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/run"
-	sspb "github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/snapshot_service"
+	sspb "github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/snapshot_service/cloud_vmm"
 	"github.com/GoogleCloudPlatform/guest-agent/retry"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 	"github.com/golang/groupcache/lru"
