@@ -21,6 +21,7 @@ import (
 	"os/exec"
 	"path/filepath"
 
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/run"
 	"github.com/GoogleCloudPlatform/guest-agent/utils"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
@@ -57,6 +58,11 @@ func (j *CredsJob) writeRootCACert(ctx context.Context, content []byte, outputFi
 	}
 	if err := utils.SaferWriteFile(content, outputFile, 0644); err != nil {
 		return err
+	}
+
+	if !cfg.Get().MDS.UpdateCACertificatesEnabled {
+		logger.Debugf("Skipping system store update as it is disabled in the configuration")
+		return nil
 	}
 
 	// Best effort to update system store, don't fail.
