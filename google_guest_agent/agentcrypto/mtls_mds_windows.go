@@ -25,6 +25,7 @@ import (
 	"syscall"
 	"unsafe"
 
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
 	"github.com/GoogleCloudPlatform/guest-agent/utils"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 	"golang.org/x/sys/windows"
@@ -67,6 +68,11 @@ func (j *CredsJob) writeRootCACert(_ context.Context, cacert []byte, outputFile 
 
 	if err := utils.SaferWriteFile(cacert, outputFile, 0644); err != nil {
 		return err
+	}
+
+	if !cfg.Get().MDS.UpdateCACertificatesEnabled {
+		logger.Debugf("Skipping system store update as it is disabled in the configuration")
+		return nil
 	}
 
 	x509Cert, err := parseCertificate(cacert)

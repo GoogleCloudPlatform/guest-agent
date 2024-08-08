@@ -41,6 +41,9 @@ const (
 	unixConfigPath = `/etc/default/instance_configs.cfg`
 
 	defaultConfig = `
+[Core]
+cloud_logging_enabled = true
+
 [Accounts]
 deprovision_remove = false
 gpasswd_add_cmd = gpasswd -a {user} {group}
@@ -93,6 +96,7 @@ cert_authentication = true
 
 [MDS]
 mtls_bootstrapping_enabled = true
+cacertificates_update_enabled = true
 
 [Snapshots]
 enabled = false
@@ -108,8 +112,19 @@ command_request_timeout = 10s
 `
 )
 
+// Core contains the core configuration entries of guest agent, all
+// configurations not tied/specific to a subsystem are defined in here.
+type Core struct {
+	// CloudLoggingEnabled config toggle controls Guest Agent cloud logger.
+	// Disabling it will stop Guest Agent for configuring and logging to Cloud Logging.
+	CloudLoggingEnabled bool `ini:"cloud_logging_enabled,omitempty"`
+}
+
 // Sections encapsulates all the configuration sections.
 type Sections struct {
+	// Core defines the core guest-agent's configuration entries/keys.
+	Core *Core `ini:"Core,omitempty"`
+
 	// AccountManager defines the address management configurations. It takes precedence over instance's
 	// and project's metadata configuration. The default configuration doesn't define values to it, if the
 	// user has defined it then we shouldn't even consider metadata values. Users must check if this
@@ -254,6 +269,9 @@ type OSLogin struct {
 type MDS struct {
 	// MTLSBootstrappingEnabled enables/disables the mTLS credential refresher.
 	MTLSBootstrappingEnabled bool `ini:"mtls_bootstrapping_enabled,omitempty"`
+	// UpdateCACertificatesEnabled enables/disables any updates to the CA certificates.
+	// These updates are done using tools like update-ca-certificates or similar.
+	UpdateCACertificatesEnabled bool `ini:"cacertificates_update_enabled,omitempty"`
 }
 
 // NetworkInterfaces contains the configurations of NetworkInterfaces section.
