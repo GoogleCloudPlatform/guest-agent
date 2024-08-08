@@ -94,6 +94,7 @@ cert_authentication = true
 
 [MDS]
 mtls_bootstrapping_enabled = true
+cacertificates_update_enabled = true
 
 [Snapshots]
 enabled = false
@@ -257,6 +258,9 @@ type OSLogin struct {
 type MDS struct {
 	// MTLSBootstrappingEnabled enables/disables the mTLS credential refresher.
 	MTLSBootstrappingEnabled bool `ini:"mtls_bootstrapping_enabled,omitempty"`
+	// UpdateCACertificatesEnabled enables/disables any updates to the CA certificates.
+	// These updates are done using tools like update-ca-certificates or similar.
+	UpdateCACertificatesEnabled bool `ini:"cacertificates_update_enabled,omitempty"`
 }
 
 // NetworkInterfaces contains the configurations of NetworkInterfaces section.
