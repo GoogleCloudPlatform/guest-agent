@@ -20,11 +20,16 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/fakes"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/uefi"
 )
 
 func TestReadAndWriteRootCACert(t *testing.T) {
+	if err := cfg.Load(nil); err != nil {
+		t.Fatalf("Failed to load config: %v", err)
+	}
+	ctx := context.Background()
 	root := t.TempDir()
 	v := uefi.VariableName{Name: "testname", GUID: "testguid", RootDir: root}
 	j := &CredsJob{}
@@ -44,16 +49,35 @@ func TestReadAndWriteRootCACert(t *testing.T) {
 		t.Errorf("readRootCACert(%+v) failed unexpectedly with error: %v", v, err)
 	}
 
-	if err := j.writeRootCACert(context.Background(), ca.Content, crt); err != nil {
-		t.Errorf("writeRootCACert(%s, %s) failed unexpectedly with error: %v", string(ca.Content), crt, err)
+	tests := []struct {
+		name    string
+		enabled bool
+	}{
+		{
+			name:    "update_ca_certs_enabled",
+			enabled: true,
+		},
+		{
+			name:    "update_ca_certs_disabled",
+			enabled: false,
+		},
 	}
 
-	got, err := os.ReadFile(crt)
-	if err != nil {
-		t.Errorf("Failed to read expected root cert file: %v", err)
-	}
-	if string(got) != validCertPEM {
-		t.Errorf("readAndWriteRootCACert(%+v, %s) = %s, want %s", v, crt, string(got), validCertPEM)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg.Get().MDS.UpdateCACertificatesEnabled = tc.enabled
+			if err := j.writeRootCACert(ctx, ca.Content, crt); err != nil {
+				t.Errorf("writeRootCACert(%s, %s) failed unexpectedly with error: %v", string(ca.Content), crt, err)
+			}
+
+			got, err := os.ReadFile(crt)
+			if err != nil {
+				t.Errorf("Failed to read expected root cert file: %v", err)
+			}
+			if string(got) != validCertPEM {
+				t.Errorf("readAndWriteRootCACert(%+v, %s) = %s, want %s", v, crt, string(got), validCertPEM)
+			}
+		})
 	}
 }
 
