@@ -226,14 +226,17 @@ func (n wicked) writeEthernetConfigs(ifaces []string) error {
 	// Write the config for all the non-primary network interfaces.
 	for _, iface := range ifaces {
 		logger.Debugf("write enabling ifcfg-%s config", iface)
+		ifcfg := n.ifcfgFilePath(iface)
 
-		var ifcfg *os.File
-
-		ifcfg, err := os.Create(n.ifcfgFilePath(iface))
-		if err != nil {
-			return err
+		// Avoid writing the configuration file if the configuration already exists.
+		if _, err := os.Stat(ifcfg); err != nil {
+			if os.IsNotExist(err) {
+				logger.Debugf("%s already exists, skipping", ifcfg)
+				continue
+			}
+			return fmt.Errorf("error getting config file %s: %v", ifcfg, err)
 		}
-		defer ifcfg.Close()
+
 		contents := []string{
 			googleComment,
 			"STARTMODE=hotplug",
@@ -241,8 +244,10 @@ func (n wicked) writeEthernetConfigs(ifaces []string) error {
 			"BOOTPROTO=dhcp",
 			fmt.Sprintf("DHCLIENT_ROUTE_PRIORITY=%d", priority),
 		}
-		_, err = ifcfg.WriteString(strings.Join(contents, "\n"))
-		if err != nil {
+		contentBytes := []byte(strings.Join(contents, "\n"))
+
+		// Write the file.
+		if err := os.WriteFile(ifcfg, contentBytes, 0644); err != nil {
 			return fmt.Errorf("error writing config file for %s: %v", iface, err)
 		}
 		priority += 100

@@ -204,14 +204,17 @@ func (n networkManager) writeNetworkManagerConfigs(ifaces []string) ([]string, e
 			return []string{}, fmt.Errorf("error updating permissions for %s connection config: %v", iface, err)
 		}
 
+		// Clean up the files written by the old agent. Make sure they're managed
+		// by the agent before deleting them.
 		ifcfgFilePath := n.ifcfgFilePath(iface)
-		_, err := os.Stat(ifcfgFilePath)
-		if err != nil {
-			if !os.IsNotExist(err) {
-				return nil, fmt.Errorf("failed to stat ifcfg file(%s): %v", ifcfgFilePath, err)
-			}
-		} else {
-			if err := os.Remove(ifcfgFilePath); err != nil {
+		contents, err := os.ReadFile(ifcfgFilePath)
+		if err != nil && !os.IsNotExist(err) {
+			return nil, fmt.Errorf("failed to read ifcfg file(%s): %v", ifcfgFilePath, err)
+		}
+
+		// Check for the google comment.
+		if strings.Contains(string(contents), "# Added by Google Compute Engine OS Login.") {
+			if err = os.Remove(ifcfgFilePath); err != nil {
 				return nil, fmt.Errorf("failed to remove previously managed ifcfg file(%s): %v", ifcfgFilePath, err)
 			}
 		}
