@@ -15,6 +15,7 @@ on Windows and Linux GCE VMs in order to enable GCE platform features.
     * [Windows Failover Cluster Support](#windows-failover-cluster-support)
     * [Instance Setup](#instance-setup)
     * [Telemetry](#telemetry)
+    * [MTLS MDS](#mtls-mds)
 * [Metadata Scripts](#metadata-scripts)
 * [Configuration](#configuration)
 * [Packaging](#packaging)
@@ -151,6 +152,54 @@ then once every 24 hours.
 
 Telemetry can be disabled by setting the metadata key `disable-guest-telemetry`
 to `true`.
+
+#### MTLS MDS
+
+GCE [Shielded VMs](https://cloud.google.com/compute/shielded-vm/docs/shielded-vm)
+now support HTTPS endpoint `https://metadata.google.internal/computeMetadata/v1`
+for Metadata Server. To enable communication with secure HTTPS endpoint, Guest Agent 
+retrieves and stores credentials on the VM's disk in a standard location, making them 
+accessible to any client application running on the VM. Both the root certificate 
+and client credentials are updated each time the guest-agent process starts. 
+For enhanced security, client credentials are automatically refreshed every 48 hours.
+The agent generates and saves new credentials, while the old ones remain valid. 
+This overlap period ensures that clients have sufficient time to transition
+to the new credentials before the old ones expire, and it allows the agent to retry in case
+of failure and obtain valid credentials before the existing ones become invalid. Client 
+credentials are basically EC private key and the client certificate concatenated. These 
+credentials are unique to an instance and would not work elsewhere.
+
+Refer [this](https://cloud.google.com/compute/docs/metadata/overview#https-mds) 
+for more information on HTTPS metadata server endpoint and credential details 
+including their lifespan.
+
+Credentials are stored at these locations - 
+
+* Linux: 
+
+    - Client credentials: `/run/google-mds-mtls/client.key`
+    - Root certificate: `/run/google-mds-mtls/root.crt` and local trust store based on 
+    target OS. Refer [this](https://cloud.google.com/compute/docs/metadata/overview#https-mds-certificates) 
+    for local trust store location for each target OS.
+
+* Windows:
+
+    - Client credentials: `C:\ProgramData\Google\ComputeEngine\mds-mtls-client.key` and 
+    `Cert:\LocalMachine\My`
+    - Root certificate: `C:\ProgramData\Google\ComputeEngine\mds-mtls-root.crt` and 
+    `Cert:\LocalMachine\Root`
+    - [PFX](https://learn.microsoft.com/en-us/windows-hardware/drivers/install/personal-information-exchange---pfx--files): `C:\ProgramData\Google\Compute Engine\mds-mtls-client.key.pfx`
+
+    *Credentials are stored on disk as well as in [Certificate Store](https://learn.microsoft.com/en-us/windows-hardware/drivers/install/certificate-stores) on Windows*
+
+Note that this is enabled automatically if HTTPS endpoint is supported on a VM. This
+can be disabled by setting `mtls_bootstrapping_enabled = false` under `[MDS]` section
+in `instance_configs.cfg` file. 
+
+Local root trust store is updated by running `update-ca-certificates` or `update-ca-trust` 
+tool based on the OS or by adding cert to `Cert:\LocalMachine\Root` on Windows. This can be
+separately disabled by setting `cacertificates_update_enabled = false` in under the same
+`MDS` section.
 
 ## Metadata Scripts
 
