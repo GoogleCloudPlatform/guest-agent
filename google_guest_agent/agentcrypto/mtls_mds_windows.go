@@ -25,6 +25,7 @@ import (
 	"syscall"
 	"unsafe"
 
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
 	"github.com/GoogleCloudPlatform/guest-agent/utils"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 	"golang.org/x/sys/windows"
@@ -67,6 +68,11 @@ func (j *CredsJob) writeRootCACert(_ context.Context, cacert []byte, outputFile 
 
 	if err := utils.SaferWriteFile(cacert, outputFile, 0644); err != nil {
 		return err
+	}
+
+	if cfg.Get().MDS.SkipNativeStore {
+		logger.Debugf("SkipNativeStore is enabled, will not write root cert to certstore")
+		return nil
 	}
 
 	x509Cert, err := parseCertificate(cacert)
@@ -187,6 +193,11 @@ func (j *CredsJob) writeClientCredentials(creds []byte, outputFile string) error
 	p := filepath.Join(filepath.Dir(outputFile), pfxFile)
 	if err := utils.SaferWriteFile(pfx, p, 0644); err != nil {
 		return fmt.Errorf("failed to write PFX file: %w", err)
+	}
+
+	if cfg.Get().MDS.SkipNativeStore {
+		logger.Debugf("SkipNativeStore is enabled, will not write client creds to certstore")
+		return nil
 	}
 
 	blob := windows.CryptDataBlob{

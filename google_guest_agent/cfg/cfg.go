@@ -93,6 +93,7 @@ cert_authentication = true
 
 [MDS]
 mtls_bootstrapping_enabled = true
+skip_native_store = true
 
 [Snapshots]
 enabled = false
@@ -254,6 +255,11 @@ type OSLogin struct {
 type MDS struct {
 	// MTLSBootstrappingEnabled enables/disables the mTLS credential refresher.
 	MTLSBootstrappingEnabled bool `ini:"mtls_bootstrapping_enabled,omitempty"`
+	// SkipNativeStore enables/disables the use of OSs native store. Native
+	// store is Certificate Store on Windows which hosts both Client Credential and
+	// Root certificate where as its trust store that hosts root certs like
+	// `/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem` on Linux.
+	SkipNativeStore bool `ini:"skip_native_store,omitempty"`
 }
 
 // NetworkInterfaces contains the configurations of NetworkInterfaces section.
