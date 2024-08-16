@@ -196,10 +196,10 @@ Note that this is enabled automatically if HTTPS endpoint is supported on a VM. 
 can be disabled by setting `mtls_bootstrapping_enabled = false` under `[MDS]` section
 in `instance_configs.cfg` file. 
 
-Local root trust store is updated by running `update-ca-certificates` or `update-ca-trust` 
-tool based on the OS or by adding cert to `Cert:\LocalMachine\Root` on Windows. This can be
-separately disabled by setting `cacertificates_update_enabled = false` in under the same
-`MDS` section.
+Use of native trust stores like `Certificate Store` on Windows which hosts both Client 
+Credential and Root certificate and `/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem` on Linux
+that hosts root certificate is disabled by default. It can be enabled by setting 
+`skip_native_store = false` under the same `MDS` section.
 
 ## Metadata Scripts
 
