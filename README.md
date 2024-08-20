@@ -44,6 +44,17 @@ functionality. Behaviors for each area of responsibility are detailed below.
 On Windows, the agent handles
 [creating user accounts and setting/resetting passwords.](https://cloud.google.com/compute/docs/instances/windows/creating-passwords-for-windows-instances)
 
+Guest Agent automatically creates local user accounts for any SSH user defined
+in the Metadata SSH keys at the instance or project level (unless blocked) 
+on Windows instances to support [connecting to Windows VMs using SSH.](https://cloud.google.com/compute/docs/connect/windows-ssh)
+
+> Active Directory Domain Controller does not use the local user account database
+except when it is booted into the recovery console or demoted, so any account 
+created on the system would become an administrator of the Active Directory Domain.
+You can prevent unintended AD user provisioning by [disabling the account manager](https://cloud.google.com/compute/docs/instances/windows/creating-managing-windows-instances#disable_the_account_manager) on the AD controller VM.
+Refer [deploy domain controllers](https://cloud.google.com/architecture/deploy-an-active-directory-forest-on-compute-engine#deploy_domain_controllers) for more information
+on setting up AD on GCE.
+
 On Linux: If OS Login is not used, the guest agent will be responsible for
 provisioning and deprovisioning user accounts. The agent creates local user
 accounts and maintains the authorized SSH keys file for each. User account
