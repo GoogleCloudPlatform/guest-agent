@@ -29,7 +29,6 @@ import (
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
 	network "github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/network/manager"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/run"
-	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/scheduler"
 	"github.com/GoogleCloudPlatform/guest-agent/retry"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 	"github.com/go-ini/ini"
@@ -227,9 +226,7 @@ func agentInit(ctx context.Context) {
 	// use them. Processes may depend on the Guest Agent at startup to ensure that the credentials are
 	// available for use. By generating the credentials before notifying the systemd, we ensure that
 	// they are generated for any process that depends on the Guest Agent.
-	if config.MDS.MTLSBootstrappingEnabled {
-		scheduler.ScheduleJobs(ctx, []scheduler.Job{agentcrypto.New()}, true)
-	}
+	agentcrypto.Init(ctx)
 }
 
 func generateSSHKeys(ctx context.Context) error {

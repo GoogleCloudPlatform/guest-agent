@@ -186,3 +186,12 @@ func ScheduleJobs(ctx context.Context, jobs []Job, synchronous bool) {
 		wg.Wait()
 	}
 }
+
+// IsScheduled returns true if job was scheduled.
+func (s *Scheduler) IsScheduled(jobID string) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	_, found := s.jobs[jobID]
+	return found
+}

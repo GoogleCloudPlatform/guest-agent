@@ -65,8 +65,8 @@ func TestSchedule(t *testing.T) {
 
 	s.start()
 
-	if _, ok := s.jobs[job.ID()]; !ok {
-		t.Errorf("Failed to schedule %s, expected an entry in scheduled jobs", job.ID())
+	if !s.IsScheduled(job.ID()) {
+		t.Errorf("IsScheduled(%s) = false, want true", job.ID())
 	}
 
 	time.Sleep(3 * time.Second)
@@ -108,11 +108,11 @@ func TestMultipleSchedules(t *testing.T) {
 	time.Sleep(2 * time.Second)
 	s.UnscheduleJob(job2.ID())
 
-	if _, ok := s.jobs[job1.ID()]; !ok {
-		t.Errorf("Failed to schedule %s, expected an entry in scheduled jobs", job1.ID())
+	if !s.IsScheduled(job1.ID()) {
+		t.Errorf("IsScheduled(%s) = false, want true", job1.ID())
 	}
-	if _, ok := s.jobs[job2.ID()]; ok {
-		t.Errorf("Failed to unschedule %s, found an entry in scheduled jobs", job2.ID())
+	if s.IsScheduled(job2.ID()) {
+		t.Errorf("IsScheduled(%s) = true, want false", job2.ID())
 	}
 
 	time.Sleep(time.Second)
@@ -142,8 +142,8 @@ func TestStopSchedule(t *testing.T) {
 		t.Errorf("AddJob(%s) failed unexecptedly with error: %v", job.ID(), err)
 	}
 
-	if _, ok := s.jobs[job.ID()]; !ok {
-		t.Errorf("Failed to schedule %s, expected an entry in scheduled jobs", job.ID())
+	if !s.IsScheduled(job.ID()) {
+		t.Errorf("IsScheduled(%s) = false, want true", job.ID())
 	}
 
 	time.Sleep(3 * time.Second)

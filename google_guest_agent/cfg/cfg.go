@@ -93,7 +93,8 @@ manage_primary_nic =
 cert_authentication = true
 
 [MDS]
-mtls_bootstrapping_enabled = true
+disable-https-mds-setup = true
+https-mds-skip-native-cert-store = true
 
 [Snapshots]
 enabled = false
@@ -253,10 +254,17 @@ type OSLogin struct {
 	CertAuthentication bool `ini:"cert_authentication,omitempty"`
 }
 
-// MDS contains the configurations for MDS section.
+// MDS contains the configurations for MDS section. Currently its opt-in only
+// and should not assume any defaults. Setting any [defaultConfig] values will
+// override user settings from Metadata.
 type MDS struct {
-	// MTLSBootstrappingEnabled enables/disables the mTLS credential refresher.
-	MTLSBootstrappingEnabled bool `ini:"mtls_bootstrapping_enabled,omitempty"`
+	// DisableHTTPSMdsSetup enables/disables the mTLS credential refresher.
+	DisableHTTPSMdsSetup bool `ini:"disable-https-mds-setup,omitempty"`
+	// HTTPSMDSSkipNativeStore enables/disables the use of OSs native store. Native
+	// store is Certificate Store on Windows which hosts both Client Credential and
+	// Root certificate where as its trust store that hosts root certs like
+	// `/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem` on Linux.
+	HTTPSMDSSkipNativeStore bool `ini:"https-mds-skip-native-cert-store,omitempty"`
 }
 
 // NetworkInterfaces contains the configurations of NetworkInterfaces section.
