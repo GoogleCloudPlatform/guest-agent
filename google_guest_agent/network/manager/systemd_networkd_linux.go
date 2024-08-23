@@ -499,6 +499,11 @@ func (sc systemdConfig) isGuestAgentManaged() bool {
 // provided directory using the given priority.
 func (n systemdNetworkd) writeEthernetConfig(interfaces, ipv6Interfaces []string) error {
 	for i, iface := range interfaces {
+		if !shouldManageInterface(i == 0) {
+			logger.Debugf("ManagePrimaryNIC is disabled, skipping systemdNetworkd writeEthernetConfig for %s", iface)
+			continue
+		}
+
 		logger.Debugf("write systemd-networkd network config for %s", iface)
 
 		var dhcp = "ipv4"

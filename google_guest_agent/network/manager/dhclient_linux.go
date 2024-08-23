@@ -420,6 +420,9 @@ func runDhclient(ctx context.Context, ipVersion ipVersion, nic string, release b
 // The first list contains interfaces for which to obtain an IPv4 lease.
 // The second list contains interfaces for which to obtain an IPv6 lease.
 // The third list contains interfaces for which to release their IPv6 lease.
+// It will skip primary NIC for IPv4 if process is already running or disabled via config.
+// Secondary NICs will be configured as long as there's no already existing dhclient
+// process managing it.
 func partitionInterfaces(ctx context.Context, interfaces, ipv6Interfaces []string) ([]string, []string, []string, error) {
 	var obtainIpv4Interfaces []string
 	var obtainIpv6Interfaces []string
@@ -428,6 +431,7 @@ func partitionInterfaces(ctx context.Context, interfaces, ipv6Interfaces []strin
 	for i, iface := range interfaces {
 		if !shouldManageInterface(i == 0) {
 			// Do not setup anything for this interface to avoid duplicate processes.
+			logger.Debugf("ManagePrimaryNIC is disabled, skipping dhclient launch for %s", iface)
 			continue
 		}
 
