@@ -92,19 +92,19 @@ func (n wicked) IsManaging(ctx context.Context, iface string) (bool, error) {
 
 // SetupEthernetInterface writes the necessary configuration files for each interface and enables them.
 func (n wicked) SetupEthernetInterface(ctx context.Context, cfg *cfg.Sections, nics *Interfaces) error {
-	if len(nics.EthernetInterfaces) < 2 {
-		return nil
-	}
 	ifaces, err := interfaceNames(nics.EthernetInterfaces)
 	if err != nil {
 		return fmt.Errorf("failed to get network interfaces: %v", err)
 	}
 
-	if err = n.writeEthernetConfigs(ifaces[1:]); err != nil {
+	if err = n.writeEthernetConfigs(ifaces); err != nil {
 		return fmt.Errorf("error writing wicked configurations: %v", err)
 	}
 
-	args := append([]string{"ifup"}, ifaces[1:]...)
+	// https://manpages.opensuse.org/Tumbleweed/wicked/wicked.8.en.html#ifreload_-_checks_whether_a_configuration_has_changed,_and_applies_accordingly.
+	// Apply any configuration changes on all interface. If unchanged ifreload
+	// does not touch specified interfaces.
+	args := []string{"ifreload", "all"}
 	if err = run.Quiet(ctx, n.wickedCommand, args...); err != nil {
 		return fmt.Errorf("error enabling interfaces: %v", err)
 	}
@@ -224,7 +224,12 @@ func (n wicked) writeEthernetConfigs(ifaces []string) error {
 	var priority = 10100
 
 	// Write the config for all the non-primary network interfaces.
-	for _, iface := range ifaces {
+	for i, iface := range ifaces {
+		if !shouldManageInterface(i == 0) {
+			logger.Debugf("ManagePrimaryNIC is disabled, skipping wicked writeEthernetConfig for %s", iface)
+			continue
+		}
+
 		logger.Debugf("write enabling ifcfg-%s config", iface)
 		ifcfg := n.ifcfgFilePath(iface)
 

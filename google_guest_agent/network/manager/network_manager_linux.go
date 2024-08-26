@@ -170,7 +170,12 @@ func (n networkManager) ifcfgFilePath(iface string) string {
 func (n networkManager) writeNetworkManagerConfigs(ifaces []string) ([]string, error) {
 	var result []string
 
-	for _, iface := range ifaces {
+	for i, iface := range ifaces {
+		if !shouldManageInterface(i == 0) {
+			logger.Debugf("ManagePrimaryNIC is disabled, skipping writeNetworkManagerConfigs for %s", iface)
+			continue
+		}
+
 		logger.Debugf("writing nmconnection file for %s", iface)
 
 		configFilePath := n.networkManagerConfigFilePath(iface)
