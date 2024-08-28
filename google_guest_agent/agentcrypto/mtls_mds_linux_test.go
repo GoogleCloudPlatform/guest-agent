@@ -20,8 +20,10 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/fakes"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/uefi"
+	"github.com/GoogleCloudPlatform/guest-agent/metadata"
 )
 
 func TestReadAndWriteRootCACert(t *testing.T) {
@@ -110,13 +112,90 @@ func TestGetClientCredentialsError(t *testing.T) {
 }
 
 func TestShouldEnable(t *testing.T) {
-	ctx := context.WithValue(context.Background(), fakes.MDSOverride, "succeed")
+	ctx := context.Background()
+	if err := cfg.Load(nil); err != nil {
+		t.Fatalf("cfg.Load(nil) failed unexpectedly with error: %v", err)
+	}
+
+	ctx = context.WithValue(ctx, fakes.MDSOverride, "succeed")
 	j := &CredsJob{
 		client: fakes.NewFakeMDSClient(),
 	}
 
-	if !j.ShouldEnable(ctx) {
-		t.Error("ShouldEnable(ctx) = false, want true")
+	tests := []struct {
+		name   string
+		mds    *metadata.Descriptor
+		cfgVal *cfg.MDS
+		want   bool
+	}{
+		{
+			name: "defaults",
+			mds:  &metadata.Descriptor{},
+			want: false,
+		},
+		{
+			name:   "enable_from_cfg",
+			mds:    &metadata.Descriptor{},
+			cfgVal: &cfg.MDS{DisableHTTPSMdsSetup: false},
+			want:   true,
+		},
+		{
+			name: "enable_from_instance_attr",
+			mds:  &metadata.Descriptor{Instance: metadata.Instance{Attributes: metadata.Attributes{DisableHTTPSMdsSetup: mkbool(false)}}},
+			want: true,
+		},
+		{
+			name: "disable_from_instance_attr",
+			mds:  &metadata.Descriptor{Instance: metadata.Instance{Attributes: metadata.Attributes{DisableHTTPSMdsSetup: mkbool(true)}}},
+			want: false,
+		},
+		{
+			name: "enable_from_project_attr",
+			mds:  &metadata.Descriptor{Project: metadata.Project{Attributes: metadata.Attributes{DisableHTTPSMdsSetup: mkbool(false)}}},
+			want: true,
+		},
+		{
+			name: "disable_from_project_attr",
+			mds:  &metadata.Descriptor{Project: metadata.Project{Attributes: metadata.Attributes{DisableHTTPSMdsSetup: mkbool(true)}}},
+			want: false,
+		},
+		{
+			name: "enable_instance_disable_project_attr",
+			mds:  &metadata.Descriptor{Instance: metadata.Instance{Attributes: metadata.Attributes{DisableHTTPSMdsSetup: mkbool(false)}}, Project: metadata.Project{Attributes: metadata.Attributes{DisableHTTPSMdsSetup: mkbool(true)}}},
+			want: true,
+		},
+		{
+			name: "enable_project_disable_instance_attr",
+			mds:  &metadata.Descriptor{Instance: metadata.Instance{Attributes: metadata.Attributes{DisableHTTPSMdsSetup: mkbool(true)}}, Project: metadata.Project{Attributes: metadata.Attributes{DisableHTTPSMdsSetup: mkbool(false)}}},
+			want: false,
+		},
+		{
+			name:   "enable_both_attr_disable_cfg",
+			mds:    &metadata.Descriptor{Instance: metadata.Instance{Attributes: metadata.Attributes{DisableHTTPSMdsSetup: mkbool(false)}}, Project: metadata.Project{Attributes: metadata.Attributes{DisableHTTPSMdsSetup: mkbool(false)}}},
+			cfgVal: &cfg.MDS{DisableHTTPSMdsSetup: false},
+			want:   true,
+		},
+		{
+			name:   "disable_both_attr_enable_cfg",
+			mds:    &metadata.Descriptor{Instance: metadata.Instance{Attributes: metadata.Attributes{DisableHTTPSMdsSetup: mkbool(true)}}, Project: metadata.Project{Attributes: metadata.Attributes{DisableHTTPSMdsSetup: mkbool(true)}}},
+			cfgVal: &cfg.MDS{DisableHTTPSMdsSetup: true},
+			want:   false,
+		},
+		{
+			name:   "enable_proj_cfg_attr_disable_instance_attr",
+			mds:    &metadata.Descriptor{Instance: metadata.Instance{Attributes: metadata.Attributes{DisableHTTPSMdsSetup: mkbool(true)}}, Project: metadata.Project{Attributes: metadata.Attributes{DisableHTTPSMdsSetup: mkbool(false)}}},
+			cfgVal: &cfg.MDS{DisableHTTPSMdsSetup: false},
+			want:   false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			cfg.Get().MDS = test.cfgVal
+			if got := j.shouldEnableJob(ctx, test.mds); got != test.want {
+				t.Errorf("shouldEnableJob(ctx, %+v) = %t, want %t", test.mds, got, test.want)
+			}
+		})
 	}
 }
 
@@ -180,5 +259,95 @@ func TestCertificateDirFromUpdaterError(t *testing.T) {
 	_, err = certificateDirFromUpdater("updater1")
 	if err == nil {
 		t.Errorf("certificateDirFromUpdater(unknown) succeeded for missing cert dir, want error")
+	}
+}
+
+func mkbool(v bool) *bool {
+	return &v
+}
+
+func TestSkipOSNativeStore(t *testing.T) {
+	if err := cfg.Load(nil); err != nil {
+		t.Fatalf("cfg.Load(nil) failed unexpectedly with error: %v", err)
+	}
+
+	j := &CredsJob{
+		client: fakes.NewFakeMDSClient(),
+	}
+
+	tests := []struct {
+		name   string
+		mds    *metadata.Descriptor
+		cfgVal *cfg.MDS
+		want   bool
+	}{
+		{
+			name: "defaults",
+			mds:  &metadata.Descriptor{},
+			want: false,
+		},
+		{
+			name:   "enable_from_cfg",
+			mds:    &metadata.Descriptor{},
+			cfgVal: &cfg.MDS{HTTPSMDSSkipNativeStore: false},
+			want:   true,
+		},
+		{
+			name: "enable_from_instance_attr",
+			mds:  &metadata.Descriptor{Instance: metadata.Instance{Attributes: metadata.Attributes{HTTPSMDSSkipNativeStore: mkbool(false)}}},
+			want: true,
+		},
+		{
+			name: "disable_from_instance_attr",
+			mds:  &metadata.Descriptor{Instance: metadata.Instance{Attributes: metadata.Attributes{HTTPSMDSSkipNativeStore: mkbool(true)}}},
+			want: false,
+		},
+		{
+			name: "enable_from_project_attr",
+			mds:  &metadata.Descriptor{Project: metadata.Project{Attributes: metadata.Attributes{HTTPSMDSSkipNativeStore: mkbool(false)}}},
+			want: true,
+		},
+		{
+			name: "disable_from_project_attr",
+			mds:  &metadata.Descriptor{Project: metadata.Project{Attributes: metadata.Attributes{HTTPSMDSSkipNativeStore: mkbool(true)}}},
+			want: false,
+		},
+		{
+			name: "enable_instance_disable_project_attr",
+			mds:  &metadata.Descriptor{Instance: metadata.Instance{Attributes: metadata.Attributes{HTTPSMDSSkipNativeStore: mkbool(false)}}, Project: metadata.Project{Attributes: metadata.Attributes{HTTPSMDSSkipNativeStore: mkbool(true)}}},
+			want: true,
+		},
+		{
+			name: "enable_project_disable_instance_attr",
+			mds:  &metadata.Descriptor{Instance: metadata.Instance{Attributes: metadata.Attributes{HTTPSMDSSkipNativeStore: mkbool(true)}}, Project: metadata.Project{Attributes: metadata.Attributes{HTTPSMDSSkipNativeStore: mkbool(false)}}},
+			want: false,
+		},
+		{
+			name:   "enable_both_attr_disable_cfg",
+			mds:    &metadata.Descriptor{Instance: metadata.Instance{Attributes: metadata.Attributes{HTTPSMDSSkipNativeStore: mkbool(false)}}, Project: metadata.Project{Attributes: metadata.Attributes{HTTPSMDSSkipNativeStore: mkbool(false)}}},
+			cfgVal: &cfg.MDS{HTTPSMDSSkipNativeStore: true},
+			want:   true,
+		},
+		{
+			name:   "disable_both_attr_enable_cfg",
+			mds:    &metadata.Descriptor{Instance: metadata.Instance{Attributes: metadata.Attributes{HTTPSMDSSkipNativeStore: mkbool(true)}}, Project: metadata.Project{Attributes: metadata.Attributes{HTTPSMDSSkipNativeStore: mkbool(true)}}},
+			cfgVal: &cfg.MDS{HTTPSMDSSkipNativeStore: false},
+			want:   false,
+		},
+		{
+			name:   "enable_proj_cfg_attr_disable_instance_attr",
+			mds:    &metadata.Descriptor{Instance: metadata.Instance{Attributes: metadata.Attributes{HTTPSMDSSkipNativeStore: mkbool(true)}}, Project: metadata.Project{Attributes: metadata.Attributes{HTTPSMDSSkipNativeStore: mkbool(false)}}},
+			cfgVal: &cfg.MDS{HTTPSMDSSkipNativeStore: false},
+			want:   false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			cfg.Get().MDS = test.cfgVal
+			if got := j.shouldUseNativeStore(test.mds); got != test.want {
+				t.Errorf("shouldUseNativeStore(%+v) = %t, want %t", test.mds, got, test.want)
+			}
+		})
 	}
 }

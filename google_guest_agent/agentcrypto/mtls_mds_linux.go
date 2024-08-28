@@ -59,6 +59,11 @@ func (j *CredsJob) writeRootCACert(ctx context.Context, content []byte, outputFi
 		return err
 	}
 
+	if !j.useNativeStore.Load() {
+		logger.Debugf("SkipNativeStore is enabled, will not write root cert to system store")
+		return nil
+	}
+
 	// Best effort to update system store, don't fail.
 	if err := updateSystemStore(ctx, outputFile); err != nil {
 		logger.Errorf("Failed add Root MDS cert to system trust store with error: %v", err)

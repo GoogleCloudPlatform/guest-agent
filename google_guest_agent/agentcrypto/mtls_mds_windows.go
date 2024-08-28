@@ -69,6 +69,11 @@ func (j *CredsJob) writeRootCACert(_ context.Context, cacert []byte, outputFile 
 		return err
 	}
 
+	if !j.useNativeStore.Load() {
+		logger.Debugf("SkipNativeStore is enabled, will not write root cert to certstore")
+		return nil
+	}
+
 	x509Cert, err := parseCertificate(cacert)
 	if err != nil {
 		return fmt.Errorf("failed to parse root CA cert: %w", err)
@@ -116,12 +121,22 @@ func (j *CredsJob) writeRootCACert(_ context.Context, cacert []byte, outputFile 
 func findCert(storeName, issuer, certID string) (*windows.CertContext, error) {
 	logger.Infof("Searching for certificate with serial number %s in store %s by issuer %s", certID, storeName, issuer)
 
+	storeNamePtr, err := syscall.UTF16PtrFromString(storeName)
+	if err != nil {
+		return nil, fmt.Errorf("UTF16PtrFromString(%s) failed with error: %v", storeName, err)
+	}
+
+	issuerPtr, err := syscall.UTF16PtrFromString(issuer)
+	if err != nil {
+		return nil, fmt.Errorf("UTF16PtrFromString(%s) failed with error: %v", issuer, err)
+	}
+
 	st, err := windows.CertOpenStore(
 		windows.CERT_STORE_PROV_SYSTEM,
 		0,
 		0,
 		windows.CERT_SYSTEM_STORE_LOCAL_MACHINE,
-		uintptr(unsafe.Pointer(syscall.StringToUTF16Ptr(storeName))))
+		uintptr(unsafe.Pointer(storeNamePtr)))
 	if err != nil {
 		return nil, fmt.Errorf("failed to open cert store: %w", err)
 	}
@@ -143,7 +158,7 @@ func findCert(storeName, issuer, certID string) (*windows.CertContext, error) {
 			windows.X509_ASN_ENCODING|windows.PKCS_7_ASN_ENCODING,
 			0,
 			windows.CERT_FIND_ISSUER_STR,
-			unsafe.Pointer(syscall.StringToUTF16Ptr(issuer)),
+			unsafe.Pointer(issuerPtr),
 			prev)
 
 		if err != nil {
@@ -189,13 +204,23 @@ func (j *CredsJob) writeClientCredentials(creds []byte, outputFile string) error
 		return fmt.Errorf("failed to write PFX file: %w", err)
 	}
 
+	if !j.useNativeStore.Load() {
+		logger.Debugf("SkipNativeStore is enabled, will not write root cert to certstore")
+		return nil
+	}
+
 	blob := windows.CryptDataBlob{
 		Size: uint32(len(pfx)),
 		Data: &pfx[0],
 	}
 
+	emptyPtr, err := syscall.UTF16PtrFromString("")
+	if err != nil {
+		return fmt.Errorf("UTF16PtrFromString(%q) empty pointer failed with error: %v", "", err)
+	}
+
 	// https://learn.microsoft.com/en-us/windows/win32/api/wincrypt/nf-wincrypt-pfximportcertstore
-	handle, err := windows.PFXImportCertStore(&blob, syscall.StringToUTF16Ptr(""), windows.CRYPT_MACHINE_KEYSET)
+	handle, err := windows.PFXImportCertStore(&blob, emptyPtr, windows.CRYPT_MACHINE_KEYSET)
 	if err != nil {
 		return fmt.Errorf("failed to import PFX in cert store: %w", err)
 	}
@@ -257,6 +282,10 @@ func generatePFX(creds []byte) (pfxData []byte, err error) {
 }
 
 func addCtxToLocalSystemStore(storeName string, certContext *windows.CertContext, disposition uint32) error {
+	storeNamePtr, err := syscall.UTF16PtrFromString(storeName)
+	if err != nil {
+		return fmt.Errorf("UTF16PtrFromString(%s) failed with error: %v", storeName, err)
+	}
 	// https://learn.microsoft.com/en-us/windows/win32/api/wincrypt/nf-wincrypt-certopenstore
 	// https://learn.microsoft.com/en-us/windows-hardware/drivers/install/local-machine-and-current-user-certificate-stores
 	// https://learn.microsoft.com/en-us/windows/win32/seccrypto/system-store-locations#cert_system_store_local_machine
@@ -265,7 +294,7 @@ func addCtxToLocalSystemStore(storeName string, certContext *windows.CertContext
 		0,
 		0,
 		windows.CERT_SYSTEM_STORE_LOCAL_MACHINE,
-		uintptr(unsafe.Pointer(syscall.StringToUTF16Ptr(storeName))))
+		uintptr(unsafe.Pointer(storeNamePtr)))
 	if err != nil {
 		return fmt.Errorf("failed to open cert store: %w", err)
 	}
@@ -285,12 +314,17 @@ func deleteCert(crtCtx *windows.CertContext, storeName string) error {
 		return nil
 	}
 
+	storeNamePtr, err := syscall.UTF16PtrFromString(storeName)
+	if err != nil {
+		return fmt.Errorf("UTF16PtrFromString(%s) failed with error: %v", storeName, err)
+	}
+
 	st, err := windows.CertOpenStore(
 		windows.CERT_STORE_PROV_SYSTEM,
 		0,
 		0,
 		windows.CERT_SYSTEM_STORE_LOCAL_MACHINE,
-		uintptr(unsafe.Pointer(syscall.StringToUTF16Ptr(storeName))))
+		uintptr(unsafe.Pointer(storeNamePtr)))
 	if err != nil {
 		return fmt.Errorf("failed to open cert store: %w", err)
 	}

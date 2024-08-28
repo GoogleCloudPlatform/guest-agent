@@ -184,7 +184,7 @@ Refer [this](https://cloud.google.com/compute/docs/metadata/overview#https-mds)
 for more information on HTTPS metadata server endpoint and credential details 
 including their lifespan.
 
-Credentials are stored at these locations - 
+Credentials can be stored at these supported locations - 
 
 * Linux: 
 
@@ -201,16 +201,26 @@ Credentials are stored at these locations -
     `Cert:\LocalMachine\Root`
     - [PFX](https://learn.microsoft.com/en-us/windows-hardware/drivers/install/personal-information-exchange---pfx--files): `C:\ProgramData\Google\Compute Engine\mds-mtls-client.key.pfx`
 
-    *Credentials are stored on disk as well as in [Certificate Store](https://learn.microsoft.com/en-us/windows-hardware/drivers/install/certificate-stores) on Windows*
+    *Credentials can be stored on disk as well as in [Certificate Store](https://learn.microsoft.com/en-us/windows-hardware/drivers/install/certificate-stores) on Windows*
 
-Note that this is enabled automatically if HTTPS endpoint is supported on a VM. This
-can be disabled by setting `mtls_bootstrapping_enabled = false` under `[MDS]` section
+Note that this is disabled by default, if HTTPS endpoint is supported on a VM, the feature
+can be enabled by setting `disable-https-mds-setup = false` under `[MDS]` section
 in `instance_configs.cfg` file. 
 
-Local root trust store is updated by running `update-ca-certificates` or `update-ca-trust` 
-tool based on the OS or by adding cert to `Cert:\LocalMachine\Root` on Windows. This can be
-separately disabled by setting `cacertificates_update_enabled = false` in under the same
-`MDS` section.
+If enabled, agent will write certificates only on disk by default and users can
+opt-in to have certificates in OS Native stores. This means in case of Linux based VMs
+MDS Root certificate will be added to trust store like 
+`/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem` on RHEL based systems 
+and `/etc/ssl/certs/ca-certificates.crt` on Debian based. Local root trust store 
+is updated by running `update-ca-certificates` or `update-ca-trust` tool based on the OS.
+On Windows, Client credentials will be added in `Cert:\LocalMachine\My` and Root
+certificate in `Cert:\LocalMachine\Root`. This can be enabled by setting `https-mds-skip-native-cert-store = false` under same `[MDS]` section.
+
+> As documented by Microsoft [here](https://learn.microsoft.com/en-us/troubleshoot/windows-server/active-directory/enable-ldap-over-ssl-3rd-certification-authority#possible-issues) there
+could be issues with LDAPS process when multiple certificates are added in personal
+store. Avoid enabling OS Native stores on Domain Controllers. Credentials can still
+be used from disk if required.
+
 
 ## Metadata Scripts
 
