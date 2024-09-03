@@ -20,15 +20,11 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/fakes"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/uefi"
 )
 
 func TestReadAndWriteRootCACert(t *testing.T) {
-	if err := cfg.Load(nil); err != nil {
-		t.Fatalf("Failed to load config: %v", err)
-	}
 	root := t.TempDir()
 	v := uefi.VariableName{Name: "testname", GUID: "testguid", RootDir: root}
 	j := &CredsJob{}
