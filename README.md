@@ -214,7 +214,7 @@ MDS Root certificate will be added to trust store like
 and `/etc/ssl/certs/ca-certificates.crt` on Debian based. Local root trust store 
 is updated by running `update-ca-certificates` or `update-ca-trust` tool based on the OS.
 On Windows, Client credentials will be added in `Cert:\LocalMachine\My` and Root
-certificate in `Cert:\LocalMachine\Root`. This can be enabled by setting `https-mds-skip-native-cert-store = false` under same `[MDS]` section.
+certificate in `Cert:\LocalMachine\Root`. This can be enabled by setting `enable-https-mds-native-cert-store = true` under same `[MDS]` section.
 
 > As documented by Microsoft [here](https://learn.microsoft.com/en-us/troubleshoot/windows-server/active-directory/enable-ldap-over-ssl-3rd-certification-authority#possible-issues) there
 could be issues with LDAPS process when multiple certificates are added in personal

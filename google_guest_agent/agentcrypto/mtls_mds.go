@@ -267,17 +267,17 @@ func (j *CredsJob) shouldUseNativeStore(mds *metadata.Descriptor) bool {
 	var useNative bool
 
 	if cfg.Get().MDS != nil {
-		useNative = !cfg.Get().MDS.HTTPSMDSSkipNativeStore
+		useNative = cfg.Get().MDS.HTTPSMDSEnableNativeStore
 		logger.Debugf("Found instance config file attribute for use native store set to: %t", useNative)
 	}
 
-	if mds.Project.Attributes.HTTPSMDSSkipNativeStore != nil {
-		useNative = !*mds.Project.Attributes.HTTPSMDSSkipNativeStore
+	if mds.Project.Attributes.HTTPSMDSEnableNativeStore != nil {
+		useNative = *mds.Project.Attributes.HTTPSMDSEnableNativeStore
 		logger.Debugf("Found project level attribute for use native store set to: %t", useNative)
 	}
 
-	if mds.Instance.Attributes.HTTPSMDSSkipNativeStore != nil {
-		useNative = !*mds.Instance.Attributes.HTTPSMDSSkipNativeStore
+	if mds.Instance.Attributes.HTTPSMDSEnableNativeStore != nil {
+		useNative = *mds.Instance.Attributes.HTTPSMDSEnableNativeStore
 		logger.Debugf("Found instance level attribute for use native store set to: %t", useNative)
 	}
 

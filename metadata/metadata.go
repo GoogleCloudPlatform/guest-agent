@@ -202,24 +202,24 @@ type Project struct {
 
 // Attributes describes the project's attributes keys.
 type Attributes struct {
-	BlockProjectKeys        bool
-	HTTPSMDSSkipNativeStore *bool
-	DisableHTTPSMdsSetup    *bool
-	EnableOSLogin           *bool
-	EnableWindowsSSH        *bool
-	TwoFactor               *bool
-	SecurityKey             *bool
-	RequireCerts            *bool
-	SSHKeys                 []string
-	WindowsKeys             WindowsKeys
-	Diagnostics             string
-	DisableAddressManager   *bool
-	DisableAccountManager   *bool
-	EnableDiagnostics       *bool
-	EnableWSFC              *bool
-	WSFCAddresses           string
-	WSFCAgentPort           string
-	DisableTelemetry        bool
+	BlockProjectKeys          bool
+	HTTPSMDSEnableNativeStore *bool
+	DisableHTTPSMdsSetup      *bool
+	EnableOSLogin             *bool
+	EnableWindowsSSH          *bool
+	TwoFactor                 *bool
+	SecurityKey               *bool
+	RequireCerts              *bool
+	SSHKeys                   []string
+	WindowsKeys               WindowsKeys
+	Diagnostics               string
+	DisableAddressManager     *bool
+	DisableAccountManager     *bool
+	EnableDiagnostics         *bool
+	EnableWSFC                *bool
+	WSFCAddresses             string
+	WSFCAgentPort             string
+	DisableTelemetry          bool
 }
 
 // UnmarshalJSON unmarshals b into Attribute.
@@ -231,25 +231,25 @@ func (a *Attributes) UnmarshalJSON(b []byte) error {
 	}
 	// Unmarshal to literal JSON types before doing anything else.
 	type inner struct {
-		BlockProjectKeys        string      `json:"block-project-ssh-keys"`
-		Diagnostics             string      `json:"diagnostics"`
-		DisableAccountManager   string      `json:"disable-account-manager"`
-		DisableAddressManager   string      `json:"disable-address-manager"`
-		EnableDiagnostics       string      `json:"enable-diagnostics"`
-		EnableOSLogin           string      `json:"enable-oslogin"`
-		EnableWindowsSSH        string      `json:"enable-windows-ssh"`
-		EnableWSFC              string      `json:"enable-wsfc"`
-		OldSSHKeys              string      `json:"sshKeys"`
-		SSHKeys                 string      `json:"ssh-keys"`
-		TwoFactor               string      `json:"enable-oslogin-2fa"`
-		SecurityKey             string      `json:"enable-oslogin-sk"`
-		RequireCerts            string      `json:"enable-oslogin-certificates"`
-		WindowsKeys             WindowsKeys `json:"windows-keys"`
-		WSFCAddresses           string      `json:"wsfc-addrs"`
-		WSFCAgentPort           string      `json:"wsfc-agent-port"`
-		DisableTelemetry        string      `json:"disable-guest-telemetry"`
-		DisableHTTPSMdsSetup    string      `json:"disable-https-mds-setup"`
-		HTTPSMDSSkipNativeStore string      `json:"https-mds-skip-native-cert-store"`
+		BlockProjectKeys          string      `json:"block-project-ssh-keys"`
+		Diagnostics               string      `json:"diagnostics"`
+		DisableAccountManager     string      `json:"disable-account-manager"`
+		DisableAddressManager     string      `json:"disable-address-manager"`
+		EnableDiagnostics         string      `json:"enable-diagnostics"`
+		EnableOSLogin             string      `json:"enable-oslogin"`
+		EnableWindowsSSH          string      `json:"enable-windows-ssh"`
+		EnableWSFC                string      `json:"enable-wsfc"`
+		OldSSHKeys                string      `json:"sshKeys"`
+		SSHKeys                   string      `json:"ssh-keys"`
+		TwoFactor                 string      `json:"enable-oslogin-2fa"`
+		SecurityKey               string      `json:"enable-oslogin-sk"`
+		RequireCerts              string      `json:"enable-oslogin-certificates"`
+		WindowsKeys               WindowsKeys `json:"windows-keys"`
+		WSFCAddresses             string      `json:"wsfc-addrs"`
+		WSFCAgentPort             string      `json:"wsfc-agent-port"`
+		DisableTelemetry          string      `json:"disable-guest-telemetry"`
+		DisableHTTPSMdsSetup      string      `json:"disable-https-mds-setup"`
+		HTTPSMDSEnableNativeStore string      `json:"enable-https-mds-native-cert-store"`
 	}
 	var temp inner
 	if err := json.Unmarshal(b, &temp); err != nil {
@@ -264,9 +264,9 @@ func (a *Attributes) UnmarshalJSON(b []byte) error {
 	if err == nil {
 		a.DisableHTTPSMdsSetup = mkbool(value)
 	}
-	value, err = strconv.ParseBool(temp.HTTPSMDSSkipNativeStore)
+	value, err = strconv.ParseBool(temp.HTTPSMDSEnableNativeStore)
 	if err == nil {
-		a.HTTPSMDSSkipNativeStore = mkbool(value)
+		a.HTTPSMDSEnableNativeStore = mkbool(value)
 	}
 	value, err = strconv.ParseBool(temp.BlockProjectKeys)
 	if err == nil {
