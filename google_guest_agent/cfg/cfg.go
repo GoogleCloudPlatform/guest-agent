@@ -94,7 +94,7 @@ cert_authentication = true
 
 [MDS]
 disable-https-mds-setup = true
-https-mds-skip-native-cert-store = true
+enable-https-mds-native-cert-store = false
 
 [Snapshots]
 enabled = false
@@ -260,11 +260,11 @@ type OSLogin struct {
 type MDS struct {
 	// DisableHTTPSMdsSetup enables/disables the mTLS credential refresher.
 	DisableHTTPSMdsSetup bool `ini:"disable-https-mds-setup,omitempty"`
-	// HTTPSMDSSkipNativeStore enables/disables the use of OSs native store. Native
+	// HTTPSMDSEnableNativeStore enables/disables the use of OSs native store. Native
 	// store is Certificate Store on Windows which hosts both Client Credential and
 	// Root certificate where as its trust store that hosts root certs like
 	// `/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem` on Linux.
-	HTTPSMDSSkipNativeStore bool `ini:"https-mds-skip-native-cert-store,omitempty"`
+	HTTPSMDSEnableNativeStore bool `ini:"enable-https-mds-native-cert-store,omitempty"`
 }
 
 // NetworkInterfaces contains the configurations of NetworkInterfaces section.
