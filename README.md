@@ -266,6 +266,7 @@ Accounts          | usermod\_cmd           | Command string to modify a user's g
 Accounts          | gpasswd\_add\_cmd      | Command string to add a user to a group.
 Accounts          | gpasswd\_remove\_cmd   | Command string to remove a user from a group.
 Accounts          | groupadd\_cmd          | Command string to create a new group.
+Core              | cloud\_logging\_enabled| `false` disable cloud logging.
 Daemons           | accounts\_daemon       | `false` disables the accounts daemon.
 Daemons           | clock\_skew\_daemon    | `false` disables the clock skew daemon.
 Daemons           | network\_daemon        | `false` disables the network daemon.

@@ -41,6 +41,9 @@ const (
 	unixConfigPath = `/etc/default/instance_configs.cfg`
 
 	defaultConfig = `
+[Core]
+cloud_logging_enabled = true
+
 [Accounts]
 deprovision_remove = false
 gpasswd_add_cmd = gpasswd -a {user} {group}
@@ -112,8 +115,18 @@ systemd_config_dir = /usr/lib/systemd/network
 `
 )
 
+// Core contains the core configuration entries of guest agent, all
+// configurations not tied/specific to a subsystem are defined in here.
+type Core struct {
+	// CloudLoggingEnabled config toggle controls Guest Agent cloud logger.
+	// Disabling it will stop Guest Agent for configuring and logging to Cloud Logging.
+	CloudLoggingEnabled bool `ini:"cloud_logging_enabled,omitempty"`
+}
+
 // Sections encapsulates all the configuration sections.
 type Sections struct {
+	// Core defines the core guest-agent's configuration entries/keys.
+	Core *Core `ini:"Core,omitempty"`
 	// AccountManager defines the address management configurations. It takes precedence over instance's
 	// and project's metadata configuration. The default configuration doesn't define values to it, if the
 	// user has defined it then we shouldn't even consider metadata values. Users must check if this
