@@ -108,15 +108,68 @@ skew may result in `system time has changed` messages in VM logs.
 #### Network
 
 The guest agent uses network interface metadata to manage the network
-interfaces in the guest by performing the following tasks:
+interfaces by performing the following tasks:
 
-*   Enabled all associated network interfaces on boot.
+*   Enable all associated network interfaces on boot.
+    *   Detect the current active network manager service that is managing the
+        primary NIC.
+    *   Rollback and delete any guest agent-managed files/configurations left
+        behind by all other supported network manager services.
+    *   Write and apply new configurations for the secondary NICs using the
+        network manager service detected in the first step.
+    *   Create a route to the metadata server for the primary NIC only.
 *   Setup or remove IP routes in the guest for IP forwarding and IP aliases
     *   Only IPv4 IP addresses are currently supported.
     *   Routes are set on the primary ethernet interface.
     *   Google routes are configured, by default, with the routing protocol ID
         `66`. This ID is a namespace for daemon configured IP addresses. It can
         be changed with the config file, see below.
+
+On Linux, supported network managers are as follows. These are listed by
+descending priority and include the location at which the configuration files
+are written.
+
+*   `netplan`
+    *   Config location: `/run/netplan/`
+        *   ex: `/run/netplan/20-google-guest-agent-eth0.yaml`
+    *   Dropin location: `/etc/systemd/network/`
+        *   ex: `/etc/systemd/network/10-netplan-eth0.network.d/`
+*   `wicked`
+    *   Config location: `/etc/sysconfig/network/`
+        *   ex: `/etc/sysconfig/network/ifcfg-eth0`
+    *   Notes:
+        *   Existing `ifcfg` files are not overwritten and are skipped instead.
+*   `NetworkManager`
+    *   Config location: `/etc/NetworkManager/system-connections/`
+        *   ex:
+            `/etc/NetworkManager/system-connections/google-guest-agent-eth0.nmconnection`
+*   `systemd-networkd`
+    *   Config location: `/usr/lib/systemd/network/`
+        *   ex: `/usr/lib/systemd/network/20-eth0-google-guest-agent.network`
+*   `dhclient`
+    *   Config location: `/run/`
+        *   ex (pid):   `/run/dhclient.google-guest-agent.eth0.ipv4.pid`
+        *   ex (lease): `/run/dhclient.google-guest-agent.eth0.ipv4.lease`
+    *   Notes:
+        *   The primary NIC setup, if enabled, is skipped if a dhclient process
+            for the primary NIC is already running.
+
+If none of the first 4 network manager services are detected on the system, then
+the agent will default to using `dhclient` for managing network interfaces.
+
+The following configuration flags can control the behavior:
+
+*   `manage_primary_nic`: When enabled, the agent will start managing the
+    primary NIC in addition to the secondary NICs.
+
+For more information about the instance configuration, see the Configuration
+section.
+
+The guest agent will also setup VLANs if VLAN is enabled. The setup and
+configuration for this work similarly to the normal NIC configuration.
+
+If the VLANs' parent interface is the primary NIC, it will apply the VLAN
+configurations regardless of whether `manage_primary_nic` is set.
 
 #### Windows Failover Cluster Support
 
