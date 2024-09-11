@@ -24,6 +24,7 @@ import (
 	"slices"
 
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/osinfo"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/run"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 )
@@ -54,6 +55,11 @@ type netplan struct {
 	// priority dictates the priority with which guest-agent should write
 	// the configuration files.
 	priority int
+
+	// interfacePrefix is prefix used to override default netplan config. This prefix is
+	// used with netplan interface config keys in /run/netplan/20-google-guest-agent-ethernet.yaml
+	// and systemd drop-in directory name like /etc/systemd/network/10-netplan-a-ens4.network.d/
+	interfacePrefix string
 }
 
 // netplanDropin maps the netplan dropin configuration yaml entries/data
@@ -132,23 +138,29 @@ type networkdNetplanDropin struct {
 
 	// DHCPv4 is the systemd-networkd ini file's [DHCPv4] section.
 	DHCPv4 *systemdDHCPConfig `ini:",omitempty"`
-
-	// DHCPv6 is the systemd-networkd ini file's [DHCPv4] section.
-	DHCPv6 *systemdDHCPConfig `ini:",omitempty"`
 }
 
 // Name returns the name of the network manager service.
-func (n netplan) Name() string {
+func (n *netplan) Name() string {
 	return "netplan"
 }
 
 // Configure gives the opportunity for the Service implementation to adjust its configuration
 // based on the Guest Agent configuration.
-func (n netplan) Configure(ctx context.Context, config *cfg.Sections) {
+func (n *netplan) Configure(ctx context.Context, config *cfg.Sections) {
+	os := osinfo.Get()
+	// Debian 12 has a pretty generic matching netplan configuration for gce,
+	// regex in /etc/netplan/90-default.yaml matches all en* and eth* nics.
+	// Until we have that changed we are adjusting the configuration so we can
+	// override the defaults.
+	if os.OS == "debian" && os.Version.Major == 12 {
+		n.interfacePrefix = "a"
+		logger.Infof("Setting up Debian 12, overriding interface prefix with: %q", n.interfacePrefix)
+	}
 }
 
 // IsManaging checks whether netplan is present in the system.
-func (n netplan) IsManaging(ctx context.Context, iface string) (bool, error) {
+func (n *netplan) IsManaging(ctx context.Context, iface string) (bool, error) {
 	// Check if the netplan CLI exists.
 	if _, err := execLookPath("netplan"); err != nil {
 		if errors.Is(err, exec.ErrNotFound) {
@@ -161,7 +173,7 @@ func (n netplan) IsManaging(ctx context.Context, iface string) (bool, error) {
 
 // SetupEthernetInterface sets the network interfaces for netplan by writing drop-in files to the specified
 // configuration directory.
-func (n netplan) SetupEthernetInterface(ctx context.Context, config *cfg.Sections, nics *Interfaces) error {
+func (n *netplan) SetupEthernetInterface(ctx context.Context, config *cfg.Sections, nics *Interfaces) error {
 	// Create a network configuration file with default configurations for each network interface.
 	googleInterfaces, googleIpv6Interfaces := interfaceListsIpv4Ipv6(nics.EthernetInterfaces)
 
@@ -196,7 +208,7 @@ func (n netplan) SetupEthernetInterface(ctx context.Context, config *cfg.Section
 
 // writeNetworkdDropin writes the overloading network-manager's drop-in file for the configurations
 // not supported by netplan.
-func (n netplan) writeNetworkdDropin(interfaces, ipv6Interfaces []string) error {
+func (n *netplan) writeNetworkdDropin(interfaces, ipv6Interfaces []string) error {
 	stat, err := os.Stat(n.networkdDropinDir)
 	if err != nil {
 		return fmt.Errorf("failed to stat systemd-networkd's drop-in root dir: %w", err)
@@ -237,10 +249,6 @@ func (n netplan) writeNetworkdDropin(interfaces, ipv6Interfaces []string) error 
 				RoutesToDNS: false,
 				RoutesToNTP: false,
 			}
-			data.DHCPv6 = &systemdDHCPConfig{
-				RoutesToDNS: false,
-				RoutesToNTP: false,
-			}
 		}
 
 		if err := data.write(n, iface); err != nil {
@@ -252,15 +260,18 @@ func (n netplan) writeNetworkdDropin(interfaces, ipv6Interfaces []string) error 
 }
 
 // networkdDropinFile returns an interface's netplan drop-in file path.
-func (n netplan) networkdDropinFile(iface string) string {
+func (n *netplan) networkdDropinFile(iface string) string {
 	// We are hardcoding the netplan priority to 10 since we are deriving the netplan
 	// networkd configuration name based on the interface name only - aligning with
 	// the commonly used value for netplan.
+	if n.interfacePrefix != "" {
+		return filepath.Join(n.networkdDropinDir, fmt.Sprintf("10-netplan-%s-%s.network.d", n.interfacePrefix, iface), "override.conf")
+	}
 	return filepath.Join(n.networkdDropinDir, fmt.Sprintf("10-netplan-%s.network.d", iface), "override.conf")
 }
 
 // write writes systemd's drop-in config file.
-func (nd networkdNetplanDropin) write(n netplan, iface string) error {
+func (nd networkdNetplanDropin) write(n *netplan, iface string) error {
 	dropinFile := n.networkdDropinFile(iface)
 
 	logger.Infof("writing systemd drop in to: %s", dropinFile)
@@ -286,7 +297,7 @@ func shouldUseDomains(idx int) *bool {
 
 // writeNetplanEthernetDropin selects the ethernet configuration, transforms it
 // into a netplan dropin format and writes it down to the netplan's drop-in directory.
-func (n netplan) writeNetplanEthernetDropin(mtuMap map[string]int, interfaces, ipv6Interfaces []string) error {
+func (n *netplan) writeNetplanEthernetDropin(mtuMap map[string]int, interfaces, ipv6Interfaces []string) error {
 	dropin := netplanDropin{
 		Network: netplanNetwork{
 			Version:   netplanConfigVersion,
@@ -321,7 +332,12 @@ func (n netplan) writeNetplanEthernetDropin(mtuMap map[string]int, interfaces, i
 			}
 		}
 
-		dropin.Network.Ethernets[iface] = ne
+		key := iface
+		if n.interfacePrefix != "" {
+			key = fmt.Sprintf("%s-%s", n.interfacePrefix, iface)
+		}
+
+		dropin.Network.Ethernets[key] = ne
 	}
 
 	if err := n.write(dropin, netplanEthernetSuffix); err != nil {
@@ -332,7 +348,7 @@ func (n netplan) writeNetplanEthernetDropin(mtuMap map[string]int, interfaces, i
 }
 
 // write writes the netplan dropin file.
-func (n netplan) write(nd netplanDropin, suffix string) error {
+func (n *netplan) write(nd netplanDropin, suffix string) error {
 	dropinFile := n.dropinFile(suffix)
 	dropinDir := filepath.Dir(dropinFile)
 	err := os.MkdirAll(dropinDir, 0755)
@@ -352,12 +368,12 @@ func (n netplan) write(nd netplanDropin, suffix string) error {
 // a priority of 1 allows the guest-agent to override any existing default configurations
 // while also allowing users the freedom of using priorities of '0...' to override the
 // agent's own configurations.
-func (n netplan) dropinFile(suffix string) string {
+func (n *netplan) dropinFile(suffix string) string {
 	return filepath.Join(n.netplanConfigDir, fmt.Sprintf("%d-google-guest-agent-%s.yaml", n.priority, suffix))
 }
 
 // SetupVlanInterface writes the apppropriate vLAN interfaces netplan configuration.
-func (n netplan) SetupVlanInterface(ctx context.Context, config *cfg.Sections, nics *Interfaces) error {
+func (n *netplan) SetupVlanInterface(ctx context.Context, config *cfg.Sections, nics *Interfaces) error {
 	// Retrieves the ethernet nics so we can detect the parent one.
 	googleInterfaces, err := interfaceNames(nics.EthernetInterfaces)
 	if err != nil {
@@ -401,7 +417,7 @@ func (n netplan) SetupVlanInterface(ctx context.Context, config *cfg.Sections, n
 }
 
 // Rollback deletes the ethernet and VLAN interfaces netplan drop-in files.
-func (n netplan) Rollback(ctx context.Context, nics *Interfaces) error {
+func (n *netplan) Rollback(ctx context.Context, nics *Interfaces) error {
 	logger.Infof("rolling back changes for %s", n.Name())
 
 	interfaces, err := interfaceNames(nics.EthernetInterfaces)
