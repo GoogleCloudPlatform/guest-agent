@@ -80,7 +80,9 @@ type netplanNetwork struct {
 	Vlans map[string]netplanVlan `yaml:"vlans,omitempty"`
 }
 
-// netplanEthernet describes the actual ethernet configuration.
+// netplanEthernet describes the actual ethernet configuration. Refer
+// https://netplan.readthedocs.io/en/stable/netplan-yaml/#properties-for-device-type-ethernets
+// for more details.
 type netplanEthernet struct {
 	// Match is the interface's matching rule.
 	Match netplanMatch `yaml:"match"`
@@ -113,18 +115,33 @@ type netplanMatch struct {
 }
 
 // netplanVlan describes the netplan's vlan interface configuration.
+// Refer https://netplan.readthedocs.io/en/stable/netplan-yaml/#properties-for-device-type-vlans
+// for more details.
 type netplanVlan struct {
 	// ID is the the VLAN ID.
 	ID int `yaml:"id,omitempty"`
 
 	// Link is the vlan's parent interface.
-	Link string `yaml:"id,link"`
+	Link string `yaml:"link,omitempty"`
 
 	// DHCPv4 determines if DHCPv4 support must be enabled to such an interface.
 	DHCPv4 *bool `yaml:"dhcp4,omitempty"`
 
 	// DHCPv6 determines if DHCPv6 support must be enabled to such an interface.
 	DHCPv6 *bool `yaml:"dhcp6,omitempty"`
+
+	// OverrideMacAddress sets the device’s MAC address. By default it will use same as
+	// parent NIC.
+	OverrideMacAddress string `yaml:"macaddress,omitempty"`
+
+	// MTU sets the MTU for interface. The default is 1500.
+	MTU int `yaml:"mtu,omitempty"`
+
+	// DHCP4Overrides sets DHCP4 overrides for the vlan.
+	DHCP4Overrides *netplanDHCPOverrides `yaml:"dhcp4-overrides,omitempty"`
+
+	// DHCP6Overrides sets DHCP6 overrides for the vlan.
+	DHCP6Overrides *netplanDHCPOverrides `yaml:"dhcp6-overrides,omitempty"`
 }
 
 // networkdNetplanDropin maps systemd-networkd's overriding drop-in if networkd
@@ -193,6 +210,16 @@ func (n *netplan) SetupEthernetInterface(ctx context.Context, config *cfg.Sectio
 		return fmt.Errorf("error writing systemd-networkd's drop-in: %v", err)
 	}
 
+	if err := n.reloadConfigs(ctx); err != nil {
+		return fmt.Errorf("error applying ethernet interface configs: %w", err)
+	}
+
+	return nil
+}
+
+// reloadConfigs triggers config reload to make sure ethernet/vlan configs are written
+// on disk are applied by netplan.
+func (n *netplan) reloadConfigs(ctx context.Context) error {
 	// Avoid restarting systemd-networkd.
 	if err := run.Quiet(ctx, "networkctl", "reload"); err != nil {
 		return fmt.Errorf("error reloading systemd-networkd network configs: %v", err)
@@ -267,6 +294,7 @@ func (n *netplan) networkdDropinFile(iface string) string {
 	if n.interfacePrefix != "" {
 		return filepath.Join(n.networkdDropinDir, fmt.Sprintf("10-netplan-%s-%s.network.d", n.interfacePrefix, iface), "override.conf")
 	}
+
 	return filepath.Join(n.networkdDropinDir, fmt.Sprintf("10-netplan-%s.network.d", iface), "override.conf")
 }
 
@@ -332,12 +360,15 @@ func (n *netplan) writeNetplanEthernetDropin(mtuMap map[string]int, interfaces, 
 			}
 		}
 
-		key := iface
-		if n.interfacePrefix != "" {
-			key = fmt.Sprintf("%s-%s", n.interfacePrefix, iface)
-		}
-
+		key := n.ID(iface)
 		dropin.Network.Ethernets[key] = ne
+	}
+
+	// This can happen if its a single NIC VM and primary NIC is not managed
+	// by Guest Agent. No need to write a file with just version in [dropin].
+	if len(dropin.Network.Ethernets) == 0 {
+		logger.Infof("No NICs to configure, skipping writeNetplanEthernetDropin")
+		return nil
 	}
 
 	if err := n.write(dropin, netplanEthernetSuffix); err != nil {
@@ -345,6 +376,16 @@ func (n *netplan) writeNetplanEthernetDropin(mtuMap map[string]int, interfaces, 
 	}
 
 	return nil
+}
+
+// ID returns the Netplan ID used for referencing parent NIC in VLAN NIC
+// configuration and the key in ethernet based NIC configuration.
+func (n *netplan) ID(iface string) string {
+	key := iface
+	if n.interfacePrefix != "" {
+		key = fmt.Sprintf("%s-%s", n.interfacePrefix, iface)
+	}
+	return key
 }
 
 // write writes the netplan dropin file.
@@ -372,45 +413,118 @@ func (n *netplan) dropinFile(suffix string) string {
 	return filepath.Join(n.netplanConfigDir, fmt.Sprintf("%d-google-guest-agent-%s.yaml", n.priority, suffix))
 }
 
+func (n *netplan) vlanInterfaceName(parentInterface string, vlanID int) string {
+	return fmt.Sprintf("gcp.%s.%d", parentInterface, vlanID)
+}
+
 // SetupVlanInterface writes the apppropriate vLAN interfaces netplan configuration.
 func (n *netplan) SetupVlanInterface(ctx context.Context, config *cfg.Sections, nics *Interfaces) error {
 	// Retrieves the ethernet nics so we can detect the parent one.
 	googleInterfaces, err := interfaceNames(nics.EthernetInterfaces)
 	if err != nil {
-		return fmt.Errorf("could not list interfaces names: %+v", err)
+		return fmt.Errorf("could not list interfaces names: %w", err)
 	}
 
+	vlanParentMap, err := vlanInterfaceParentMap(nics.VlanInterfaces, googleInterfaces)
+	if err != nil {
+		return fmt.Errorf("could not get all VLAN IDs and its parent: %w", err)
+	}
+
+	if err := n.writeNetplanVLANDropin(nics, vlanParentMap); err != nil {
+		return fmt.Errorf("unable to write netplan VLAN dropin: %w", err)
+	}
+
+	if err := n.writeNetworkdVLANDropin(nics, vlanParentMap); err != nil {
+		return fmt.Errorf("unable to write netplan networkd VLAN dropin: %w", err)
+	}
+
+	if err := n.reloadConfigs(ctx); err != nil {
+		return fmt.Errorf("error applying vlan interface configs: %w", err)
+	}
+
+	return nil
+}
+
+func (n *netplan) writeNetplanVLANDropin(nics *Interfaces, parentMap map[int]string) error {
 	dropin := netplanDropin{
 		Network: netplanNetwork{
 			Version: netplanConfigVersion,
+			Vlans:   make(map[string]netplanVlan),
 		},
 	}
 
-	for i, curr := range nics.VlanInterfaces {
-		parentInterface, err := vlanParentInterface(googleInterfaces, curr)
-		if err != nil {
-			return fmt.Errorf("failed to determine vlan's parent interface: %+v", err)
-		}
-
-		iface := fmt.Sprintf("gcp.%s.%d", parentInterface, curr.Vlan)
-		logger.Debugf("Adding %s(%d) to drop-in configuration.", iface, i)
+	for _, curr := range nics.VlanInterfaces {
+		iface := n.vlanInterfaceName(parentMap[curr.Vlan], curr.Vlan)
+		logger.Debugf("Adding %s(%d) to drop-in configuration.", iface, curr.Vlan)
 
 		trueVal := true
+		falseVal := false
 		nv := netplanVlan{
-			ID:     curr.Vlan,
-			Link:   parentInterface,
-			DHCPv4: &trueVal,
+			ID:                 curr.Vlan,
+			Link:               n.ID(parentMap[curr.Vlan]),
+			DHCPv4:             &trueVal,
+			OverrideMacAddress: curr.Mac,
+			MTU:                curr.MTU,
+			DHCP4Overrides:     &netplanDHCPOverrides{UseDomains: &falseVal},
+			DHCP6Overrides:     &netplanDHCPOverrides{UseDomains: &falseVal},
 		}
 
 		if len(curr.IPv6) > 0 {
 			nv.DHCPv6 = &trueVal
 		}
 
-		dropin.Network.Vlans[iface] = nv
+		key := n.ID(iface)
+		dropin.Network.Vlans[key] = nv
 	}
 
 	if err := n.write(dropin, netplanVlanSuffix); err != nil {
 		return fmt.Errorf("failed to write netplan vlan drop-in config: %+v", err)
+	}
+
+	return nil
+}
+
+func (n *netplan) writeNetworkdVLANDropin(nics *Interfaces, parentMap map[int]string) error {
+	googleIpv6Interfaces := vlanInterfaceListsIpv6(nics.VlanInterfaces)
+
+	stat, err := os.Stat(n.networkdDropinDir)
+	if err != nil {
+		return fmt.Errorf("failed to stat systemd-networkd's drop-in root dir: %w", err)
+	}
+
+	if !stat.IsDir() {
+		return fmt.Errorf("systemd-networkd drop-in dir(%s) is not a dir", n.networkdDropinDir)
+	}
+
+	for _, iface := range nics.VlanInterfaces {
+		logger.Debugf("writing systemd-networkd drop-in config for VLAN ID: %d", iface.Vlan)
+
+		var dhcp = "ipv4"
+		if slices.Contains(googleIpv6Interfaces, iface.Vlan) {
+			dhcp = "yes"
+		}
+
+		ifaceName := n.vlanInterfaceName(parentMap[iface.Vlan], iface.Vlan)
+		matchID := n.ID(ifaceName)
+
+		// Create and setup ini file.
+		data := networkdNetplanDropin{
+			Match: systemdMatchConfig{
+				Name: matchID,
+			},
+			Network: systemdNetworkConfig{
+				DNSDefaultRoute: false,
+				DHCP:            dhcp,
+			},
+			DHCPv4: &systemdDHCPConfig{
+				RoutesToDNS: false,
+				RoutesToNTP: false,
+			},
+		}
+
+		if err := data.write(n, ifaceName); err != nil {
+			return fmt.Errorf("failed to write systemd drop-in config for VLAN ID(%s): %w", ifaceName, err)
+		}
 	}
 
 	return nil
@@ -423,6 +537,10 @@ func (n *netplan) Rollback(ctx context.Context, nics *Interfaces) error {
 	interfaces, err := interfaceNames(nics.EthernetInterfaces)
 	if err != nil {
 		return fmt.Errorf("failed to get list of interface names: %v", err)
+	}
+	parentInterfaces, err := vlanInterfaceParentMap(nics.VlanInterfaces, interfaces)
+	if err != nil {
+		return fmt.Errorf("failed to get list of vlan parent interfaces: %v", err)
 	}
 
 	var deleteMe []string
@@ -440,6 +558,12 @@ func (n *netplan) Rollback(ctx context.Context, nics *Interfaces) error {
 		deleteMe = append(deleteMe, netplanVlanDropinFile)
 	}
 
+	for _, iface := range nics.VlanInterfaces {
+		ifaceName := n.vlanInterfaceName(parentInterfaces[iface.Vlan], iface.Vlan)
+		dropinFile := n.networkdDropinFile(ifaceName)
+		deleteMe = append(deleteMe, dropinFile)
+	}
+
 	for _, configFile := range deleteMe {
 		if err := os.Remove(configFile); err != nil {
 			if !os.IsNotExist(err) {
@@ -450,11 +574,8 @@ func (n *netplan) Rollback(ctx context.Context, nics *Interfaces) error {
 		}
 	}
 
-	if err := run.Quiet(ctx, "networkctl", "reload"); err != nil {
-		return fmt.Errorf("error reloading systemd-networkd network configs: %v", err)
-	}
-	if err := run.Quiet(ctx, "netplan", "apply"); err != nil {
-		return fmt.Errorf("error applying netplan changes: %w", err)
+	if err := n.reloadConfigs(ctx); err != nil {
+		return fmt.Errorf("error reloading configs: %v", err)
 	}
 
 	return nil
