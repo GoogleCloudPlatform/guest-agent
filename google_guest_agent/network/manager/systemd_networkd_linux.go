@@ -106,7 +106,10 @@ type systemdNetworkConfig struct {
 }
 
 // systemdDHCPConfig contains the dhcp specific configurations for a
-// systemd network configuration.
+// systemd network configuration. RouteToDNS and RouteToNTP are present
+// only in context of [DHCPv4]
+// https://www.freedesktop.org/software/systemd/man/latest/systemd.network.html#RoutesToDNS=
+// https://www.freedesktop.org/software/systemd/man/latest/systemd.network.html#RoutesToNTP=
 type systemdDHCPConfig struct {
 	// RoutesToDNS defines if routes to the DNS servers received from the DHCP
 	// shoud be configured/installed.
@@ -170,7 +173,7 @@ type systemdNetdevConfig struct {
 }
 
 // Name returns the name of the network manager service.
-func (n systemdNetworkd) Name() string {
+func (n *systemdNetworkd) Name() string {
 	return "systemd-networkd"
 }
 
@@ -183,7 +186,7 @@ func (n *systemdNetworkd) Configure(ctx context.Context, config *cfg.Sections) {
 // IsManaging checks whether systemd-networkd is managing the provided interface.
 // This first checks if the systemd-networkd service is running, then uses networkctl
 // to check if systemd-networkd is managing or has configured the provided interface.
-func (n systemdNetworkd) IsManaging(ctx context.Context, iface string) (bool, error) {
+func (n *systemdNetworkd) IsManaging(ctx context.Context, iface string) (bool, error) {
 	// Check the version.
 	if _, err := execLookPath("networkctl"); err != nil {
 		if errors.Is(err, exec.ErrNotFound) {
@@ -237,7 +240,7 @@ func (n systemdNetworkd) IsManaging(ctx context.Context, iface string) (bool, er
 
 // SetupEthernetInterface sets up the non-primary network interfaces for systemd-networkd by writing
 // configuration files to the specified configuration directory.
-func (n systemdNetworkd) SetupEthernetInterface(ctx context.Context, config *cfg.Sections, nics *Interfaces) error {
+func (n *systemdNetworkd) SetupEthernetInterface(ctx context.Context, config *cfg.Sections, nics *Interfaces) error {
 	// Create a network configuration file with default configurations for each network interface.
 	googleInterfaces, googleIpv6Interfaces := interfaceListsIpv4Ipv6(nics.EthernetInterfaces)
 
@@ -268,7 +271,7 @@ func (n systemdNetworkd) SetupEthernetInterface(ctx context.Context, config *cfg
 
 // SetupVlanInterface writes the apppropriate vLAN interfaces configuration for the network manager service
 // for all configured interfaces.
-func (n systemdNetworkd) SetupVlanInterface(ctx context.Context, config *cfg.Sections, nics *Interfaces) error {
+func (n *systemdNetworkd) SetupVlanInterface(ctx context.Context, config *cfg.Sections, nics *Interfaces) error {
 	// Retrieves the ethernet nics so we can detect the parent one.
 	googleInterfaces, err := interfaceNames(nics.EthernetInterfaces)
 	if err != nil {
@@ -367,7 +370,7 @@ func (n systemdNetworkd) SetupVlanInterface(ctx context.Context, config *cfg.Sec
 }
 
 // removeVlanInterfaces removes vlan interfaces that are not present in keepMe slice.
-func (n systemdNetworkd) removeVlanInterfaces(keepMe []string) (bool, error) {
+func (n *systemdNetworkd) removeVlanInterfaces(keepMe []string) (bool, error) {
 	files, err := os.ReadDir(n.configDir)
 	if err != nil {
 		return false, fmt.Errorf("failed to read content from %s: %+v", n.configDir, err)
@@ -441,13 +444,13 @@ func (n systemdNetworkd) removeVlanInterfaces(keepMe []string) (bool, error) {
 // a priority of 1 allows the guest-agent to override any existing default configurations
 // while also allowing users the freedom of using priorities of '0...' to override the
 // agent's own configurations.
-func (n systemdNetworkd) netdevFile(iface string) string {
+func (n *systemdNetworkd) netdevFile(iface string) string {
 	return filepath.Join(n.configDir, fmt.Sprintf("%d-%s-google-guest-agent.netdev", n.priority, iface))
 }
 
 // deprecatedNetdevFile returns the older and deprecated networkd's netdev file. It's
 // present mainly to allow us to roll it back.
-func (n systemdNetworkd) deprecatedNetdevFile(iface string) string {
+func (n *systemdNetworkd) deprecatedNetdevFile(iface string) string {
 	return filepath.Join(n.configDir, fmt.Sprintf("%d-%s-google-guest-agent.netdev", n.deprecatedPriority, iface))
 }
 
@@ -457,18 +460,18 @@ func (n systemdNetworkd) deprecatedNetdevFile(iface string) string {
 // a priority of 1 allows the guest-agent to override any existing default configurations
 // while also allowing users the freedom of using priorities of '0...' to override the
 // agent's own configurations.
-func (n systemdNetworkd) networkFile(iface string) string {
+func (n *systemdNetworkd) networkFile(iface string) string {
 	return filepath.Join(n.configDir, fmt.Sprintf("%d-%s-google-guest-agent.network", n.priority, iface))
 }
 
 // deprecatedNetworkFile returns the older and deprecated networkd's network file. It's
 // present mainly to allow us to roll it back.
-func (n systemdNetworkd) deprecatedNetworkFile(iface string) string {
+func (n *systemdNetworkd) deprecatedNetworkFile(iface string) string {
 	return filepath.Join(n.configDir, fmt.Sprintf("%d-%s-google-guest-agent.network", n.deprecatedPriority, iface))
 }
 
 // write writes systemd's .netdev config file.
-func (nd systemdNetdevConfig) write(n systemdNetworkd, iface string) error {
+func (nd systemdNetdevConfig) write(n *systemdNetworkd, iface string) error {
 	if err := writeIniFile(n.netdevFile(iface), &nd); err != nil {
 		return fmt.Errorf("error saving .netdev config for %s: %v", iface, err)
 	}
@@ -482,7 +485,7 @@ func (nd systemdNetdevConfig) isGuestAgentManaged() bool {
 }
 
 // write writes the systemd's configuration file to its destination.
-func (sc systemdConfig) write(n systemdNetworkd, iface string) error {
+func (sc systemdConfig) write(n *systemdNetworkd, iface string) error {
 	if err := writeIniFile(n.networkFile(iface), &sc); err != nil {
 		return fmt.Errorf("error saving .network config for %s: %v", iface, err)
 	}
@@ -497,7 +500,7 @@ func (sc systemdConfig) isGuestAgentManaged() bool {
 
 // writeEthernetConfig writes the systemd config for all the provided interfaces in the
 // provided directory using the given priority.
-func (n systemdNetworkd) writeEthernetConfig(interfaces, ipv6Interfaces []string) error {
+func (n *systemdNetworkd) writeEthernetConfig(interfaces, ipv6Interfaces []string) error {
 	for i, iface := range interfaces {
 		if !shouldManageInterface(i == 0) {
 			logger.Debugf("ManagePrimaryNIC is disabled, skipping systemdNetworkd writeEthernetConfig for %s", iface)
@@ -548,7 +551,7 @@ func (n systemdNetworkd) writeEthernetConfig(interfaces, ipv6Interfaces []string
 }
 
 // Rollback deletes the configuration files created by the agent for systemd-networkd.
-func (n systemdNetworkd) Rollback(ctx context.Context, nics *Interfaces) error {
+func (n *systemdNetworkd) Rollback(ctx context.Context, nics *Interfaces) error {
 	logger.Infof("rolling back changes for %s", n.Name())
 	interfaces, err := interfaceNames(nics.EthernetInterfaces)
 	if err != nil {
@@ -603,7 +606,7 @@ func (n systemdNetworkd) Rollback(ctx context.Context, nics *Interfaces) error {
 	return nil
 }
 
-func (n systemdNetworkd) rollbackNetwork(configFile string) (bool, error) {
+func (n *systemdNetworkd) rollbackNetwork(configFile string) (bool, error) {
 	logger.Debugf("Checking for %s", configFile)
 
 	_, err := os.Stat(configFile)
@@ -632,7 +635,7 @@ func (n systemdNetworkd) rollbackNetwork(configFile string) (bool, error) {
 	return false, nil
 }
 
-func (n systemdNetworkd) rollbackNetdev(configFile string) (bool, error) {
+func (n *systemdNetworkd) rollbackNetdev(configFile string) (bool, error) {
 	logger.Debugf("Checking for %s", configFile)
 
 	_, err := os.Stat(configFile)

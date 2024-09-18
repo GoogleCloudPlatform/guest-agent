@@ -49,7 +49,7 @@ const (
 )
 
 // Name returns the name of this network manager service.
-func (n wicked) Name() string {
+func (n *wicked) Name() string {
 	return "wicked"
 }
 
@@ -65,7 +65,7 @@ func (n *wicked) Configure(ctx context.Context, config *cfg.Sections) {
 }
 
 // IsManaging checks whether wicked is managing the provided interface.
-func (n wicked) IsManaging(ctx context.Context, iface string) (bool, error) {
+func (n *wicked) IsManaging(ctx context.Context, iface string) (bool, error) {
 	// Check the current main network service. Primarily applicable to SUSE images.
 	res := run.WithOutput(ctx, "systemctl", "status", "network.service")
 	if strings.Contains(res.StdOut, "wicked.service") {
@@ -91,7 +91,7 @@ func (n wicked) IsManaging(ctx context.Context, iface string) (bool, error) {
 }
 
 // SetupEthernetInterface writes the necessary configuration files for each interface and enables them.
-func (n wicked) SetupEthernetInterface(ctx context.Context, cfg *cfg.Sections, nics *Interfaces) error {
+func (n *wicked) SetupEthernetInterface(ctx context.Context, cfg *cfg.Sections, nics *Interfaces) error {
 	ifaces, err := interfaceNames(nics.EthernetInterfaces)
 	if err != nil {
 		return fmt.Errorf("failed to get network interfaces: %v", err)
@@ -113,7 +113,7 @@ func (n wicked) SetupEthernetInterface(ctx context.Context, cfg *cfg.Sections, n
 
 // SetupVlanInterface writes the apppropriate vLAN interfaces configuration for the network manager service
 // for all configured interfaces.
-func (n wicked) SetupVlanInterface(ctx context.Context, cfg *cfg.Sections, nics *Interfaces) error {
+func (n *wicked) SetupVlanInterface(ctx context.Context, cfg *cfg.Sections, nics *Interfaces) error {
 	// Retrieves the ethernet nics so we can detect the parent one.
 	googleInterfaces, err := interfaceNames(nics.EthernetInterfaces)
 	if err != nil {
@@ -180,7 +180,7 @@ func (n wicked) SetupVlanInterface(ctx context.Context, cfg *cfg.Sections, nics 
 
 // cleanupVlanInterfaces removes vlan interfaces no longer configured, i.e. they were previously
 // added by the user but removed later.
-func (n wicked) cleanupVlanInterfaces(ctx context.Context, keepMe []string) error {
+func (n *wicked) cleanupVlanInterfaces(ctx context.Context, keepMe []string) error {
 	files, err := os.ReadDir(n.configDir)
 	if err != nil {
 		return fmt.Errorf("failed to read content from %s: %+v", n.configDir, err)
@@ -220,7 +220,7 @@ func (n wicked) cleanupVlanInterfaces(ctx context.Context, keepMe []string) erro
 
 // writeEthernetConfigs writes config files for the given ifaces in the given configuration
 // directory.
-func (n wicked) writeEthernetConfigs(ifaces []string) error {
+func (n *wicked) writeEthernetConfigs(ifaces []string) error {
 	var priority = 10100
 
 	// Write the config for all the non-primary network interfaces.
@@ -261,11 +261,11 @@ func (n wicked) writeEthernetConfigs(ifaces []string) error {
 }
 
 // ifcfgFilePath gets the file path for the configuration file for the given interface.
-func (n wicked) ifcfgFilePath(iface string) string {
+func (n *wicked) ifcfgFilePath(iface string) string {
 	return path.Join(n.configDir, fmt.Sprintf("ifcfg-%s", iface))
 }
 
-func (n wicked) removeInterface(ctx context.Context, iface string) error {
+func (n *wicked) removeInterface(ctx context.Context, iface string) error {
 	configFilePath := n.ifcfgFilePath(iface)
 
 	// Check if the file exists.
@@ -320,7 +320,7 @@ func (n wicked) removeInterface(ctx context.Context, iface string) error {
 }
 
 // Rollback deletes all the ifcfg files written by Setup, then reloads wicked.service.
-func (n wicked) Rollback(ctx context.Context, nics *Interfaces) error {
+func (n *wicked) Rollback(ctx context.Context, nics *Interfaces) error {
 	ifaces, err := interfaceNames(nics.EthernetInterfaces)
 	if err != nil {
 		return fmt.Errorf("failed to get network interfaces: %v", err)

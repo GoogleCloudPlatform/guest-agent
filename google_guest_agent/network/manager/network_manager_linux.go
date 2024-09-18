@@ -82,7 +82,7 @@ type networkManager struct {
 }
 
 // Name is the name of this network manager service.
-func (n networkManager) Name() string {
+func (n *networkManager) Name() string {
 	return "NetworkManager"
 }
 
@@ -92,7 +92,7 @@ func (n *networkManager) Configure(ctx context.Context, config *cfg.Sections) {
 }
 
 // IsManaging checks if NetworkManager is managing the provided interface.
-func (n networkManager) IsManaging(ctx context.Context, iface string) (bool, error) {
+func (n *networkManager) IsManaging(ctx context.Context, iface string) (bool, error) {
 	// Check whether NetworkManager.service is active.
 	if err := run.Quiet(ctx, "systemctl", "is-active", "NetworkManager.service"); err != nil {
 		return false, nil
@@ -125,7 +125,7 @@ func (n networkManager) IsManaging(ctx context.Context, iface string) (bool, err
 }
 
 // Setup sets up the necessary configurations for NetworkManager.
-func (n networkManager) SetupEthernetInterface(ctx context.Context, config *cfg.Sections, nics *Interfaces) error {
+func (n *networkManager) SetupEthernetInterface(ctx context.Context, config *cfg.Sections, nics *Interfaces) error {
 	ifaces, err := interfaceNames(nics.EthernetInterfaces)
 	if err != nil {
 		return fmt.Errorf("error getting interfaces: %v", err)
@@ -153,21 +153,21 @@ func (n networkManager) SetupEthernetInterface(ctx context.Context, config *cfg.
 
 // SetupVlanInterface writes the apppropriate vLAN interfaces configuration for the network manager service
 // for all configured interfaces.
-func (n networkManager) SetupVlanInterface(ctx context.Context, config *cfg.Sections, nics *Interfaces) error {
+func (n *networkManager) SetupVlanInterface(ctx context.Context, config *cfg.Sections, nics *Interfaces) error {
 	return nil
 }
 
 // networkManagerConfigFilePath gets the config file path for the provided interface.
-func (n networkManager) networkManagerConfigFilePath(iface string) string {
+func (n *networkManager) networkManagerConfigFilePath(iface string) string {
 	return path.Join(n.configDir, fmt.Sprintf("google-guest-agent-%s.nmconnection", iface))
 }
 
-func (n networkManager) ifcfgFilePath(iface string) string {
+func (n *networkManager) ifcfgFilePath(iface string) string {
 	return path.Join(n.networkScriptsDir, fmt.Sprintf("ifcfg-%s", iface))
 }
 
 // writeNetworkManagerConfigs writes the configuration files for NetworkManager.
-func (n networkManager) writeNetworkManagerConfigs(ifaces []string) ([]string, error) {
+func (n *networkManager) writeNetworkManagerConfigs(ifaces []string) ([]string, error) {
 	var result []string
 
 	for i, iface := range ifaces {
@@ -231,7 +231,7 @@ func (n networkManager) writeNetworkManagerConfigs(ifaces []string) ([]string, e
 }
 
 // Rollback deletes the configurations created by Setup().
-func (n networkManager) Rollback(ctx context.Context, nics *Interfaces) error {
+func (n *networkManager) Rollback(ctx context.Context, nics *Interfaces) error {
 	ifaces, err := interfaceNames(nics.EthernetInterfaces)
 	if err != nil {
 		return fmt.Errorf("getting interfaces: %v", err)

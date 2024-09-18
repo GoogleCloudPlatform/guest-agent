@@ -157,18 +157,18 @@ type ipVersion struct {
 type dhclient struct{}
 
 // Name returns the name of the network manager service.
-func (n dhclient) Name() string {
+func (n *dhclient) Name() string {
 	return "dhclient"
 }
 
 // Configure gives the opportunity for the Service implementation to adjust its configuration
 // based on the Guest Agent configuration.
-func (n dhclient) Configure(ctx context.Context, config *cfg.Sections) {
+func (n *dhclient) Configure(ctx context.Context, config *cfg.Sections) {
 }
 
 // isDhclientInstalled returns true if the dhclient binary/executable is
 // installed in the running system.
-func (n dhclient) isDhclientInstalled() (bool, error) {
+func (n *dhclient) isDhclientInstalled() (bool, error) {
 	if _, err := execLookPath("dhclient"); err != nil {
 		if errors.Is(err, exec.ErrNotFound) {
 			return false, nil
@@ -179,13 +179,13 @@ func (n dhclient) isDhclientInstalled() (bool, error) {
 }
 
 // IsManaging checks if the dhclient CLI is available.
-func (n dhclient) IsManaging(ctx context.Context, iface string) (bool, error) {
+func (n *dhclient) IsManaging(ctx context.Context, iface string) (bool, error) {
 	return n.isDhclientInstalled()
 }
 
 // SetupEthernetInterface sets up the non-primary interfaces with dhclient, having different setup procedures
 // for IPv6 network interfaces and IPv4 network interfaces.
-func (n dhclient) SetupEthernetInterface(ctx context.Context, config *cfg.Sections, nics *Interfaces) error {
+func (n *dhclient) SetupEthernetInterface(ctx context.Context, config *cfg.Sections, nics *Interfaces) error {
 	dhcpCommand := config.NetworkInterfaces.DHCPCommand
 	if dhcpCommand != "" {
 		tokens := strings.Split(dhcpCommand, " ")
@@ -243,7 +243,7 @@ func (n dhclient) SetupEthernetInterface(ctx context.Context, config *cfg.Sectio
 }
 
 // SetupVlanInterface calls the appropriate native commands to configure a vlan interface.
-func (n dhclient) SetupVlanInterface(ctx context.Context, config *cfg.Sections, nics *Interfaces) error {
+func (n *dhclient) SetupVlanInterface(ctx context.Context, config *cfg.Sections, nics *Interfaces) error {
 	logger.Debugf("vlans: %+v", nics.VlanInterfaces)
 
 	// Retrieves the ethernet nics so we can detect the parent one.
@@ -343,7 +343,7 @@ func (n dhclient) SetupVlanInterface(ctx context.Context, config *cfg.Sections, 
 	return nil
 }
 
-func (n dhclient) removeVlanInterfaces(ctx context.Context, keepMe []string) error {
+func (n *dhclient) removeVlanInterfaces(ctx context.Context, keepMe []string) error {
 	sysInterfaces, err := net.Interfaces()
 	if err != nil {
 		return fmt.Errorf("failed to list systems interfaces: %+v", err)
@@ -492,7 +492,7 @@ func dhclientProcessExists(_ context.Context, iface string, ipVersion ipVersion)
 }
 
 // Rollback releases all leases from DHClient, effectively undoing the dhclient configurations.
-func (n dhclient) Rollback(ctx context.Context, nics *Interfaces) error {
+func (n *dhclient) Rollback(ctx context.Context, nics *Interfaces) error {
 	// Determine if we can even rollback dhclient processes.
 	if isInstalled, err := n.isDhclientInstalled(); !isInstalled || err != nil {
 		logger.Debugf("No preconditions met for dhclient roll back, skipping.")
