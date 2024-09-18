@@ -27,6 +27,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/run"
 	"github.com/GoogleCloudPlatform/guest-agent/metadata"
 	"github.com/go-ini/ini"
@@ -429,6 +430,10 @@ func TestSystemdNetworkdIsManaging(t *testing.T) {
 
 // TestSystemdNetworkdConfig tests whether config file writing works correctly.
 func TestSystemdNetworkdConfig(t *testing.T) {
+	if err := cfg.Load(nil); err != nil {
+		t.Fatalf("cfg.Load(nil) failed unexpectedly with error: %v", err)
+	}
+
 	tests := []struct {
 		// name is the name of the test.
 		name string
@@ -439,25 +444,34 @@ func TestSystemdNetworkdConfig(t *testing.T) {
 		// testIpv6Interfaces is the list of mock IPv6 interfaces.
 		testIpv6Interfaces []string
 
+		// wantInterfaces is the list of test interfaces expected in output.
+		wantInterfaces []string
+
 		// expectedFiles is the list of expected file names.
 		expectedFiles []string
 
 		// expectedDHCP is the list of expected DHCP values.
 		expectedDHCP []string
+
+		// should manage primary nic interface.
+		managePrimary bool
 	}{
 		{
 			name:           "ipv4",
 			testInterfaces: []string{"iface0"},
+			wantInterfaces: []string{"iface0"},
 			expectedFiles: []string{
 				"1-iface0-google-guest-agent.network",
 			},
 			expectedDHCP: []string{
 				"ipv4",
 			},
+			managePrimary: true,
 		},
 		{
 			name:               "ipv6",
 			testInterfaces:     []string{"iface0"},
+			wantInterfaces:     []string{"iface0"},
 			testIpv6Interfaces: []string{"iface0"},
 			expectedFiles: []string{
 				"1-iface0-google-guest-agent.network",
@@ -465,10 +479,12 @@ func TestSystemdNetworkdConfig(t *testing.T) {
 			expectedDHCP: []string{
 				"yes",
 			},
+			managePrimary: true,
 		},
 		{
 			name:               "multinic",
 			testInterfaces:     []string{"iface0", "iface1"},
+			wantInterfaces:     []string{"iface0", "iface1"},
 			testIpv6Interfaces: []string{"iface1"},
 			expectedFiles: []string{
 				"1-iface0-google-guest-agent.network",
@@ -478,11 +494,26 @@ func TestSystemdNetworkdConfig(t *testing.T) {
 				"ipv4",
 				"yes",
 			},
+			managePrimary: true,
+		},
+		{
+			name:               "multinic_no_primary",
+			testInterfaces:     []string{"iface0", "iface1"},
+			wantInterfaces:     []string{"iface1"},
+			testIpv6Interfaces: []string{"iface1"},
+			expectedFiles: []string{
+				"1-iface1-google-guest-agent.network",
+			},
+			expectedDHCP: []string{
+				"yes",
+			},
+			managePrimary: false,
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			cfg.Get().NetworkInterfaces.ManagePrimaryNIC = test.managePrimary
 			systemdTestSetup(t, systemdTestOpts{})
 
 			if err := mockSystemd.writeEthernetConfig(test.testInterfaces, test.testIpv6Interfaces); err != nil {
@@ -524,10 +555,10 @@ func TestSystemdNetworkdConfig(t *testing.T) {
 				}
 
 				// Check that the file matches the interface.
-				if sections.Match.Name != test.testInterfaces[i] {
+				if sections.Match.Name != test.wantInterfaces[i] {
 					t.Errorf(`%s does not have correct match.
 						Expected: %s
-						Actual: %s`, file.Name(), test.testInterfaces[i], sections.Match.Name)
+						Actual: %s`, file.Name(), test.wantInterfaces[i], sections.Match.Name)
 				}
 
 				// Make sure the DHCP section is set correctly.
