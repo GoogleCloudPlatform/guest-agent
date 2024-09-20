@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path"
+	"path/filepath"
 	"strings"
 
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
@@ -36,6 +36,10 @@ const (
 
 	// defaultNetworkScriptsDir is the directory where the old (no longer managed) ifcfg files are stored.
 	defaultNetworkScriptsDir = "/etc/sysconfig/network-scripts"
+
+	// nmConfigFileMode is the file mode for the NetworkManager config files.
+	// The permissions need to be 600 in order for nmcli to load and use the file correctly.
+	nmConfigFileMode = 0600
 )
 
 // nmConnectionSection is the connection section of NetworkManager's keyfile.
@@ -50,10 +54,20 @@ type nmConnectionSection struct {
 	ConnType string `ini:"type"`
 }
 
-// nmIPSection is the ipv4/ipv6 section of NetworkManager's keyfile.
-type nmIPSection struct {
+// nmIPv4Section is the ipv4 section of NetworkManager's keyfile.
+type nmIPv4Section struct {
 	// Method is the IP configuration method. Supports "auto", "manual", and "link-local".
 	Method string `ini:"method"`
+}
+
+// nmIPSection is the ipv6 section of NetworkManager's keyfile.
+type nmIPv6Section struct {
+	// Method is the IP configuration method. Supports "auto", "manual", and "link-local".
+	Method string `ini:"method"`
+
+	// MTU is MTU configuration for the interface. Default is auto, we set it explicitly
+	// for VLAN based interfaces.
+	MTU int `ini:"mtu"`
 }
 
 // nmConfig is a wrapper containing all the sections for the NetworkManager keyfile.
@@ -65,10 +79,41 @@ type nmConfig struct {
 	Connection nmConnectionSection `ini:"connection"`
 
 	// Ipv4 is the ipv4 section.
-	Ipv4 nmIPSection `ini:"ipv4"`
+	Ipv4 nmIPv4Section `ini:"ipv4"`
 
 	// Ipv6 is the ipv6 section.
-	Ipv6 nmIPSection `ini:"ipv6"`
+	Ipv6 nmIPv6Section `ini:"ipv6"`
+
+	// Vlan is the vlan section.
+	Vlan *nmVlan `ini:"vlan,omitempty"`
+
+	// Ethernet is 802-3-ethernet section.
+	Ethernet *nmEthernet `ini:"ethernet,omitempty"`
+}
+
+// nmEthernet is the [802-3-ethernet setting] section of nm-settings.
+// See https://networkmanager.dev/docs/api/latest/nm-settings-nmcli.html for more details.
+type nmEthernet struct {
+	// OverrideMacAddress requests that the device use this MAC address instead. This is
+	// required in case of VLAN NICs which otherwise by default ends up using parent NICs address.
+	OverrideMacAddress string `ini:"cloned-mac-address"`
+
+	// MTU is MTU configuration for the interface. Default is auto, we set it explicitly
+	// for VLAN based interfaces.
+	MTU int `ini:"mtu"`
+}
+
+// nmVlan is the [vlan setting] section of nm-settings.
+type nmVlan struct {
+	// Flags are one or more flags which control the behavior and features of the VLAN interface.
+	// See vlan.flags at https://networkmanager.dev/docs/api/latest/nm-settings-nmcli.html for details.
+	Flags int `ini:"flags"`
+
+	// ID is the actual Vlan ID.
+	ID int `ini:"id"`
+
+	// Parent is the name of the parent interface.
+	Parent string `ini:"parent"`
 }
 
 // networkManager implements the manager.Service interface for NetworkManager.
@@ -142,6 +187,12 @@ func (n *networkManager) SetupEthernetInterface(ctx context.Context, config *cfg
 		return fmt.Errorf("error reloading NetworkManager config cache: %v", err)
 	}
 
+	// We ignore the primary interface below. Attempt to spin up interfaces if we get
+	// atleast more than one in response.
+	if len(interfaces) <= 1 {
+		return nil
+	}
+
 	// Enable the new connections. Ignore the primary interface as it will already be up.
 	for _, ifname := range interfaces[1:] {
 		if err = run.Quiet(ctx, "nmcli", "conn", "up", "ifname", ifname); err != nil {
@@ -151,19 +202,97 @@ func (n *networkManager) SetupEthernetInterface(ctx context.Context, config *cfg
 	return nil
 }
 
+// vlanInterfaceName generates vlan interface name based on parent interface
+// name and VLAN ID.
+func (n *networkManager) vlanInterfaceName(parentInterface string, vlanID int) string {
+	return fmt.Sprintf("gcp.%s.%d", parentInterface, vlanID)
+}
+
 // SetupVlanInterface writes the apppropriate vLAN interfaces configuration for the network manager service
 // for all configured interfaces.
 func (n *networkManager) SetupVlanInterface(ctx context.Context, config *cfg.Sections, nics *Interfaces) error {
+	if len(nics.VlanInterfaces) == 0 {
+		logger.Debugf("No VLAN interfaces found, skipping setup")
+		return nil
+	}
+
+	if err := n.writeVLANConfigs(nics); err != nil {
+		return fmt.Errorf("error writing NetworkManager VLAN configs: %w", err)
+	}
+
+	if err := run.Quiet(ctx, "nmcli", "conn", "reload"); err != nil {
+		return fmt.Errorf("error reloading NetworkManager config cache for VLAN interfaces: %v", err)
+	}
+
+	return nil
+}
+
+// writeVLANConfigs writes NetworkManager configs for VLAN interfaces.
+func (n *networkManager) writeVLANConfigs(nics *Interfaces) error {
+	// Retrieves the ethernet nics so we can detect the parent one.
+	googleInterfaces, err := interfaceNames(nics.EthernetInterfaces)
+	if err != nil {
+		return fmt.Errorf("could not list interfaces names: %+v", err)
+	}
+
+	for _, curr := range nics.VlanInterfaces {
+		parentInterface, err := vlanParentInterface(googleInterfaces, curr)
+		if err != nil {
+			return fmt.Errorf("failed to determine vlan's (%d) parent interface: %w", curr.Vlan, err)
+		}
+
+		iface := n.vlanInterfaceName(parentInterface, curr.Vlan)
+		cfgFile := n.networkManagerConfigFilePath(iface)
+		connID := fmt.Sprintf("google-guest-agent-%s", iface)
+
+		nmCfg := nmConfig{
+			GuestAgent: guestAgentSection{
+				ManagedByGuestAgent: true,
+			},
+			Connection: nmConnectionSection{
+				InterfaceName: iface,
+				ID:            connID,
+				ConnType:      "vlan",
+			},
+			Vlan: &nmVlan{
+				// 1 is NM_VLAN_FLAG_REORDER_HEADERS.
+				Flags:  1,
+				ID:     curr.Vlan,
+				Parent: parentInterface,
+			},
+			Ipv4: nmIPv4Section{
+				Method: "auto",
+			},
+			Ipv6: nmIPv6Section{
+				Method: "auto",
+				MTU:    curr.MTU,
+			},
+			Ethernet: &nmEthernet{
+				OverrideMacAddress: curr.Mac,
+				MTU:                curr.MTU,
+			},
+		}
+
+		if err := writeIniFile(cfgFile, &nmCfg); err != nil {
+			return fmt.Errorf("error writing vlan config for %q: %v", iface, err)
+		}
+
+		// If the permission is not properly set nmcli will fail to load the file correctly.
+		if err := os.Chmod(cfgFile, nmConfigFileMode); err != nil {
+			return fmt.Errorf("error updating permissions for %s: %w", cfgFile, err)
+		}
+	}
+
 	return nil
 }
 
 // networkManagerConfigFilePath gets the config file path for the provided interface.
 func (n *networkManager) networkManagerConfigFilePath(iface string) string {
-	return path.Join(n.configDir, fmt.Sprintf("google-guest-agent-%s.nmconnection", iface))
+	return filepath.Join(n.configDir, fmt.Sprintf("google-guest-agent-%s.nmconnection", iface))
 }
 
 func (n *networkManager) ifcfgFilePath(iface string) string {
-	return path.Join(n.networkScriptsDir, fmt.Sprintf("ifcfg-%s", iface))
+	return filepath.Join(n.networkScriptsDir, fmt.Sprintf("ifcfg-%s", iface))
 }
 
 // writeNetworkManagerConfigs writes the configuration files for NetworkManager.
@@ -191,10 +320,10 @@ func (n *networkManager) writeNetworkManagerConfigs(ifaces []string) ([]string, 
 				ID:            connID,
 				ConnType:      "ethernet",
 			},
-			Ipv4: nmIPSection{
+			Ipv4: nmIPv4Section{
 				Method: "auto",
 			},
-			Ipv6: nmIPSection{
+			Ipv6: nmIPv6Section{
 				Method: "auto",
 			},
 		}
@@ -205,7 +334,7 @@ func (n *networkManager) writeNetworkManagerConfigs(ifaces []string) ([]string, 
 		}
 
 		// The permissions need to be 600 in order for nmcli to load and use the file correctly.
-		if err := os.Chmod(configFilePath, 0600); err != nil {
+		if err := os.Chmod(configFilePath, nmConfigFileMode); err != nil {
 			return []string{}, fmt.Errorf("error updating permissions for %s connection config: %v", iface, err)
 		}
 
@@ -238,34 +367,54 @@ func (n *networkManager) Rollback(ctx context.Context, nics *Interfaces) error {
 	}
 
 	for _, iface := range ifaces {
-		configFilePath := path.Join(n.configDir, fmt.Sprintf("google-guest-agent-%s.nmconnection", iface))
+		if err := n.removeInterface(iface); err != nil {
+			logger.Errorf("Failed to remove %q interface with error: %v", iface, err)
+		}
+	}
 
-		_, err := os.Stat(configFilePath)
+	for _, vnic := range nics.VlanInterfaces {
+		parentInterface, err := vlanParentInterface(ifaces, vnic)
 		if err != nil {
-			if !os.IsNotExist(err) {
-				logger.Debugf("Can't remove NetworkManager configuration(%s), %s", configFilePath, err)
-			} else {
-				logger.Debugf("NetworkManager's configuration file doesn't exist, ignoring.")
-			}
-			continue
+			return fmt.Errorf("failed to determine vlan's parent interface: %+v", err)
 		}
 
-		config := new(nmConfig)
-		if err := readIniFile(configFilePath, config); err != nil {
-			return fmt.Errorf("failed to load NetworkManager .nmconnection file: %v", err)
-		}
-
-		if config.GuestAgent.ManagedByGuestAgent {
-			logger.Debugf("Attempting to remove NetworkManager configuration %s", configFilePath)
-
-			if err = os.Remove(configFilePath); err != nil {
-				return fmt.Errorf("error deleting config file for %s: %v", iface, err)
-			}
+		iface := n.vlanInterfaceName(parentInterface, vnic.Vlan)
+		if err := n.removeInterface(iface); err != nil {
+			logger.Errorf("Failed to remove %q interface with error: %v", iface, err)
 		}
 	}
 
 	if err := run.Quiet(ctx, "nmcli", "conn", "reload"); err != nil {
 		return fmt.Errorf("error reloading NetworkManager config cache: %v", err)
+	}
+
+	return nil
+}
+
+// removeInterface verifies .nmconnection is managed by Guest Agent and removes it.
+func (n *networkManager) removeInterface(iface string) error {
+	configFilePath := n.networkManagerConfigFilePath(iface)
+
+	_, err := os.Stat(configFilePath)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return fmt.Errorf("unable to remove %q interface, stat failed on %q: %w", iface, configFilePath, err)
+		}
+		logger.Debugf("NetworkManager's configuration file %q doesn't exist, ignoring.", configFilePath)
+		return nil
+	}
+
+	config := new(nmConfig)
+	if err := readIniFile(configFilePath, config); err != nil {
+		return fmt.Errorf("failed to load NetworkManager %q file: %v", configFilePath, err)
+	}
+
+	if config.GuestAgent.ManagedByGuestAgent {
+		logger.Debugf("Attempting to remove NetworkManager configuration %s", configFilePath)
+
+		if err = os.Remove(configFilePath); err != nil {
+			return fmt.Errorf("error deleting config file for %s: %v", iface, err)
+		}
 	}
 	return nil
 }

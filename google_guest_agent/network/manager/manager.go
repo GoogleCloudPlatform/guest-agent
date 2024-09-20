@@ -165,6 +165,7 @@ func SetupInterfaces(ctx context.Context, config *cfg.Sections, mds *metadata.De
 	}
 
 	if config.Unstable.VlanSetupEnabled {
+		logger.Infof("VLAN setup is enabled via config file, setting up interfaces")
 		if err = activeService.manager.SetupVlanInterface(ctx, config, nics); err != nil {
 			return fmt.Errorf("manager(%s): error setting up vlan interfaces: %v", activeService.manager.Name(), err)
 		}
