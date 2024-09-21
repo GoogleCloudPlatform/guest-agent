@@ -16,9 +16,11 @@ package manager
 
 import (
 	"fmt"
+	"sort"
 	"testing"
 
 	"github.com/GoogleCloudPlatform/guest-agent/metadata"
+	"github.com/google/go-cmp/cmp"
 )
 
 func TestVlanParentInterfaceSuccess(t *testing.T) {
@@ -71,6 +73,65 @@ func TestVlanParentInterfaceFailure(t *testing.T) {
 			_, err := vlanParentInterface([]string{}, vlan)
 			if err == nil {
 				t.Fatalf("vlanParentInterface(%s) = nil, want: non-nil", curr)
+			}
+		})
+	}
+}
+
+func TestVlanInterfaceListsIpv6(t *testing.T) {
+	nics := map[int]metadata.VlanInterface{
+		0: {Vlan: 4, DHCPv6Refresh: "123456"},
+		1: {Vlan: 5},
+		2: {Vlan: 6, MTU: 1234},
+		3: {Vlan: 7, Mac: "acd", ParentInterface: "/parent/0", DHCPv6Refresh: "7890"},
+	}
+	want := []int{4, 7}
+	got := vlanInterfaceListsIpv6(nics)
+	sort.Ints(got)
+
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("vlanInterfaceListsIpv6(%+v) returned unexpected diff (-want,+got)\n%s", nics, diff)
+	}
+}
+
+func TestVlanInterfaceParentMap(t *testing.T) {
+	tests := []struct {
+		name                  string
+		nics                  map[int]metadata.VlanInterface
+		allEthernetInterfaces []string
+		wantErr               bool
+		wantMap               map[int]string
+	}{
+		{
+			name:                  "all_valid_nics",
+			allEthernetInterfaces: []string{"ens3", "ens4"},
+			nics: map[int]metadata.VlanInterface{
+				4: {Vlan: 4, ParentInterface: "/computeMetadata/v1/instance/network-interfaces/0/"},
+				5: {Vlan: 5, ParentInterface: "/computeMetadata/v1/instance/network-interfaces/1/"},
+			},
+			wantMap: map[int]string{
+				4: "ens3",
+				5: "ens4",
+			},
+		},
+		{
+			name:                  "invalid_parent",
+			allEthernetInterfaces: []string{"ens3"},
+			nics: map[int]metadata.VlanInterface{
+				5: {Vlan: 5, ParentInterface: "/computeMetadata/v1/instance/network-interfaces/1/"},
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got, err := vlanInterfaceParentMap(test.nics, test.allEthernetInterfaces)
+			if (err != nil) != test.wantErr {
+				t.Fatalf("vlanInterfaceParentMap(%+v, %v) = error [%v], want error: %t", test.nics, test.allEthernetInterfaces, err, test.wantErr)
+			}
+			if diff := cmp.Diff(test.wantMap, got); diff != "" {
+				t.Errorf("vlanInterfaceParentMap(%+v, %v) returned unexpected diff (-want,+got)\n%s", test.nics, test.allEthernetInterfaces, diff)
 			}
 		})
 	}

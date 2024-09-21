@@ -191,6 +191,9 @@ type VlanInterface struct {
 
 	// GatewayIPv6 is the vlan's IPv6 gateway address.
 	GatewayIPv6 string
+
+	// DHCPv6Refresh determine if VLAN NIC supports IPV6.
+	DHCPv6Refresh string
 }
 
 // Project describes the projects instance's attributes.

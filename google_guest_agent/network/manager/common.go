@@ -53,6 +53,33 @@ func interfaceNames(nics []metadata.NetworkInterfaces) ([]string, error) {
 	return ifaces, nil
 }
 
+// vlanInterfaceParentMap gets a map of VLAN IDs and its parent NIC.
+func vlanInterfaceParentMap(nics map[int]metadata.VlanInterface, allEthernetInterfaces []string) (map[int]string, error) {
+	vlans := make(map[int]string)
+
+	for _, ni := range nics {
+		parentInterface, err := vlanParentInterface(allEthernetInterfaces, ni)
+		if err != nil {
+			return nil, fmt.Errorf("failed to determine vlan's parent interface: %+v", err)
+		}
+		vlans[ni.Vlan] = parentInterface
+	}
+
+	return vlans, nil
+}
+
+// vlanInterfaceListsIpv6 gets a list of VLAN IDs that support IPv6.
+func vlanInterfaceListsIpv6(nics map[int]metadata.VlanInterface) []int {
+	var googleIpv6Interfaces []int
+
+	for _, ni := range nics {
+		if ni.DHCPv6Refresh != "" {
+			googleIpv6Interfaces = append(googleIpv6Interfaces, ni.Vlan)
+		}
+	}
+	return googleIpv6Interfaces
+}
+
 // interfaceListsIpv4Ipv6 gets a list of interface names. The first list is a list of all
 // interfaces, and the second list consists of only interfaces that support IPv6.
 func interfaceListsIpv4Ipv6(nics []metadata.NetworkInterfaces) ([]string, []string) {
@@ -185,4 +212,14 @@ func writeYamlFile(filePath string, ptr any) error {
 		return fmt.Errorf("error writing yaml file: %w", err)
 	}
 	return nil
+}
+
+// readYamlFile reads and parses the content of filePath and loads it into ptr.
+func readYamlFile(filepath string, ptr any) error {
+	bytes, err := os.ReadFile(filepath)
+	if err != nil {
+		return fmt.Errorf("unable to read %q: %w", filepath, err)
+	}
+
+	return yaml.Unmarshal(bytes, ptr)
 }
