@@ -114,24 +114,13 @@ func (n *wicked) SetupEthernetInterface(ctx context.Context, cfg *cfg.Sections, 
 // SetupVlanInterface writes the apppropriate vLAN interfaces configuration for the network manager service
 // for all configured interfaces.
 func (n *wicked) SetupVlanInterface(ctx context.Context, cfg *cfg.Sections, nics *Interfaces) error {
-	// Retrieves the ethernet nics so we can detect the parent one.
-	googleInterfaces, err := interfaceNames(nics.EthernetInterfaces)
-	if err != nil {
-		return fmt.Errorf("could not list interfaces names: %+v", err)
-	}
-
 	var keepMe []string
 
 	// Make sure the dhclient route priority is in a different range of ethernet nics.
 	priority := 20200
 
 	for _, curr := range nics.VlanInterfaces {
-		parentInterface, err := vlanParentInterface(googleInterfaces, curr)
-		if err != nil {
-			return fmt.Errorf("failed to determine vlan's parent interface: %+v", err)
-		}
-
-		iface := fmt.Sprintf("gcp.%s.%d", parentInterface, curr.Vlan)
+		iface := fmt.Sprintf("gcp.%s.%d", curr.ParentInterfaceID, curr.Vlan)
 
 		configLines := []string{
 			googleComment,
@@ -141,7 +130,7 @@ func (n *wicked) SetupVlanInterface(ctx context.Context, cfg *cfg.Sections, nics
 			fmt.Sprintf("DEVICE=%s", iface),
 			fmt.Sprintf("MTU=%d", curr.MTU),
 			fmt.Sprintf("LLADDR=%s", curr.Mac),
-			fmt.Sprintf("ETHERDEVICE=%s", parentInterface),
+			fmt.Sprintf("ETHERDEVICE=%s", curr.ParentInterfaceID),
 			fmt.Sprintf("VLAN_ID=%d", curr.Vlan),
 			fmt.Sprintf("DHCLIENT_ROUTE_PRIORITY=%d", priority),
 		}
@@ -335,12 +324,7 @@ func (n *wicked) Rollback(ctx context.Context, nics *Interfaces) error {
 	}
 
 	for _, curr := range nics.VlanInterfaces {
-		parentInterface, err := vlanParentInterface(ifaces, curr)
-		if err != nil {
-			return fmt.Errorf("failed to determine vlan's parent interface: %+v", err)
-		}
-
-		iface := fmt.Sprintf("%s.%d", parentInterface, curr.Vlan)
+		iface := fmt.Sprintf("%s.%d", curr.ParentInterfaceID, curr.Vlan)
 		if err := n.removeInterface(ctx, iface); err != nil {
 			return fmt.Errorf("failed to rollback wicked ethernet interface: %+v", err)
 		}

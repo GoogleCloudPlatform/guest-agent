@@ -419,22 +419,11 @@ func (n *netplan) vlanInterfaceName(parentInterface string, vlanID int) string {
 
 // SetupVlanInterface writes the apppropriate vLAN interfaces netplan configuration.
 func (n *netplan) SetupVlanInterface(ctx context.Context, config *cfg.Sections, nics *Interfaces) error {
-	// Retrieves the ethernet nics so we can detect the parent one.
-	googleInterfaces, err := interfaceNames(nics.EthernetInterfaces)
-	if err != nil {
-		return fmt.Errorf("could not list interfaces names: %w", err)
-	}
-
-	vlanParentMap, err := vlanInterfaceParentMap(nics.VlanInterfaces, googleInterfaces)
-	if err != nil {
-		return fmt.Errorf("could not get all VLAN IDs and its parent: %w", err)
-	}
-
-	if err := n.writeNetplanVLANDropin(nics, vlanParentMap); err != nil {
+	if err := n.writeNetplanVLANDropin(nics); err != nil {
 		return fmt.Errorf("unable to write netplan VLAN dropin: %w", err)
 	}
 
-	if err := n.writeNetworkdVLANDropin(nics, vlanParentMap); err != nil {
+	if err := n.writeNetworkdVLANDropin(nics); err != nil {
 		return fmt.Errorf("unable to write netplan networkd VLAN dropin: %w", err)
 	}
 
@@ -445,7 +434,7 @@ func (n *netplan) SetupVlanInterface(ctx context.Context, config *cfg.Sections, 
 	return nil
 }
 
-func (n *netplan) writeNetplanVLANDropin(nics *Interfaces, parentMap map[int]string) error {
+func (n *netplan) writeNetplanVLANDropin(nics *Interfaces) error {
 	dropin := netplanDropin{
 		Network: netplanNetwork{
 			Version: netplanConfigVersion,
@@ -454,14 +443,14 @@ func (n *netplan) writeNetplanVLANDropin(nics *Interfaces, parentMap map[int]str
 	}
 
 	for _, curr := range nics.VlanInterfaces {
-		iface := n.vlanInterfaceName(parentMap[curr.Vlan], curr.Vlan)
+		iface := n.vlanInterfaceName(curr.ParentInterfaceID, curr.Vlan)
 		logger.Debugf("Adding %s(%d) to drop-in configuration.", iface, curr.Vlan)
 
 		trueVal := true
 		falseVal := false
 		nv := netplanVlan{
 			ID:                 curr.Vlan,
-			Link:               n.ID(parentMap[curr.Vlan]),
+			Link:               n.ID(curr.ParentInterfaceID),
 			DHCPv4:             &trueVal,
 			OverrideMacAddress: curr.Mac,
 			MTU:                curr.MTU,
@@ -484,7 +473,7 @@ func (n *netplan) writeNetplanVLANDropin(nics *Interfaces, parentMap map[int]str
 	return nil
 }
 
-func (n *netplan) writeNetworkdVLANDropin(nics *Interfaces, parentMap map[int]string) error {
+func (n *netplan) writeNetworkdVLANDropin(nics *Interfaces) error {
 	googleIpv6Interfaces := vlanInterfaceListsIpv6(nics.VlanInterfaces)
 
 	stat, err := os.Stat(n.networkdDropinDir)
@@ -504,7 +493,7 @@ func (n *netplan) writeNetworkdVLANDropin(nics *Interfaces, parentMap map[int]st
 			dhcp = "yes"
 		}
 
-		ifaceName := n.vlanInterfaceName(parentMap[iface.Vlan], iface.Vlan)
+		ifaceName := n.vlanInterfaceName(iface.ParentInterfaceID, iface.Vlan)
 		matchID := n.ID(ifaceName)
 
 		// Create and setup ini file.
@@ -538,10 +527,6 @@ func (n *netplan) Rollback(ctx context.Context, nics *Interfaces) error {
 	if err != nil {
 		return fmt.Errorf("failed to get list of interface names: %v", err)
 	}
-	parentInterfaces, err := vlanInterfaceParentMap(nics.VlanInterfaces, interfaces)
-	if err != nil {
-		return fmt.Errorf("failed to get list of vlan parent interfaces: %v", err)
-	}
 
 	var deleteMe []string
 	for _, iface := range interfaces {
@@ -559,7 +544,7 @@ func (n *netplan) Rollback(ctx context.Context, nics *Interfaces) error {
 	}
 
 	for _, iface := range nics.VlanInterfaces {
-		ifaceName := n.vlanInterfaceName(parentInterfaces[iface.Vlan], iface.Vlan)
+		ifaceName := n.vlanInterfaceName(iface.ParentInterfaceID, iface.Vlan)
 		dropinFile := n.networkdDropinFile(ifaceName)
 		deleteMe = append(deleteMe, dropinFile)
 	}

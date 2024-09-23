@@ -246,12 +246,6 @@ func (n *dhclient) SetupEthernetInterface(ctx context.Context, config *cfg.Secti
 func (n *dhclient) SetupVlanInterface(ctx context.Context, config *cfg.Sections, nics *Interfaces) error {
 	logger.Debugf("vlans: %+v", nics.VlanInterfaces)
 
-	// Retrieves the ethernet nics so we can detect the parent one.
-	googleInterfaces, err := interfaceNames(nics.EthernetInterfaces)
-	if err != nil {
-		return fmt.Errorf("could not list interfaces names: %+v", err)
-	}
-
 	sysInterfaces, err := net.Interfaces()
 	if err != nil {
 		return fmt.Errorf("failed to list systems interfaces: %+v", err)
@@ -265,16 +259,11 @@ func (n *dhclient) SetupVlanInterface(ctx context.Context, config *cfg.Sections,
 	var keepMe []string
 
 	for _, curr := range nics.VlanInterfaces {
-		parentInterface, err := vlanParentInterface(googleInterfaces, curr)
-		if err != nil {
-			return fmt.Errorf("failed to determine vlan's parent interface: %+v", err)
-		}
-
-		logger.Debugf("vlan(%d) parent interface: %s", curr.Vlan, parentInterface)
+		logger.Debugf("vlan(%d) parent interface: %s", curr.Vlan, curr.ParentInterfaceID)
 
 		// For dhclient/native implementation we use a "gcp." prefix to the interface name
 		// so we can determine it is a guest agent managed vlan interface.
-		iface := fmt.Sprintf("gcp.%s.%d", parentInterface, curr.Vlan)
+		iface := fmt.Sprintf("gcp.%s.%d", curr.ParentInterfaceID, curr.Vlan)
 		existingIface, found := interfaceMap[iface]
 
 		// If the interface already exists and has the same configuration just keep it.
@@ -285,7 +274,7 @@ func (n *dhclient) SetupVlanInterface(ctx context.Context, config *cfg.Sections,
 		}
 
 		// Generic description of the interface.
-		ifaceDesc := InterfaceConfig{iface, parentInterface, curr.MTU, curr.Mac, curr.Vlan}
+		ifaceDesc := InterfaceConfig{iface, curr.ParentInterfaceID, curr.MTU, curr.Mac, curr.Vlan}
 
 		// If the vlan interface exists but the configuration has changed we recreate it.
 		if found {

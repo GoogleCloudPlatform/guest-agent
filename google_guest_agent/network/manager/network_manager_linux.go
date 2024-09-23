@@ -229,19 +229,8 @@ func (n *networkManager) SetupVlanInterface(ctx context.Context, config *cfg.Sec
 
 // writeVLANConfigs writes NetworkManager configs for VLAN interfaces.
 func (n *networkManager) writeVLANConfigs(nics *Interfaces) error {
-	// Retrieves the ethernet nics so we can detect the parent one.
-	googleInterfaces, err := interfaceNames(nics.EthernetInterfaces)
-	if err != nil {
-		return fmt.Errorf("could not list interfaces names: %+v", err)
-	}
-
 	for _, curr := range nics.VlanInterfaces {
-		parentInterface, err := vlanParentInterface(googleInterfaces, curr)
-		if err != nil {
-			return fmt.Errorf("failed to determine vlan's (%d) parent interface: %w", curr.Vlan, err)
-		}
-
-		iface := n.vlanInterfaceName(parentInterface, curr.Vlan)
+		iface := n.vlanInterfaceName(curr.ParentInterfaceID, curr.Vlan)
 		cfgFile := n.networkManagerConfigFilePath(iface)
 		connID := fmt.Sprintf("google-guest-agent-%s", iface)
 
@@ -258,7 +247,7 @@ func (n *networkManager) writeVLANConfigs(nics *Interfaces) error {
 				// 1 is NM_VLAN_FLAG_REORDER_HEADERS.
 				Flags:  1,
 				ID:     curr.Vlan,
-				Parent: parentInterface,
+				Parent: curr.ParentInterfaceID,
 			},
 			Ipv4: nmIPv4Section{
 				Method: "auto",
@@ -373,12 +362,7 @@ func (n *networkManager) Rollback(ctx context.Context, nics *Interfaces) error {
 	}
 
 	for _, vnic := range nics.VlanInterfaces {
-		parentInterface, err := vlanParentInterface(ifaces, vnic)
-		if err != nil {
-			return fmt.Errorf("failed to determine vlan's parent interface: %+v", err)
-		}
-
-		iface := n.vlanInterfaceName(parentInterface, vnic.Vlan)
+		iface := n.vlanInterfaceName(vnic.ParentInterfaceID, vnic.Vlan)
 		if err := n.removeInterface(iface); err != nil {
 			logger.Errorf("Failed to remove %q interface with error: %v", iface, err)
 		}

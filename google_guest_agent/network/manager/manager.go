@@ -60,13 +60,23 @@ type serviceStatus struct {
 	active bool
 }
 
+// VlanInterface are [metadata.VlanInterface] offered by MDS with derived Parent Interface
+// name added to it for convenience.
+type VlanInterface struct {
+	metadata.VlanInterface
+	// ParentInterfaceID is the interface name on the host. All network managers should refer
+	// this interface name instead of one present in [metadata.VlanInterface] which is just an
+	// index to interface in [EthernetInterfaces]
+	ParentInterfaceID string
+}
+
 // Interfaces wraps both ethernet and vlan interfaces.
 type Interfaces struct {
 	// EthernetInterfaces are the regular ethernet interfaces descriptors offered by metadata.
 	EthernetInterfaces []metadata.NetworkInterfaces
 
 	// VlanInterfaces are the vLAN interfaces descriptors offered by metadata.
-	VlanInterfaces map[int]metadata.VlanInterface
+	VlanInterfaces map[int]VlanInterface
 }
 
 // guestAgentSection is the section added to guest-agent-written ini files to indicate
@@ -110,6 +120,21 @@ func detectNetworkManager(ctx context.Context, iface string) (*serviceStatus, er
 	return nil, fmt.Errorf("no network manager impl found for %s", iface)
 }
 
+// reformatVlanNics reads VLAN NIC information from metadata descriptor and formats
+// it into [Interfaces.VlanInterfaces] that every network manager understands.
+func reformatVlanNics(mds *metadata.Descriptor, nics *Interfaces, ethernetInterfaces []string) error {
+	for parentID, vlans := range mds.Instance.VlanNetworkInterfaces {
+		if parentID >= len(ethernetInterfaces) {
+			return fmt.Errorf("invalid parent index(%d), known interfaces count: %d", parentID, len(ethernetInterfaces))
+		}
+
+		for vlanID, vlan := range vlans {
+			nics.VlanInterfaces[vlanID] = VlanInterface{VlanInterface: vlan, ParentInterfaceID: ethernetInterfaces[parentID]}
+		}
+	}
+	return nil
+}
+
 // SetupInterfaces sets up all secondary network interfaces on the system, and primary network
 // interface if enabled in the configuration using the native network manager service detected
 // to be managing the primary network interface.
@@ -122,13 +147,7 @@ func SetupInterfaces(ctx context.Context, config *cfg.Sections, mds *metadata.De
 
 	nics := &Interfaces{
 		EthernetInterfaces: mds.Instance.NetworkInterfaces,
-		VlanInterfaces:     map[int]metadata.VlanInterface{},
-	}
-
-	for _, curr := range mds.Instance.VlanNetworkInterfaces {
-		for key, val := range curr {
-			nics.VlanInterfaces[key] = val
-		}
+		VlanInterfaces:     map[int]VlanInterface{},
 	}
 
 	interfaces, err := interfaceNames(nics.EthernetInterfaces)
@@ -166,6 +185,9 @@ func SetupInterfaces(ctx context.Context, config *cfg.Sections, mds *metadata.De
 
 	if config.Unstable.VlanSetupEnabled {
 		logger.Infof("VLAN setup is enabled via config file, setting up interfaces")
+		if err := reformatVlanNics(mds, nics, interfaces); err != nil {
+			return fmt.Errorf("unable to read vlans, invalid format: %w", err)
+		}
 		if err = activeService.manager.SetupVlanInterface(ctx, config, nics); err != nil {
 			return fmt.Errorf("manager(%s): error setting up vlan interfaces: %v", activeService.manager.Name(), err)
 		}
@@ -199,7 +221,7 @@ func FallbackToDefault(ctx context.Context) error {
 func buildInterfacesFromAllPhysicalNICs() (*Interfaces, error) {
 	nics := &Interfaces{
 		EthernetInterfaces: nil,
-		VlanInterfaces:     map[int]metadata.VlanInterface{},
+		VlanInterfaces:     map[int]VlanInterface{},
 	}
 
 	interfaces, err := net.Interfaces()

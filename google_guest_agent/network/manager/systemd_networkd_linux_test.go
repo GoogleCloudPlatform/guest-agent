@@ -589,6 +589,7 @@ func TestSetupVlanInterfaceSuccess(t *testing.T) {
 
 	tests := []struct {
 		ethernetInterface metadata.NetworkInterfaces
+		parentID          string
 		vlanInterface     metadata.VlanInterface
 	}{
 		{
@@ -597,6 +598,7 @@ func TestSetupVlanInterfaceSuccess(t *testing.T) {
 				ParentInterface: "/computeMetadata/v1/instance/network-interfaces/0/",
 				Vlan:            22,
 			},
+			parentID: ifaces[1].Name,
 			ethernetInterface: metadata.NetworkInterfaces{
 				Mac: ifaces[1].HardwareAddr.String(),
 			},
@@ -607,6 +609,7 @@ func TestSetupVlanInterfaceSuccess(t *testing.T) {
 				ParentInterface: "/computeMetadata/v1/instance/network-interfaces/0/",
 				Vlan:            33,
 			},
+			parentID: ifaces[1].Name,
 			ethernetInterface: metadata.NetworkInterfaces{
 				Mac: ifaces[1].HardwareAddr.String(),
 			},
@@ -646,8 +649,8 @@ func TestSetupVlanInterfaceSuccess(t *testing.T) {
 
 			nics := &Interfaces{
 				EthernetInterfaces: []metadata.NetworkInterfaces{curr.ethernetInterface},
-				VlanInterfaces: map[int]metadata.VlanInterface{
-					curr.vlanInterface.Vlan: curr.vlanInterface,
+				VlanInterfaces: map[int]VlanInterface{
+					curr.vlanInterface.Vlan: {VlanInterface: curr.vlanInterface, ParentInterfaceID: curr.parentID},
 				},
 			}
 
@@ -692,92 +695,6 @@ func TestSetupVlanInterfaceSuccess(t *testing.T) {
 
 			fileExists(networkFile, false)
 			fileExists(netdevFile, false)
-		})
-	}
-}
-
-func TestSetupVlanInterfaceFailure(t *testing.T) {
-	ifaces, err := net.Interfaces()
-	if err != nil {
-		t.Fatalf("could not list local interfaces: %+v", err)
-	}
-
-	tests := []struct {
-		ethernetInterface metadata.NetworkInterfaces
-		vlanInterface     metadata.VlanInterface
-	}{
-		{
-			vlanInterface: metadata.VlanInterface{
-				Mac:             "foobar",
-				ParentInterface: "/computeMetadata/v1/instance/network-interfaces/x/",
-				Vlan:            33,
-			},
-			ethernetInterface: metadata.NetworkInterfaces{
-				Mac: ifaces[1].HardwareAddr.String(),
-			},
-		},
-		{
-			vlanInterface: metadata.VlanInterface{
-				Mac:             "foobar",
-				ParentInterface: "/computeMetadata/v1/instance/network-interfaces/1/",
-				Vlan:            11,
-			},
-			ethernetInterface: metadata.NetworkInterfaces{
-				Mac: ifaces[1].HardwareAddr.String(),
-			},
-		},
-		{
-			vlanInterface: metadata.VlanInterface{
-				Mac:             "foobar",
-				ParentInterface: "/computeMetadata/v1/instance/network-interfaces/0/",
-				Vlan:            22,
-			},
-			ethernetInterface: metadata.NetworkInterfaces{
-				Mac: "foo-bar",
-			},
-		},
-	}
-
-	opts := systemdTestOpts{
-		lookPathOpts: systemdLookPathOpts{
-			returnValue: true,
-		},
-		runnerOpts: systemdRunnerOpts{
-			versionOpts: systemdVersionOpts{
-				version: 300,
-			},
-			statusOpts: systemdStatusOpts{
-				returnValue:   true,
-				hasKey:        true,
-				configuredKey: "SetupState",
-			},
-		}}
-
-	for i, curr := range tests {
-		t.Run(fmt.Sprintf("test-setup-vlan-success-%d", i), func(t *testing.T) {
-			impl := &systemdNetworkd{
-				configDir:      t.TempDir(),
-				networkCtlKeys: []string{"AdministrativeState", "SetupState"},
-				priority:       1,
-			}
-
-			systemdTestSetup(t, opts)
-
-			t.Cleanup(func() {
-				dhclientTestTearDown(t)
-			})
-
-			nics := &Interfaces{
-				EthernetInterfaces: []metadata.NetworkInterfaces{curr.ethernetInterface},
-				VlanInterfaces: map[int]metadata.VlanInterface{
-					curr.vlanInterface.Vlan: curr.vlanInterface,
-				},
-			}
-
-			ctx := context.Background()
-			if err := impl.SetupVlanInterface(ctx, nil, nics); err == nil {
-				t.Fatal("expected err: non-nill, got: nil")
-			}
 		})
 	}
 }
