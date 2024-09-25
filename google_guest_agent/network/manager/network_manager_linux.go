@@ -348,8 +348,7 @@ func (n *networkManager) writeNetworkManagerConfigs(ifaces []string) ([]string, 
 	return result, nil
 }
 
-// Rollback deletes the configurations created by Setup().
-func (n *networkManager) Rollback(ctx context.Context, nics *Interfaces) error {
+func (n *networkManager) rollbackConfigs(ctx context.Context, nics *Interfaces, removeVlan bool) error {
 	ifaces, err := interfaceNames(nics.EthernetInterfaces)
 	if err != nil {
 		return fmt.Errorf("getting interfaces: %v", err)
@@ -361,10 +360,12 @@ func (n *networkManager) Rollback(ctx context.Context, nics *Interfaces) error {
 		}
 	}
 
-	for _, vnic := range nics.VlanInterfaces {
-		iface := n.vlanInterfaceName(vnic.ParentInterfaceID, vnic.Vlan)
-		if err := n.removeInterface(iface); err != nil {
-			logger.Errorf("Failed to remove %q interface with error: %v", iface, err)
+	if removeVlan {
+		for _, vnic := range nics.VlanInterfaces {
+			iface := n.vlanInterfaceName(vnic.ParentInterfaceID, vnic.Vlan)
+			if err := n.removeInterface(iface); err != nil {
+				logger.Errorf("Failed to remove %q interface with error: %v", iface, err)
+			}
 		}
 	}
 
@@ -373,6 +374,18 @@ func (n *networkManager) Rollback(ctx context.Context, nics *Interfaces) error {
 	}
 
 	return nil
+}
+
+// Rollback deletes the configurations created by Setup() - both regular and vlan nics
+// are handed.
+func (n *networkManager) Rollback(ctx context.Context, nics *Interfaces) error {
+	return n.rollbackConfigs(ctx, nics, true)
+}
+
+// Rollback deletes the configurations created by Setup() - only regular nics
+// are handled.
+func (n *networkManager) RollbackNics(ctx context.Context, nics *Interfaces) error {
+	return n.rollbackConfigs(ctx, nics, false)
 }
 
 // removeInterface verifies .nmconnection is managed by Guest Agent and removes it.

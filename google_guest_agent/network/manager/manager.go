@@ -50,6 +50,9 @@ type Service interface {
 
 	// Rollback rolls back the changes created in Setup.
 	Rollback(ctx context.Context, nics *Interfaces) error
+
+	// RollbackNics rolls back only changes to regular nics (vlan nics are not handled).
+	RollbackNics(ctx context.Context, nics *Interfaces) error
 }
 
 // serviceStatus is an internal wrapper of a service implementation and its status.
@@ -160,6 +163,20 @@ func SetupInterfaces(ctx context.Context, config *cfg.Sections, mds *metadata.De
 	activeService, err := detectNetworkManager(ctx, primaryInterface)
 	if err != nil {
 		return fmt.Errorf("error detecting network manager service: %v", err)
+	}
+
+	// Remove only primary nics left over configs.
+	if !config.NetworkInterfaces.ManagePrimaryNIC {
+		primaryInterface := mds.Instance.NetworkInterfaces[0]
+		nic := &Interfaces{
+			EthernetInterfaces: []metadata.NetworkInterfaces{primaryInterface},
+		}
+
+		for _, svc := range knownNetworkManagers {
+			if err := svc.RollbackNics(ctx, nic); err != nil {
+				logger.Errorf("Failed to rollback primary nic (left over) config for %s: %v", svc.Name(), err)
+			}
+		}
 	}
 
 	// Attempt to rollback any left over configuration of non active network managers.

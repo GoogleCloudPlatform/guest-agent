@@ -90,6 +90,11 @@ func (n *mockService) Rollback(context.Context, *Interfaces) error {
 	return nil
 }
 
+// RollbackNics implements the Service interface.
+func (n *mockService) RollbackNics(ctx context.Context, nics *Interfaces) error {
+	return n.Rollback(ctx, nics)
+}
+
 // managerTestSetup does pre-test setup steps.
 func managerTestSetup() {
 	// Clear the known network managers and fallbacks.
