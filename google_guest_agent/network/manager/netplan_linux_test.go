@@ -191,20 +191,24 @@ func TestSetupVlanInterface(t *testing.T) {
 				Mac: ifaces[1].HardwareAddr.String(),
 			},
 		},
-		VlanInterfaces: map[int]metadata.VlanInterface{
+		VlanInterfaces: map[int]VlanInterface{
 			5: {
-				ParentInterface: "/computeMetadata/v1/instance/network-interfaces/0/",
-				Mac:             "mac-address",
-				Vlan:            5,
-				MTU:             1460,
+				VlanInterface: metadata.VlanInterface{
+					Mac:  "mac-address",
+					Vlan: 5,
+					MTU:  1460,
+				},
+				ParentInterfaceID: ifaces[1].Name,
 			},
 			6: {
-				ParentInterface: "/computeMetadata/v1/instance/network-interfaces/0/",
-				Mac:             "mac-address2",
-				Vlan:            6,
-				MTU:             1500,
-				IPv6:            []string{"::0"},
-				DHCPv6Refresh:   "123456",
+				VlanInterface: metadata.VlanInterface{
+					Mac:           "mac-address2",
+					Vlan:          6,
+					MTU:           1500,
+					IPv6:          []string{"::0"},
+					DHCPv6Refresh: "123456",
+				},
+				ParentInterfaceID: ifaces[1].Name,
 			},
 		},
 	}

@@ -23,6 +23,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"path/filepath"
 	"slices"
 	"testing"
 	"time"
@@ -445,97 +446,62 @@ func TestVlanInterface(t *testing.T) {
 		EthernetInterfaces: []metadata.NetworkInterfaces{{
 			Mac: ifaces[1].HardwareAddr.String(),
 		}},
-		VlanInterfaces: map[int]metadata.VlanInterface{
+		VlanInterfaces: map[int]VlanInterface{
 			22: {
-				Mac:             "foobar",
-				ParentInterface: "/computeMetadata/v1/instance/network-interfaces/0/",
-				Vlan:            22,
-				MTU:             1460,
-			},
-		},
-	}
-
-	invalidNics := &Interfaces{
-		EthernetInterfaces: []metadata.NetworkInterfaces{{
-			Mac: ifaces[1].HardwareAddr.String(),
-		}},
-		VlanInterfaces: map[int]metadata.VlanInterface{
-			22: {
-				Mac:             "foobar",
-				ParentInterface: "/computeMetadata/v1/instance/network-interfaces/1/",
-				Vlan:            22,
-				MTU:             1460,
-			},
-		},
-	}
-
-	tests := []struct {
-		name    string
-		nics    *Interfaces
-		wantErr bool
-		wantCfg *nmConfig
-	}{
-		{
-			name: "valid_vlan",
-			nics: validNics,
-			wantCfg: &nmConfig{
-				GuestAgent: guestAgentSection{ManagedByGuestAgent: true},
-				Connection: nmConnectionSection{
-					InterfaceName: fmt.Sprintf("gcp.%s.22", interfaceName),
-					ID:            fmt.Sprintf("google-guest-agent-gcp.%s.22", interfaceName),
-					ConnType:      "vlan",
+				VlanInterface: metadata.VlanInterface{
+					Mac:             "foobar",
+					ParentInterface: "/computeMetadata/v1/instance/network-interfaces/0/",
+					Vlan:            22,
+					MTU:             1460,
 				},
-				Ipv4:     nmIPv4Section{Method: "auto"},
-				Ipv6:     nmIPv6Section{Method: "auto", MTU: 1460},
-				Vlan:     &nmVlan{Flags: 1, ID: 22, Parent: interfaceName},
-				Ethernet: &nmEthernet{OverrideMacAddress: "foobar", MTU: 1460},
+				ParentInterfaceID: ifaces[1].Name,
 			},
 		},
-		{
-			name:    "invalid_vlan",
-			nics:    invalidNics,
-			wantErr: true,
+	}
+
+	wantCfg := &nmConfig{
+		GuestAgent: guestAgentSection{ManagedByGuestAgent: true},
+		Connection: nmConnectionSection{
+			InterfaceName: fmt.Sprintf("gcp.%s.22", interfaceName),
+			ID:            fmt.Sprintf("google-guest-agent-gcp.%s.22", interfaceName),
+			ConnType:      "vlan",
 		},
+		Ipv4:     nmIPv4Section{Method: "auto"},
+		Ipv6:     nmIPv6Section{Method: "auto", MTU: 1460},
+		Vlan:     &nmVlan{Flags: 1, ID: 22, Parent: interfaceName},
+		Ethernet: &nmEthernet{OverrideMacAddress: "foobar", MTU: 1460},
 	}
 
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			nmTestSetup(t, nmTestOpts{})
-			configDir := path.Join(t.TempDir(), "system-connections")
-			if err := os.MkdirAll(configDir, 0755); err != nil {
-				t.Fatalf("error creating temp dir: %v", err)
-			}
-
-			testNetworkManager.configDir = configDir
-
-			err := testNetworkManager.SetupVlanInterface(ctx, nil, test.nics)
-			if (err != nil) != test.wantErr {
-				t.Fatalf("testNetworkManager.SetupVlanInterface(ctx, nil, %+v) = err [%v], want error: %t", test.nics, err, test.wantErr)
-			}
-
-			if test.wantErr {
-				return
-			}
-
-			name := testNetworkManager.vlanInterfaceName(interfaceName, 22)
-			cfgFile := testNetworkManager.networkManagerConfigFilePath(name)
-			nmCfg := new(nmConfig)
-
-			if err := readIniFile(cfgFile, nmCfg); err != nil {
-				t.Fatalf("readIniFile(%s, nmConfig) failed unexpectedly with error: %v", cfgFile, err)
-			}
-
-			if diff := cmp.Diff(test.wantCfg, nmCfg); diff != "" {
-				t.Errorf("SetupVlanInterface returned unexpected diff (-want,+got)\n%s", diff)
-			}
-
-			if err := testNetworkManager.Rollback(ctx, test.nics); err != nil {
-				t.Fatalf("testNetworkManager.Rollback(ctx, %+v) failed unexpectedly with error: %v", test.nics, err)
-			}
-
-			if _, err := os.Stat(cfgFile); err == nil {
-				t.Errorf("testNetworkManager.Rollback(ctx, %+v) did not remove %q", test.nics, cfgFile)
-			}
-		})
+	nmTestSetup(t, nmTestOpts{})
+	configDir := filepath.Join(t.TempDir(), "system-connections")
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		t.Fatalf("error creating temp dir: %v", err)
 	}
+
+	testNetworkManager.configDir = configDir
+
+	if err := testNetworkManager.SetupVlanInterface(ctx, nil, validNics); err != nil {
+		t.Fatalf("testNetworkManager.SetupVlanInterface(ctx, nil, %+v) = err [%v], want error: nil", validNics, err)
+	}
+
+	name := testNetworkManager.vlanInterfaceName(interfaceName, 22)
+	cfgFile := testNetworkManager.networkManagerConfigFilePath(name)
+	nmCfg := new(nmConfig)
+
+	if err := readIniFile(cfgFile, nmCfg); err != nil {
+		t.Fatalf("readIniFile(%s, nmConfig) failed unexpectedly with error: %v", cfgFile, err)
+	}
+
+	if diff := cmp.Diff(wantCfg, nmCfg); diff != "" {
+		t.Errorf("SetupVlanInterface returned unexpected diff (-want,+got)\n%s", diff)
+	}
+
+	if err := testNetworkManager.Rollback(ctx, validNics); err != nil {
+		t.Fatalf("testNetworkManager.Rollback(ctx, %+v) failed unexpectedly with error: %v", validNics, err)
+	}
+
+	if _, err := os.Stat(cfgFile); err == nil {
+		t.Errorf("testNetworkManager.Rollback(ctx, %+v) did not remove %q", validNics, cfgFile)
+	}
+
 }

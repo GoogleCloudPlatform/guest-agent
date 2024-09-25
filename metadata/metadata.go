@@ -148,7 +148,7 @@ type Instance struct {
 	NetworkInterfaces []NetworkInterfaces
 
 	// VlanNetworkInterfaces contains all the vLAN network interfaces.
-	VlanNetworkInterfaces []map[int]VlanInterface
+	VlanNetworkInterfaces map[int]map[int]VlanInterface
 
 	// VirtualClock contains the drift-token attribute.
 	VirtualClock virtualClock

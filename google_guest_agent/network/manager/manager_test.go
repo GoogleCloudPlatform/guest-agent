@@ -23,6 +23,8 @@ import (
 
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/osinfo"
+	"github.com/GoogleCloudPlatform/guest-agent/metadata"
+	"github.com/google/go-cmp/cmp"
 )
 
 const (
@@ -313,5 +315,74 @@ func TestShouldManageInterface(t *testing.T) {
 	}
 	if !shouldManageInterface(false) {
 		t.Error("with manage_primary_nic=false, shouldManageInterface(isPrimary = false) = false, want true")
+	}
+}
+
+func TestReformatVlanNics(t *testing.T) {
+	mds := &metadata.Descriptor{Instance: metadata.Instance{
+		VlanNetworkInterfaces: map[int]map[int]metadata.VlanInterface{
+			0: {
+				5: {Mac: "a", ParentInterface: "/computeMetadata/v1/instance/network-interfaces/0/", Vlan: 5},
+				6: {Mac: "b", Vlan: 6, IP: "1.2.3.4"},
+			},
+			1: {
+				7: {Mac: "c", Vlan: 7, DHCPv6Refresh: "123456"},
+			},
+		},
+	}}
+	nics := &Interfaces{VlanInterfaces: map[int]VlanInterface{}}
+	want := &Interfaces{VlanInterfaces: map[int]VlanInterface{
+		5: {VlanInterface: metadata.VlanInterface{Mac: "a", ParentInterface: "/computeMetadata/v1/instance/network-interfaces/0/", Vlan: 5}, ParentInterfaceID: "eth0"},
+		6: {VlanInterface: metadata.VlanInterface{Mac: "b", Vlan: 6, IP: "1.2.3.4"}, ParentInterfaceID: "eth0"},
+		7: {VlanInterface: metadata.VlanInterface{Mac: "c", Vlan: 7, DHCPv6Refresh: "123456"}, ParentInterfaceID: "eth1"},
+	}}
+
+	ethernetInterfaces := []string{"eth0", "eth1"}
+
+	if err := reformatVlanNics(mds, nics, ethernetInterfaces); err != nil {
+		t.Fatalf("reformatVlanNics(%+v, %+v, %+v) failed unexpectedly with error: %v", mds, nics, ethernetInterfaces, err)
+	}
+
+	if diff := cmp.Diff(want.VlanInterfaces, nics.VlanInterfaces); diff != "" {
+		t.Errorf("reformatVlanNics(%+v, %+v, %+v) returned unexpected diff (-want,+got):\n %s", mds, nics, ethernetInterfaces, diff)
+	}
+}
+
+func TestReformatVlanNicsError(t *testing.T) {
+	mds := &metadata.Descriptor{Instance: metadata.Instance{
+		VlanNetworkInterfaces: map[int]map[int]metadata.VlanInterface{
+			0: {
+				5: {Mac: "a", ParentInterface: "/computeMetadata/v1/instance/network-interfaces/0/", Vlan: 5},
+				6: {Mac: "b", Vlan: 6, IP: "1.2.3.4"},
+			},
+			1: {
+				7: {Mac: "c", Vlan: 7, DHCPv6Refresh: "123456"},
+			},
+		},
+	}}
+	nics := &Interfaces{VlanInterfaces: map[int]VlanInterface{}}
+
+	tests := []struct {
+		name               string
+		mds                *metadata.Descriptor
+		ethernetInterfaces []string
+	}{
+		{
+			name:               "invalid_parentId",
+			mds:                mds,
+			ethernetInterfaces: []string{"eth0"},
+		},
+		{
+			name: "all_invalid_parentIds",
+			mds:  mds,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if err := reformatVlanNics(mds, nics, test.ethernetInterfaces); err == nil {
+				t.Fatalf("reformatVlanNics(%+v, %+v, %+v) succeeded, want error", mds, nics, test.ethernetInterfaces)
+			}
+		})
 	}
 }

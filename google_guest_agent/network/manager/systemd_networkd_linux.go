@@ -272,21 +272,10 @@ func (n *systemdNetworkd) SetupEthernetInterface(ctx context.Context, config *cf
 // SetupVlanInterface writes the apppropriate vLAN interfaces configuration for the network manager service
 // for all configured interfaces.
 func (n *systemdNetworkd) SetupVlanInterface(ctx context.Context, config *cfg.Sections, nics *Interfaces) error {
-	// Retrieves the ethernet nics so we can detect the parent one.
-	googleInterfaces, err := interfaceNames(nics.EthernetInterfaces)
-	if err != nil {
-		return fmt.Errorf("could not list interfaces names: %+v", err)
-	}
-
 	var keepMe []string
 
 	for _, curr := range nics.VlanInterfaces {
-		parentInterface, err := vlanParentInterface(googleInterfaces, curr)
-		if err != nil {
-			return fmt.Errorf("failed to determine vlan's parent interface: %+v", err)
-		}
-
-		iface := fmt.Sprintf("gcp.%s.%d", parentInterface, curr.Vlan)
+		iface := fmt.Sprintf("gcp.%s.%d", curr.ParentInterfaceID, curr.Vlan)
 
 		// Create and setup .network file.
 		networkConfig := systemdConfig{
@@ -330,7 +319,7 @@ func (n *systemdNetworkd) SetupVlanInterface(ctx context.Context, config *cfg.Se
 		}
 
 		// Add VLAN keys to the VLAN's parent .network config file.
-		parentFile := n.networkFile(parentInterface)
+		parentFile := n.networkFile(curr.ParentInterfaceID)
 		parentConfig := new(systemdConfig)
 
 		if err := readIniFile(parentFile, parentConfig); err != nil {
@@ -341,7 +330,7 @@ func (n *systemdNetworkd) SetupVlanInterface(ctx context.Context, config *cfg.Se
 		if !slices.Contains(parentConfig.Network.VLANS, iface) {
 			parentConfig.Network.VLANS = append(parentConfig.Network.VLANS, iface)
 
-			if err := parentConfig.write(n, parentInterface); err != nil {
+			if err := parentConfig.write(n, curr.ParentInterfaceID); err != nil {
 				return fmt.Errorf("error writing vlan parent's .network config: %+v", err)
 			}
 		}

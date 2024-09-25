@@ -25,6 +25,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/google/go-cmp/cmp"
 )
 
 func TestWatchMetadata(t *testing.T) {
@@ -309,5 +311,45 @@ func TestRetryError(t *testing.T) {
 				t.Errorf("retry(ctx, %+v) retried %d times, should have returned after %d retries", req, ctr[test.mdsKey], test.wantCtr)
 			}
 		})
+	}
+}
+
+func TestVlanInterfaces(t *testing.T) {
+	vlan := `
+{
+  "0": {
+    "5": {
+      "ipv6": [
+        "::0"
+      ],
+      "mac": "abcd_mac",
+	  "parentInterface": "/computeMetadata/v1/instance/network-interfaces/0/",
+      "mtu": 1460,
+      "vlan": 5
+    }
+  }
+}`
+
+	cfg := fmt.Sprintf(`{"instance": {"vlanNetworkInterfaces": %s}}`, vlan)
+
+	want := map[int]map[int]VlanInterface{
+		0: {
+			5: {
+				Mac:             "abcd_mac",
+				ParentInterface: "/computeMetadata/v1/instance/network-interfaces/0/",
+				MTU:             1460,
+				Vlan:            5,
+				IPv6:            []string{"::0"},
+			},
+		},
+	}
+
+	var md *Descriptor
+	if err := json.Unmarshal([]byte(cfg), &md); err != nil {
+		t.Fatalf("json.Unmarshal(%s, &md) failed unexpectedly with error: %v", cfg, err)
+	}
+
+	if diff := cmp.Diff(want, md.Instance.VlanNetworkInterfaces); diff != "" {
+		t.Errorf("json.Unmarshal(%s, &md) returned unexpected diff (-want,+got):\n %s", cfg, diff)
 	}
 }
