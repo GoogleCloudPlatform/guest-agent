@@ -20,10 +20,12 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"os"
 
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/osinfo"
 	"github.com/GoogleCloudPlatform/guest-agent/metadata"
+	"github.com/GoogleCloudPlatform/guest-agent/utils"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 )
 
@@ -90,7 +92,30 @@ type guestAgentSection struct {
 }
 
 const (
-	googleComment = "# Added by Google Compute Engine Guest Agent."
+	googleComment         = "# Added by Google Compute Engine Guest Agent."
+	debian12NetplanFile   = "/etc/netplan/90-default.yaml"
+	debian12NetplanConfig = `network:
+    version: 2
+    ethernets:
+        all-en:
+            match:
+                name: en*
+            dhcp4: true
+            dhcp4-overrides:
+                use-domains: true
+            dhcp6: true
+            dhcp6-overrides:
+                use-domains: true
+        all-eth:
+            match:
+                name: eth*
+            dhcp4: true
+            dhcp4-overrides:
+                use-domains: true
+            dhcp6: true
+            dhcp6-overrides:
+                use-domains: true
+`
 )
 
 var (
@@ -179,6 +204,10 @@ func SetupInterfaces(ctx context.Context, config *cfg.Sections, mds *metadata.De
 		}
 	}
 
+	if err := restoreDebian12NetplanConfig(config); err != nil {
+		logger.Errorf("Failed to restore debian-12 netplan configuration: %v", err)
+	}
+
 	// Attempt to rollback any left over configuration of non active network managers.
 	for _, svc := range knownNetworkManagers {
 		if svc == activeService.manager {
@@ -211,6 +240,36 @@ func SetupInterfaces(ctx context.Context, config *cfg.Sections, mds *metadata.De
 	}
 
 	logger.Infof("Finished setting up %s", activeService.manager.Name())
+
+	return nil
+}
+
+// restoreDebian12NetplanConfig recreates the default netplan configuration
+// for debian-12 in case user hasn't disabled it and the running system is
+// indeed a debian-12 system.
+func restoreDebian12NetplanConfig(config *cfg.Sections) error {
+	if !config.NetworkInterfaces.RestoreDebian12NetplanConfig {
+		logger.Debugf("User provided configuration requested to skip debian-12 netplan configuration")
+		return nil
+	}
+
+	osDesc := osinfo.Get()
+	if osDesc.OS != "debian" || osDesc.Version.Major != 12 {
+		logger.Debugf("Not running a debian-12 system, skipping netplan configuration restore")
+		return nil
+	}
+
+	if _, err := os.Stat(debian12NetplanFile); err != nil {
+		if !os.IsNotExist(err) {
+			return err
+		}
+
+		if err := utils.WriteFile([]byte(debian12NetplanConfig), debian12NetplanFile, 0644); err != nil {
+			return fmt.Errorf("Failed to recreate default netplan config: %w", err)
+		}
+
+		logger.Debugf("Recreated default netplan config...")
+	}
 
 	return nil
 }

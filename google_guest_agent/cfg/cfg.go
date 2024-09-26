@@ -91,6 +91,7 @@ dhcp_command =
 ip_forwarding = true
 setup = true
 manage_primary_nic =
+restore_debian12_netplan_config = true
 
 [OSLogin]
 cert_authentication = true
@@ -282,10 +283,11 @@ type MDS struct {
 
 // NetworkInterfaces contains the configurations of NetworkInterfaces section.
 type NetworkInterfaces struct {
-	DHCPCommand      string `ini:"dhcp_command,omitempty"`
-	IPForwarding     bool   `ini:"ip_forwarding,omitempty"`
-	Setup            bool   `ini:"setup,omitempty"`
-	ManagePrimaryNIC bool   `ini:"manage_primary_nic,omitempty"`
+	DHCPCommand                  string `ini:"dhcp_command,omitempty"`
+	IPForwarding                 bool   `ini:"ip_forwarding,omitempty"`
+	Setup                        bool   `ini:"setup,omitempty"`
+	ManagePrimaryNIC             bool   `ini:"manage_primary_nic,omitempty"`
+	RestoreDebian12NetplanConfig bool   `ini:"restore_debian12_netplan_config,omitempty"`
 }
 
 // Snapshots contains the configurations of Snapshots section.

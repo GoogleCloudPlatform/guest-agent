@@ -340,6 +340,7 @@ NetworkInterfaces | setup                  | `false` skips network interface set
 NetworkInterfaces | ip\_forwarding         | `false` skips IP forwarding.
 NetworkInterfaces | manage\_primary\_nic   | `true` will start managing the primary NIC in addition to the secondary NICs.
 NetworkInterfaces | dhcp\_command          | String path for alternate dhcp executable used to enable network interfaces.
+NetworkInterfaces | restore_debian12_netplan_config | `true` will create the debian-12's default netplan  configuration. It's set `true` by default.
 OSLogin           | cert_authentication    | `false` prevents guest-agent from setting up sshd's `TrustedUserCAKeys`, `AuthorizedPrincipalsCommand` and `AuthorizedPrincipalsCommandUser` configuration keys. Default value: `true`.
 
 Setting `network_enabled` to `false` will disable generating host keys and the
