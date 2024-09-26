@@ -482,6 +482,20 @@ func dhclientProcessExists(_ context.Context, iface string, ipVersion ipVersion)
 
 // Rollback releases all leases from DHClient, effectively undoing the dhclient configurations.
 func (n *dhclient) Rollback(ctx context.Context, nics *Interfaces) error {
+	if err := n.RollbackNics(ctx, nics); err != nil {
+		return fmt.Errorf("failed to rollback ethernet interfaces: %w", err)
+	}
+
+	if err := n.removeVlanInterfaces(ctx, nil); err != nil {
+		return fmt.Errorf("failed to rollback vlan interfaces: %+v", err)
+	}
+
+	return nil
+}
+
+// Rollback releases all leases from DHClient, effectively undoing the dhclient
+// configurations - only regular nics are handled.
+func (n *dhclient) RollbackNics(ctx context.Context, nics *Interfaces) error {
 	// Determine if we can even rollback dhclient processes.
 	if isInstalled, err := n.isDhclientInstalled(); !isInstalled || err != nil {
 		logger.Debugf("No preconditions met for dhclient roll back, skipping.")
@@ -502,6 +516,7 @@ func (n *dhclient) Rollback(ctx context.Context, nics *Interfaces) error {
 			}
 		}
 	}
+
 	for _, iface := range googleIpv6Interfaces {
 		ipv6Exists, err := dhclientProcessExists(ctx, iface, ipv6)
 		if err != nil {
@@ -512,10 +527,6 @@ func (n *dhclient) Rollback(ctx context.Context, nics *Interfaces) error {
 				return err
 			}
 		}
-	}
-
-	if err := n.removeVlanInterfaces(ctx, nil); err != nil {
-		return fmt.Errorf("failed to rollback vlan interfaces: %+v", err)
 	}
 
 	return nil

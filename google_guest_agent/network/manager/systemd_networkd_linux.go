@@ -539,8 +539,22 @@ func (n *systemdNetworkd) writeEthernetConfig(interfaces, ipv6Interfaces []strin
 	return nil
 }
 
-// Rollback deletes the configuration files created by the agent for systemd-networkd.
+// Rollback deletes the configuration files created by the agent for
+// systemd-networkd - both regular and vlan nics are handled.
 func (n *systemdNetworkd) Rollback(ctx context.Context, nics *Interfaces) error {
+	return n.rollbackConfigs(ctx, nics, true)
+}
+
+// Rollback deletes the configuration files created by the agent for
+// systemd-networkd - only regular nics are handled.
+func (n *systemdNetworkd) RollbackNics(ctx context.Context, nics *Interfaces) error {
+	return n.rollbackConfigs(ctx, nics, false)
+}
+
+// rollbackConfigs is the low level implementation of Rollback and RollbackNics
+// interface. If removeVlan is true both regular nics and vlan nics are removed
+// otherwise only regular nics are removed.
+func (n *systemdNetworkd) rollbackConfigs(ctx context.Context, nics *Interfaces, removeVlan bool) error {
 	logger.Infof("rolling back changes for %s", n.Name())
 	interfaces, err := interfaceNames(nics.EthernetInterfaces)
 	if err != nil {
@@ -576,10 +590,13 @@ func (n *systemdNetworkd) Rollback(ctx context.Context, nics *Interfaces) error 
 		}
 	}
 
+	vlanRequiresRestart := false
 	// Rollback vlan interfaces.
-	vlanRequiresRestart, err := n.removeVlanInterfaces(nil)
-	if err != nil {
-		logger.Warningf("Failed to rollback vlan interfaces: %v", err)
+	if removeVlan {
+		vlanRequiresRestart, err = n.removeVlanInterfaces(nil)
+		if err != nil {
+			logger.Warningf("Failed to rollback vlan interfaces: %v", err)
+		}
 	}
 
 	if !ethernetRequiresRestart && !vlanRequiresRestart {

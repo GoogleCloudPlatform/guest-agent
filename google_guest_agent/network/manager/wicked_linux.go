@@ -310,6 +310,23 @@ func (n *wicked) removeInterface(ctx context.Context, iface string) error {
 
 // Rollback deletes all the ifcfg files written by Setup, then reloads wicked.service.
 func (n *wicked) Rollback(ctx context.Context, nics *Interfaces) error {
+	if err := n.RollbackNics(ctx, nics); err != nil {
+		return fmt.Errorf("failed to rollback wicked ethernet interfaces: %w", err)
+	}
+
+	for _, curr := range nics.VlanInterfaces {
+		iface := fmt.Sprintf("%s.%d", curr.ParentInterfaceID, curr.Vlan)
+		if err := n.removeInterface(ctx, iface); err != nil {
+			return fmt.Errorf("failed to rollback wicked vlan ethernet interface: %+v", err)
+		}
+	}
+
+	return nil
+}
+
+// Rollback deletes all the ifcfg files written by Setup for regular nics only,
+// then reloads wicked.service.
+func (n *wicked) RollbackNics(ctx context.Context, nics *Interfaces) error {
 	ifaces, err := interfaceNames(nics.EthernetInterfaces)
 	if err != nil {
 		return fmt.Errorf("failed to get network interfaces: %v", err)
@@ -318,13 +335,6 @@ func (n *wicked) Rollback(ctx context.Context, nics *Interfaces) error {
 	// Since configuration files are only written for non-primary, only check
 	// for non-primary configuration files.
 	for _, iface := range ifaces[1:] {
-		if err := n.removeInterface(ctx, iface); err != nil {
-			return fmt.Errorf("failed to rollback wicked ethernet interface: %+v", err)
-		}
-	}
-
-	for _, curr := range nics.VlanInterfaces {
-		iface := fmt.Sprintf("%s.%d", curr.ParentInterfaceID, curr.Vlan)
 		if err := n.removeInterface(ctx, iface); err != nil {
 			return fmt.Errorf("failed to rollback wicked ethernet interface: %+v", err)
 		}

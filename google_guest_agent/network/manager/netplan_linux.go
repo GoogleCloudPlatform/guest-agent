@@ -519,10 +519,9 @@ func (n *netplan) writeNetworkdVLANDropin(nics *Interfaces) error {
 	return nil
 }
 
-// Rollback deletes the ethernet and VLAN interfaces netplan drop-in files.
-func (n *netplan) Rollback(ctx context.Context, nics *Interfaces) error {
-	logger.Infof("rolling back changes for %s", n.Name())
-
+// rollbackConfigs is the low level implementation for Rollback and RollbackNics interface.
+// If removeVlan is true both regular nics and vlan nics are rolled back.
+func (n *netplan) rollbackConfigs(ctx context.Context, nics *Interfaces, removeVlan bool) error {
 	interfaces, err := interfaceNames(nics.EthernetInterfaces)
 	if err != nil {
 		return fmt.Errorf("failed to get list of interface names: %v", err)
@@ -543,10 +542,12 @@ func (n *netplan) Rollback(ctx context.Context, nics *Interfaces) error {
 		deleteMe = append(deleteMe, netplanVlanDropinFile)
 	}
 
-	for _, iface := range nics.VlanInterfaces {
-		ifaceName := n.vlanInterfaceName(iface.ParentInterfaceID, iface.Vlan)
-		dropinFile := n.networkdDropinFile(ifaceName)
-		deleteMe = append(deleteMe, dropinFile)
+	if removeVlan {
+		for _, iface := range nics.VlanInterfaces {
+			ifaceName := n.vlanInterfaceName(iface.ParentInterfaceID, iface.Vlan)
+			dropinFile := n.networkdDropinFile(ifaceName)
+			deleteMe = append(deleteMe, dropinFile)
+		}
 	}
 
 	for _, configFile := range deleteMe {
@@ -564,4 +565,17 @@ func (n *netplan) Rollback(ctx context.Context, nics *Interfaces) error {
 	}
 
 	return nil
+}
+
+// Rollback deletes the ethernet and VLAN interfaces netplan drop-in files.
+func (n *netplan) Rollback(ctx context.Context, nics *Interfaces) error {
+	logger.Infof("rolling back changes for %s", n.Name())
+	return n.rollbackConfigs(ctx, nics, true)
+}
+
+// Rollback deletes the ethernet interfaces netplan drop-in files - only
+// regular nics are handled.
+func (n *netplan) RollbackNics(ctx context.Context, nics *Interfaces) error {
+	logger.Infof("rolling back regular ethernet changes for %s", n.Name())
+	return n.rollbackConfigs(ctx, nics, false)
 }
