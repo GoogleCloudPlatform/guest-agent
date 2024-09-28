@@ -117,6 +117,8 @@ func TestShouldEnable(t *testing.T) {
 		t.Fatalf("cfg.Load(nil) failed unexpectedly with error: %v", err)
 	}
 
+	defCfg := cfg.Get().MDS
+
 	ctx = context.WithValue(ctx, fakes.MDSOverride, "succeed")
 	j := &CredsJob{
 		client: fakes.NewFakeMDSClient(),
@@ -129,9 +131,10 @@ func TestShouldEnable(t *testing.T) {
 		want   bool
 	}{
 		{
-			name: "defaults",
-			mds:  &metadata.Descriptor{},
-			want: false,
+			name:   "defaults",
+			mds:    &metadata.Descriptor{},
+			cfgVal: defCfg,
+			want:   true,
 		},
 		{
 			name:   "enable_from_cfg",
