@@ -190,22 +190,8 @@ func SetupInterfaces(ctx context.Context, config *cfg.Sections, mds *metadata.De
 		return fmt.Errorf("error detecting network manager service: %v", err)
 	}
 
-	// Remove only primary nics left over configs.
-	if !config.NetworkInterfaces.ManagePrimaryNIC {
-		primaryInterface := mds.Instance.NetworkInterfaces[0]
-		nic := &Interfaces{
-			EthernetInterfaces: []metadata.NetworkInterfaces{primaryInterface},
-		}
-
-		for _, svc := range knownNetworkManagers {
-			if err := svc.RollbackNics(ctx, nic); err != nil {
-				logger.Errorf("Failed to rollback primary nic (left over) config for %s: %v", svc.Name(), err)
-			}
-		}
-	}
-
-	if err := restoreDebian12NetplanConfig(config); err != nil {
-		logger.Errorf("Failed to restore debian-12 netplan configuration: %v", err)
+	if err := rollbackLeftoverConfigs(ctx, config, mds); err != nil {
+		logger.Errorf("Failed to rollback left over configs: %v", err)
 	}
 
 	// Attempt to rollback any left over configuration of non active network managers.
@@ -240,6 +226,34 @@ func SetupInterfaces(ctx context.Context, config *cfg.Sections, mds *metadata.De
 	}
 
 	logger.Infof("Finished setting up %s", activeService.manager.Name())
+
+	return nil
+}
+
+// Remove only primary nics left over configs.
+func rollbackLeftoverConfigs(ctx context.Context, config *cfg.Sections, mds *metadata.Descriptor) error {
+	// If we are running debian 12 and failed to restore default netplan config
+	// we should not rollback dangling/left over configs.
+	if err := restoreDebian12NetplanConfig(config); err != nil {
+		return fmt.Errorf("Failed to restore debian-12 netplan configuration: %v", err)
+	}
+
+	// If we are managing primary nics we don't want to rollback "dangling/left over" configs
+	// since we are actually managing them.
+	if config.NetworkInterfaces.ManagePrimaryNIC {
+		return nil
+	}
+
+	primaryInterface := mds.Instance.NetworkInterfaces[0]
+	nic := &Interfaces{
+		EthernetInterfaces: []metadata.NetworkInterfaces{primaryInterface},
+	}
+
+	for _, svc := range knownNetworkManagers {
+		if err := svc.RollbackNics(ctx, nic); err != nil {
+			logger.Errorf("Failed to rollback primary nic (left over) config for %s: %v", svc.Name(), err)
+		}
+	}
 
 	return nil
 }
