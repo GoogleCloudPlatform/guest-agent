@@ -252,9 +252,14 @@ func (j *CredsJob) shouldEnableJob(ctx context.Context, mds *metadata.Descriptor
 		logger.Debugf("Found instance level attribute for enable credential refresher set to: %t", enable)
 	}
 
+	if !enable {
+		// No need to make MDS call in case job is disabled by the user.
+		return false
+	}
+
 	_, err := j.client.GetKey(ctx, clientCertsKey, nil)
 	if err != nil {
-		logger.Debugf("Skipping scheduling credential generation job, failed to reach client credentials endpoint(%s) with error: %v", clientCertsKey, err)
+		logger.Debugf("Skipping scheduling credential generation job, unable to reach client credentials endpoint(%s): %v\nNote that this does not impact any functionality and you might see this message if HTTPS endpoint isn't supported by the Metadata Server on your VM. Refer https://cloud.google.com/compute/docs/metadata/overview#https-mds for more details.", clientCertsKey, err)
 		enable = false
 	}
 
