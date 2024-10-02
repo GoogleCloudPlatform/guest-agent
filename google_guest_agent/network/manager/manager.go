@@ -227,6 +227,8 @@ func SetupInterfaces(ctx context.Context, config *cfg.Sections, mds *metadata.De
 
 	logger.Infof("Finished setting up %s", activeService.manager.Name())
 
+	logInterfaceState(ctx)
+
 	return nil
 }
 
