@@ -17,6 +17,7 @@
 package manager
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"os"
@@ -24,6 +25,7 @@ import (
 	"regexp"
 	"strconv"
 
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/run"
 	"github.com/GoogleCloudPlatform/guest-agent/metadata"
 	"github.com/GoogleCloudPlatform/guest-agent/utils"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
@@ -38,6 +40,30 @@ var (
 	// execLookPath points to the function to check if a path exists.
 	execLookPath = exec.LookPath
 )
+
+// logInterfaceState logs all network interface state present on the machine.
+func logInterfaceState(ctx context.Context) {
+	logger.Infof("Getting current interface state and routes")
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		logger.Warningf("Unable to get all interface: %v, will skip logging state", err)
+	}
+
+	for _, iface := range ifaces {
+		addrs, err := iface.Addrs()
+		if err != nil {
+			logger.Warningf("Unable to get interface (%s) addresses: %v", iface.Name, err)
+		}
+		logger.Infof("Interface(%s), State: %+v, Addresses: %+v", iface.Name, iface, addrs)
+	}
+
+	res := run.WithOutput(ctx, "ip", "route")
+	if res.ExitCode != 0 {
+		logger.Warningf("Unable to get ip routes: %s", res.StdErr)
+		return
+	}
+	logger.Infof("Currently present IP routes:\n %s", res.StdOut)
+}
 
 // interfaceNames extracts the names of the network interfaces from the provided list
 // of network interfaces.
