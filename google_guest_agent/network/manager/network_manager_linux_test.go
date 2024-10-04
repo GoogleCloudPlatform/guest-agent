@@ -213,7 +213,7 @@ func TestNetworkManagerIsManaging(t *testing.T) {
 			},
 			expectedRes: false,
 			expectErr:   true,
-			expectedErr: "error checking for nmcli: mock error lookpath",
+			expectedErr: `error looking up path for "nmcli": mock error lookpath`,
 		},
 		// 'systemctl is-active NetworkManager.service' error.
 		{

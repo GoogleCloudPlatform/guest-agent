@@ -16,10 +16,8 @@ package manager
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 
@@ -179,13 +177,7 @@ func (n *netplan) Configure(ctx context.Context, config *cfg.Sections) {
 // IsManaging checks whether netplan is present in the system.
 func (n *netplan) IsManaging(ctx context.Context, iface string) (bool, error) {
 	// Check if the netplan CLI exists.
-	if _, err := execLookPath("netplan"); err != nil {
-		if errors.Is(err, exec.ErrNotFound) {
-			return false, nil
-		}
-		return false, fmt.Errorf("error looking up netplan path: %v", err)
-	}
-	return true, nil
+	return cliExists("netplan")
 }
 
 // SetupEthernetInterface sets the network interfaces for netplan by writing drop-in files to the specified
@@ -200,18 +192,23 @@ func (n *netplan) SetupEthernetInterface(ctx context.Context, config *cfg.Sectio
 	}
 
 	// Write the config files.
-	if err := n.writeNetplanEthernetDropin(mtuMap, googleInterfaces, googleIpv6Interfaces); err != nil {
+	reload1, err := n.writeNetplanEthernetDropin(mtuMap, googleInterfaces, googleIpv6Interfaces)
+	if err != nil {
 		return fmt.Errorf("error writing network configs: %v", err)
 	}
 
 	// If we are running netplan+systemd-networkd we try to write networkd's drop-in for configs
 	// not mapped/supported by netplan.
-	if err := n.writeNetworkdDropin(googleInterfaces, googleIpv6Interfaces); err != nil {
+	reload2, err := n.writeNetworkdDropin(googleInterfaces, googleIpv6Interfaces)
+	if err != nil {
 		return fmt.Errorf("error writing systemd-networkd's drop-in: %v", err)
 	}
 
-	if err := n.reloadConfigs(ctx); err != nil {
-		return fmt.Errorf("error applying ethernet interface configs: %w", err)
+	// Avoid unnecessary reloads, if we've really updated some config then only do a reload.
+	if reload1 || reload2 {
+		if err := n.reloadConfigs(ctx); err != nil {
+			return fmt.Errorf("error applying ethernet interface configs: %w", err)
+		}
 	}
 
 	return nil
@@ -220,6 +217,8 @@ func (n *netplan) SetupEthernetInterface(ctx context.Context, config *cfg.Sectio
 // reloadConfigs triggers config reload to make sure ethernet/vlan configs are written
 // on disk are applied by netplan.
 func (n *netplan) reloadConfigs(ctx context.Context) error {
+	logger.Infof("Reloading netplan configs...")
+
 	// Avoid restarting systemd-networkd.
 	if err := run.Quiet(ctx, "networkctl", "reload"); err != nil {
 		return fmt.Errorf("error reloading systemd-networkd network configs: %v", err)
@@ -235,14 +234,15 @@ func (n *netplan) reloadConfigs(ctx context.Context) error {
 
 // writeNetworkdDropin writes the overloading network-manager's drop-in file for the configurations
 // not supported by netplan.
-func (n *netplan) writeNetworkdDropin(interfaces, ipv6Interfaces []string) error {
+func (n *netplan) writeNetworkdDropin(interfaces, ipv6Interfaces []string) (bool, error) {
+	var requiresReload bool
 	stat, err := os.Stat(n.networkdDropinDir)
 	if err != nil {
-		return fmt.Errorf("failed to stat systemd-networkd's drop-in root dir: %w", err)
+		return false, fmt.Errorf("failed to stat systemd-networkd's drop-in root dir: %w", err)
 	}
 
 	if !stat.IsDir() {
-		return fmt.Errorf("systemd-networkd drop-in dir(%s) is not a dir", n.networkdDropinDir)
+		return false, fmt.Errorf("systemd-networkd drop-in dir(%s) is not a dir", n.networkdDropinDir)
 	}
 
 	for i, iface := range interfaces {
@@ -279,11 +279,12 @@ func (n *netplan) writeNetworkdDropin(interfaces, ipv6Interfaces []string) error
 		}
 
 		if err := data.write(n, iface); err != nil {
-			return fmt.Errorf("failed to write systemd drop-in config: %w", err)
+			return false, fmt.Errorf("failed to write systemd drop-in config: %w", err)
 		}
+		requiresReload = true
 	}
 
-	return nil
+	return requiresReload, nil
 }
 
 // networkdDropinFile returns an interface's netplan drop-in file path.
@@ -325,7 +326,7 @@ func shouldUseDomains(idx int) *bool {
 
 // writeNetplanEthernetDropin selects the ethernet configuration, transforms it
 // into a netplan dropin format and writes it down to the netplan's drop-in directory.
-func (n *netplan) writeNetplanEthernetDropin(mtuMap map[string]int, interfaces, ipv6Interfaces []string) error {
+func (n *netplan) writeNetplanEthernetDropin(mtuMap map[string]int, interfaces, ipv6Interfaces []string) (bool, error) {
 	dropin := netplanDropin{
 		Network: netplanNetwork{
 			Version:   netplanConfigVersion,
@@ -368,14 +369,14 @@ func (n *netplan) writeNetplanEthernetDropin(mtuMap map[string]int, interfaces, 
 	// by Guest Agent. No need to write a file with just version in [dropin].
 	if len(dropin.Network.Ethernets) == 0 {
 		logger.Infof("No NICs to configure, skipping writeNetplanEthernetDropin")
-		return nil
+		return false, nil
 	}
 
 	if err := n.write(dropin, netplanEthernetSuffix); err != nil {
-		return fmt.Errorf("failed to write netplan ethernet drop-in config: %+v", err)
+		return false, fmt.Errorf("failed to write netplan ethernet drop-in config: %+v", err)
 	}
 
-	return nil
+	return true, nil
 }
 
 // ID returns the Netplan ID used for referencing parent NIC in VLAN NIC
@@ -419,22 +420,26 @@ func (n *netplan) vlanInterfaceName(parentInterface string, vlanID int) string {
 
 // SetupVlanInterface writes the apppropriate vLAN interfaces netplan configuration.
 func (n *netplan) SetupVlanInterface(ctx context.Context, config *cfg.Sections, nics *Interfaces) error {
-	if err := n.writeNetplanVLANDropin(nics); err != nil {
+	reload1, err := n.writeNetplanVLANDropin(nics)
+	if err != nil {
 		return fmt.Errorf("unable to write netplan VLAN dropin: %w", err)
 	}
 
-	if err := n.writeNetworkdVLANDropin(nics); err != nil {
+	reload2, err := n.writeNetworkdVLANDropin(nics)
+	if err != nil {
 		return fmt.Errorf("unable to write netplan networkd VLAN dropin: %w", err)
 	}
 
-	if err := n.reloadConfigs(ctx); err != nil {
-		return fmt.Errorf("error applying vlan interface configs: %w", err)
+	if reload1 || reload2 {
+		if err := n.reloadConfigs(ctx); err != nil {
+			return fmt.Errorf("error applying vlan interface configs: %w", err)
+		}
 	}
 
 	return nil
 }
 
-func (n *netplan) writeNetplanVLANDropin(nics *Interfaces) error {
+func (n *netplan) writeNetplanVLANDropin(nics *Interfaces) (bool, error) {
 	dropin := netplanDropin{
 		Network: netplanNetwork{
 			Version: netplanConfigVersion,
@@ -466,23 +471,28 @@ func (n *netplan) writeNetplanVLANDropin(nics *Interfaces) error {
 		dropin.Network.Vlans[key] = nv
 	}
 
+	if len(nics.VlanInterfaces) == 0 {
+		return false, nil
+	}
 	if err := n.write(dropin, netplanVlanSuffix); err != nil {
-		return fmt.Errorf("failed to write netplan vlan drop-in config: %+v", err)
+		return false, fmt.Errorf("failed to write netplan vlan drop-in config: %+v", err)
 	}
 
-	return nil
+	return true, nil
 }
 
-func (n *netplan) writeNetworkdVLANDropin(nics *Interfaces) error {
+func (n *netplan) writeNetworkdVLANDropin(nics *Interfaces) (bool, error) {
+	var reload bool
+
 	googleIpv6Interfaces := vlanInterfaceListsIpv6(nics.VlanInterfaces)
 
 	stat, err := os.Stat(n.networkdDropinDir)
 	if err != nil {
-		return fmt.Errorf("failed to stat systemd-networkd's drop-in root dir: %w", err)
+		return false, fmt.Errorf("failed to stat systemd-networkd's drop-in root dir: %w", err)
 	}
 
 	if !stat.IsDir() {
-		return fmt.Errorf("systemd-networkd drop-in dir(%s) is not a dir", n.networkdDropinDir)
+		return false, fmt.Errorf("systemd-networkd drop-in dir(%s) is not a dir", n.networkdDropinDir)
 	}
 
 	for _, iface := range nics.VlanInterfaces {
@@ -512,16 +522,19 @@ func (n *netplan) writeNetworkdVLANDropin(nics *Interfaces) error {
 		}
 
 		if err := data.write(n, ifaceName); err != nil {
-			return fmt.Errorf("failed to write systemd drop-in config for VLAN ID(%s): %w", ifaceName, err)
+			return false, fmt.Errorf("failed to write systemd drop-in config for VLAN ID(%s): %w", ifaceName, err)
 		}
+
+		reload = true
 	}
 
-	return nil
+	return reload, nil
 }
 
 // rollbackConfigs is the low level implementation for Rollback and RollbackNics interface.
 // If removeVlan is true both regular nics and vlan nics are rolled back.
 func (n *netplan) rollbackConfigs(ctx context.Context, nics *Interfaces, removeVlan bool) error {
+	var reload bool
 	interfaces, err := interfaceNames(nics.EthernetInterfaces)
 	if err != nil {
 		return fmt.Errorf("failed to get list of interface names: %v", err)
@@ -557,7 +570,13 @@ func (n *netplan) rollbackConfigs(ctx context.Context, nics *Interfaces, removeV
 			} else {
 				logger.Debugf("No such drop-in file(%s), ignoring.", configFile)
 			}
+			continue
 		}
+		reload = true
+	}
+
+	if !reload {
+		return nil
 	}
 
 	if err := n.reloadConfigs(ctx); err != nil {

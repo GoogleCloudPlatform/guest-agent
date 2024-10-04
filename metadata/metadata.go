@@ -461,16 +461,22 @@ func (c *Client) WriteGuestAttributes(ctx context.Context, key, value string) er
 
 	logger.Debugf("Requesting(PUT) MDS URL: %s", finalURL)
 
-	req, err := http.NewRequest("PUT", finalURL, strings.NewReader(value))
-	if err != nil {
+	// This is a arbitrary retry number.
+	policy := retry.Policy{MaxAttempts: 10, Jitter: backoffDuration, BackoffFactor: 1}
+
+	putCall := func() error {
+		req, err := http.NewRequest("PUT", finalURL, strings.NewReader(value))
+		if err != nil {
+			return err
+		}
+		req.Header.Add("Metadata-Flavor", "Google")
+		req = req.WithContext(ctx)
+		_, err = c.httpClient.Do(req)
+
 		return err
 	}
 
-	req.Header.Add("Metadata-Flavor", "Google")
-	req = req.WithContext(ctx)
-
-	_, err = c.httpClient.Do(req)
-	return err
+	return retry.Run(ctx, policy, putCall)
 }
 
 func (c *Client) do(ctx context.Context, cfg requestConfig) (*http.Response, error) {

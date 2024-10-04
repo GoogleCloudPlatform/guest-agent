@@ -18,10 +18,8 @@ package manager
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net"
-	"os/exec"
 	"path"
 	"regexp"
 	"slices"
@@ -169,13 +167,7 @@ func (n *dhclient) Configure(ctx context.Context, config *cfg.Sections) {
 // isDhclientInstalled returns true if the dhclient binary/executable is
 // installed in the running system.
 func (n *dhclient) isDhclientInstalled() (bool, error) {
-	if _, err := execLookPath("dhclient"); err != nil {
-		if errors.Is(err, exec.ErrNotFound) {
-			return false, nil
-		}
-		return false, fmt.Errorf("error looking up dhclient path: %v", err)
-	}
-	return true, nil
+	return cliExists("dhclient")
 }
 
 // IsManaging checks if the dhclient CLI is available.

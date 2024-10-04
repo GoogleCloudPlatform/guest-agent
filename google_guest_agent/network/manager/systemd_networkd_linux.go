@@ -19,10 +19,8 @@ package manager
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -188,12 +186,11 @@ func (n *systemdNetworkd) Configure(ctx context.Context, config *cfg.Sections) {
 // to check if systemd-networkd is managing or has configured the provided interface.
 func (n *systemdNetworkd) IsManaging(ctx context.Context, iface string) (bool, error) {
 	// Check the version.
-	if _, err := execLookPath("networkctl"); err != nil {
-		if errors.Is(err, exec.ErrNotFound) {
-			return false, nil
-		}
-		return false, fmt.Errorf("error looking up networkctl path: %v", err)
+	_, err := cliExists("networkctl")
+	if err != nil {
+		return false, err
 	}
+
 	res := run.WithOutput(ctx, "networkctl", "--version")
 	if res.ExitCode != 0 {
 		return false, fmt.Errorf("error checking networkctl version: %v", res.StdErr)
