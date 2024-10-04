@@ -261,7 +261,7 @@ func TestSystemdNetworkdIsManaging(t *testing.T) {
 			},
 			expectedRes: false,
 			expectErr:   true,
-			expectedErr: "error looking up networkctl path: mock error finding path",
+			expectedErr: `error looking up path for "networkctl": mock error finding path`,
 		},
 		// networkctl unsupported version
 		{

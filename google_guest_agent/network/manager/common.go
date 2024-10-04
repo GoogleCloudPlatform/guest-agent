@@ -18,6 +18,7 @@ package manager
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -40,6 +41,18 @@ var (
 	// execLookPath points to the function to check if a path exists.
 	execLookPath = exec.LookPath
 )
+
+func cliExists(name string) (bool, error) {
+	_, err := execLookPath(name)
+	if err == nil {
+		return true, nil
+	}
+
+	if errors.Is(err, exec.ErrNotFound) {
+		return false, nil
+	}
+	return false, fmt.Errorf("error looking up path for %q: %v", name, err)
+}
 
 // logInterfaceState logs all network interface state present on the machine.
 func logInterfaceState(ctx context.Context) {

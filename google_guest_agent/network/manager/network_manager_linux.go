@@ -18,10 +18,8 @@ package manager
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -145,11 +143,9 @@ func (n *networkManager) IsManaging(ctx context.Context, iface string) (bool, er
 
 	// Check for existence of nmcli. Without nmcli, the agent cannot tell NetworkManager
 	// to reload the configs for its connections.
-	if _, err := execLookPath("nmcli"); err != nil {
-		if errors.Is(err, exec.ErrNotFound) {
-			return false, nil
-		}
-		return false, fmt.Errorf("error checking for nmcli: %v", err)
+	_, err := cliExists("nmcli")
+	if err != nil {
+		return false, err
 	}
 
 	// Use nmcli to check status of provided  interface.

@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"time"
 
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/osinfo"
@@ -202,7 +203,7 @@ func SetupInterfaces(ctx context.Context, config *cfg.Sections, mds *metadata.De
 
 		logger.Infof("Rolling back %s", svc.Name())
 		if err = svc.Rollback(ctx, nics); err != nil {
-			logger.Errorf("Failed to roll back config for %s: %v", svc.Name(), err)
+			logger.Warningf("Unable to roll back config for %s: %v", svc.Name(), err)
 		}
 	}
 
@@ -227,7 +228,12 @@ func SetupInterfaces(ctx context.Context, config *cfg.Sections, mds *metadata.De
 
 	logger.Infof("Finished setting up %s", activeService.manager.Name())
 
-	logInterfaceState(ctx)
+	go func() {
+		// Setup might not have finished when we log and collect this information. Adding this
+		// temporary sleep for debugging purposes to make sure we have up-to-date information.
+		time.Sleep(2 * time.Second)
+		logInterfaceState(ctx)
+	}()
 
 	return nil
 }
@@ -253,7 +259,7 @@ func rollbackLeftoverConfigs(ctx context.Context, config *cfg.Sections, mds *met
 
 	for _, svc := range knownNetworkManagers {
 		if err := svc.RollbackNics(ctx, nic); err != nil {
-			logger.Errorf("Failed to rollback primary nic (left over) config for %s: %v", svc.Name(), err)
+			logger.Warningf("Failed to rollback primary nic (left over) config for %s: %v", svc.Name(), err)
 		}
 	}
 
@@ -302,7 +308,7 @@ func FallbackToDefault(ctx context.Context) error {
 	for _, svc := range knownNetworkManagers {
 		logger.Infof("Rolling back %s", svc.Name())
 		if err := svc.Rollback(ctx, nics); err != nil {
-			logger.Errorf("Failed to roll back config for %s: %v", svc.Name(), err)
+			logger.Warningf("Failed to roll back config for %s: %v", svc.Name(), err)
 		}
 	}
 
