@@ -19,7 +19,10 @@ import (
 	"context"
 	"net"
 	"net/url"
+	"strings"
+	"time"
 
+	network "github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/network/manager"
 	"github.com/GoogleCloudPlatform/guest-agent/metadata"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 )
@@ -68,9 +71,31 @@ func (mp *Watcher) Run(ctx context.Context, evType string) (bool, interface{}, e
 			logger.Errorf("Error watching metadata: %s", err)
 			mp.failedPrevious = true
 		}
+		if strings.Contains(err.Error(), "network is unreachable") {
+			// At this point agent has already retries 100 times so most likely Network is broken. Try
+			// falling back to default configs.
+			mp.tryFallback(ctx)
+		}
 	} else {
 		mp.failedPrevious = false
 	}
 
 	return true, descriptor, err
+}
+
+func (mp *Watcher) tryFallback(ctx context.Context) {
+	logger.Infof("Falling to OS default network configuration to attempt to recover.")
+	if err := network.FallbackToDefault(ctx); err != nil {
+		// Just log error and attempt to continue anyway, if we can't reach MDS
+		// we can't do anything.
+		logger.Errorf("Failed to rollback guest-agent network configuration: %v", err)
+	}
+	// Give it some time to make sure configurations are applied.
+	time.Sleep(time.Second * 2)
+	_, err := mp.client.Get(ctx)
+	if err != nil {
+		logger.Fatalf("Failed to reach MDS after falling back to default config: %v", err)
+	}
+	// Reset if GET succeeds. If it fails it wouldn't matter as agent would exit and restart.
+	mp.failedPrevious = false
 }
