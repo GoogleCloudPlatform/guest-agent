@@ -242,7 +242,7 @@ func (n *systemdNetworkd) SetupEthernetInterface(ctx context.Context, config *cf
 	googleInterfaces, googleIpv6Interfaces := interfaceListsIpv4Ipv6(nics.EthernetInterfaces)
 
 	// Write the config files.
-	if err := n.writeEthernetConfig(googleInterfaces, googleIpv6Interfaces); err != nil {
+	if err := n.writeEthernetConfig(ctx, googleInterfaces, googleIpv6Interfaces); err != nil {
 		return fmt.Errorf("error writing network configs: %v", err)
 	}
 
@@ -256,11 +256,6 @@ func (n *systemdNetworkd) SetupEthernetInterface(ctx context.Context, config *cf
 		if _, err := n.rollbackNetwork(n.deprecatedNetdevFile(iface)); err != nil {
 			logger.Infof("Failed to rollback .netdev file: %v", err)
 		}
-	}
-
-	// Avoid restarting systemd-networkd.
-	if err := run.Quiet(ctx, "networkctl", "reload"); err != nil {
-		return fmt.Errorf("error reloading systemd-networkd network configs: %v", err)
 	}
 
 	return nil
@@ -486,7 +481,7 @@ func (sc systemdConfig) isGuestAgentManaged() bool {
 
 // writeEthernetConfig writes the systemd config for all the provided interfaces in the
 // provided directory using the given priority.
-func (n *systemdNetworkd) writeEthernetConfig(interfaces, ipv6Interfaces []string) error {
+func (n *systemdNetworkd) writeEthernetConfig(ctx context.Context, interfaces, ipv6Interfaces []string) error {
 	for i, iface := range interfaces {
 		if !shouldManageInterface(i == 0) {
 			logger.Debugf("ManagePrimaryNIC is disabled, skipping systemdNetworkd writeEthernetConfig for %s", iface)
@@ -530,6 +525,11 @@ func (n *systemdNetworkd) writeEthernetConfig(interfaces, ipv6Interfaces []strin
 
 		if err := data.write(n, iface); err != nil {
 			return fmt.Errorf("failed to write systemd's ethernet interface config: %+v", err)
+		}
+
+		// Avoid restarting systemd-networkd.
+		if err := run.Quiet(ctx, "networkctl", "reload", iface); err != nil {
+			return fmt.Errorf("error reloading systemd-networkd network configs: %v", err)
 		}
 	}
 

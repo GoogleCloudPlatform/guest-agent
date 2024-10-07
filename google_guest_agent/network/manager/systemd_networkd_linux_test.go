@@ -511,12 +511,13 @@ func TestSystemdNetworkdConfig(t *testing.T) {
 		},
 	}
 
+	ctx := context.Background()
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			cfg.Get().NetworkInterfaces.ManagePrimaryNIC = test.managePrimary
 			systemdTestSetup(t, systemdTestOpts{})
 
-			if err := mockSystemd.writeEthernetConfig(test.testInterfaces, test.testIpv6Interfaces); err != nil {
+			if err := mockSystemd.writeEthernetConfig(ctx, test.testInterfaces, test.testIpv6Interfaces); err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
 
