@@ -71,6 +71,8 @@ type CredsJob struct {
 	useNativeStore atomic.Bool
 	// isEnabled tracks if the job is currently enabled or not.
 	isEnabled atomic.Bool
+	// failedPrevious tracks if MDS check has failed previously to not spam the log failures.
+	failedPrevious atomic.Bool
 }
 
 // New initializes new job.
@@ -259,8 +261,15 @@ func (j *CredsJob) shouldEnableJob(ctx context.Context, mds *metadata.Descriptor
 
 	_, err := j.client.GetKey(ctx, clientCertsKey, nil)
 	if err != nil {
-		logger.Debugf("Skipping scheduling credential generation job, unable to reach client credentials endpoint(%s): %v\nNote that this does not impact any functionality and you might see this message if HTTPS endpoint isn't supported by the Metadata Server on your VM. Refer https://cloud.google.com/compute/docs/metadata/overview#https-mds for more details.", clientCertsKey, err)
-		enable = false
+		// This error is logged only once to prevent raising unnecessary alerts. Repeated logging
+		// could be mistaken for a recurring issue, even if mTLS MDS is indeed not supported.
+		if !j.failedPrevious.Load() {
+			logger.Debugf("Skipping scheduling credential generation job, unable to reach client credentials endpoint(%s): %v\nNote that this does not impact any functionality and you might see this message if HTTPS endpoint isn't supported by the Metadata Server on your VM. Refer https://cloud.google.com/compute/docs/metadata/overview#https-mds for more details.", clientCertsKey, err)
+			enable = false
+			j.failedPrevious.Store(true)
+		}
+	} else {
+		j.failedPrevious.Store(false)
 	}
 
 	return enable
