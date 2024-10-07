@@ -192,7 +192,7 @@ func (n *netplan) SetupEthernetInterface(ctx context.Context, config *cfg.Sectio
 	}
 
 	// Write the config files.
-	reload1, err := n.writeNetplanEthernetDropin(mtuMap, googleInterfaces, googleIpv6Interfaces)
+	reload1, reloadInterfaces, err := n.writeNetplanEthernetDropin(mtuMap, googleInterfaces, googleIpv6Interfaces)
 	if err != nil {
 		return fmt.Errorf("error writing network configs: %v", err)
 	}
@@ -206,7 +206,7 @@ func (n *netplan) SetupEthernetInterface(ctx context.Context, config *cfg.Sectio
 
 	// Avoid unnecessary reloads, if we've really updated some config then only do a reload.
 	if reload1 || reload2 {
-		if err := n.reloadConfigs(ctx); err != nil {
+		if err := n.reloadConfigs(ctx, reloadInterfaces); err != nil {
 			return fmt.Errorf("error applying ethernet interface configs: %w", err)
 		}
 	}
@@ -216,17 +216,32 @@ func (n *netplan) SetupEthernetInterface(ctx context.Context, config *cfg.Sectio
 
 // reloadConfigs triggers config reload to make sure ethernet/vlan configs are written
 // on disk are applied by netplan.
-func (n *netplan) reloadConfigs(ctx context.Context) error {
+func (n *netplan) reloadConfigs(ctx context.Context, interfaces map[string]bool) error {
 	logger.Infof("Reloading netplan configs...")
+
+	// Avoid restarting netplan.
+	if err := run.Quiet(ctx, "netplan", "apply"); err != nil {
+		return fmt.Errorf("error applying netplan changes: %w", err)
+	}
 
 	// Avoid restarting systemd-networkd.
 	if err := run.Quiet(ctx, "networkctl", "reload"); err != nil {
 		return fmt.Errorf("error reloading systemd-networkd network configs: %v", err)
 	}
 
-	// Avoid restarting netplan.
-	if err := run.Quiet(ctx, "netplan", "apply"); err != nil {
-		return fmt.Errorf("error applying netplan changes: %w", err)
+	// Don't attempt to reconfigure if we have no interfaces to.
+	if len(interfaces) == 0 {
+		return nil
+	}
+
+	// Force reconfigure of changed interfaces and primary interface.
+	cmdArgs := []string{"reconfigure"}
+	for k := range interfaces {
+		cmdArgs = append(cmdArgs, k)
+	}
+
+	if err := run.Quiet(ctx, "networkctl", cmdArgs...); err != nil {
+		return fmt.Errorf("error reconfiguring systemd-networkd network configs: %v", err)
 	}
 
 	return nil
@@ -326,7 +341,7 @@ func shouldUseDomains(idx int) *bool {
 
 // writeNetplanEthernetDropin selects the ethernet configuration, transforms it
 // into a netplan dropin format and writes it down to the netplan's drop-in directory.
-func (n *netplan) writeNetplanEthernetDropin(mtuMap map[string]int, interfaces, ipv6Interfaces []string) (bool, error) {
+func (n *netplan) writeNetplanEthernetDropin(mtuMap map[string]int, interfaces, ipv6Interfaces []string) (bool, map[string]bool, error) {
 	dropin := netplanDropin{
 		Network: netplanNetwork{
 			Version:   netplanConfigVersion,
@@ -334,7 +349,12 @@ func (n *netplan) writeNetplanEthernetDropin(mtuMap map[string]int, interfaces, 
 		},
 	}
 
+	reloadInterfaces := make(map[string]bool)
 	for i, iface := range interfaces {
+		// We want to return primary as well hence we populate the map here even if the
+		// condition of shouldManageInterface() is false.
+		reloadInterfaces[iface] = true
+
 		if !shouldManageInterface(i == 0) {
 			logger.Debugf("ManagePrimaryNIC is disabled, skipping writeNetplanEthernetDropin for %s", iface)
 			continue
@@ -369,14 +389,14 @@ func (n *netplan) writeNetplanEthernetDropin(mtuMap map[string]int, interfaces, 
 	// by Guest Agent. No need to write a file with just version in [dropin].
 	if len(dropin.Network.Ethernets) == 0 {
 		logger.Infof("No NICs to configure, skipping writeNetplanEthernetDropin")
-		return false, nil
+		return false, nil, nil
 	}
 
 	if err := n.write(dropin, netplanEthernetSuffix); err != nil {
-		return false, fmt.Errorf("failed to write netplan ethernet drop-in config: %+v", err)
+		return false, nil, fmt.Errorf("failed to write netplan ethernet drop-in config: %+v", err)
 	}
 
-	return true, nil
+	return true, reloadInterfaces, nil
 }
 
 // ID returns the Netplan ID used for referencing parent NIC in VLAN NIC
@@ -431,7 +451,7 @@ func (n *netplan) SetupVlanInterface(ctx context.Context, config *cfg.Sections, 
 	}
 
 	if reload1 || reload2 {
-		if err := n.reloadConfigs(ctx); err != nil {
+		if err := n.reloadConfigs(ctx, nil); err != nil {
 			return fmt.Errorf("error applying vlan interface configs: %w", err)
 		}
 	}
@@ -579,7 +599,7 @@ func (n *netplan) rollbackConfigs(ctx context.Context, nics *Interfaces, removeV
 		return nil
 	}
 
-	if err := n.reloadConfigs(ctx); err != nil {
+	if err := n.reloadConfigs(ctx, nil); err != nil {
 		return fmt.Errorf("error reloading configs: %v", err)
 	}
 
