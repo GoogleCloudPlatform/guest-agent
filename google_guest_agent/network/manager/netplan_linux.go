@@ -97,6 +97,9 @@ type netplanEthernet struct {
 	DHCPv6 *bool `yaml:"dhcp6,omitempty"`
 
 	DHCP6Overrides *netplanDHCPOverrides `yaml:"dhcp6-overrides,omitempty"`
+
+	// LinkLocal defines the stack to be used for link local i.e: ipv4, ipv6 etc.
+	LinkLocal []string `yaml:"link-local,omitempty"`
 }
 
 // netplanDHCPOverrides sets the netplan dhcp-overrides configuration.
@@ -348,6 +351,7 @@ func (n *netplan) writeNetplanEthernetDropin(mtuMap map[string]int, interfaces, 
 			DHCP4Overrides: &netplanDHCPOverrides{
 				UseDomains: shouldUseDomains(i),
 			},
+			LinkLocal: []string{"ipv4"},
 		}
 
 		if mtu, found := mtuMap[iface]; found {
@@ -359,6 +363,7 @@ func (n *netplan) writeNetplanEthernetDropin(mtuMap map[string]int, interfaces, 
 			ne.DHCP6Overrides = &netplanDHCPOverrides{
 				UseDomains: shouldUseDomains(i),
 			}
+			ne.LinkLocal = append(ne.LinkLocal, "ipv6")
 		}
 
 		key := n.ID(iface)
