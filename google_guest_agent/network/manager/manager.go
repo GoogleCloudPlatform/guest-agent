@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"reflect"
 	"time"
 
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
@@ -128,6 +129,10 @@ var (
 	// osinfoGet points to the function to use for getting osInfo.
 	// Primarily used for testing.
 	osinfoGet = osinfo.Get
+
+	// seenMetadata keeps a copy of MDS descriptor that was already seen and applied
+	// in terms of VLAN/Ethernet NIC configuration by the manager.
+	seenMetadata *metadata.Descriptor
 )
 
 // detectNetworkManager detects the network manager managing the primary network interface.
@@ -168,6 +173,16 @@ func reformatVlanNics(mds *metadata.Descriptor, nics *Interfaces, ethernetInterf
 // interface if enabled in the configuration using the native network manager service detected
 // to be managing the primary network interface.
 func SetupInterfaces(ctx context.Context, config *cfg.Sections, mds *metadata.Descriptor) error {
+	if seenMetadata != nil {
+		diff := reflect.DeepEqual(mds.Instance.NetworkInterfaces, seenMetadata.Instance.NetworkInterfaces) &&
+			reflect.DeepEqual(mds.Instance.VlanNetworkInterfaces, seenMetadata.Instance.VlanNetworkInterfaces)
+
+		if diff {
+			logger.Debugf("MDS returned Ethernet NICs [%+v] and VLAN NICs [%+v] are already seen and applied, skipping", seenMetadata.Instance.NetworkInterfaces, seenMetadata.Instance.VlanNetworkInterfaces)
+			return nil
+		}
+	}
+
 	// User may have disabled network interface setup entirely.
 	if !config.NetworkInterfaces.Setup {
 		logger.Infof("Network interface setup disabled, skipping...")
@@ -235,6 +250,7 @@ func SetupInterfaces(ctx context.Context, config *cfg.Sections, mds *metadata.De
 		logInterfaceState(ctx)
 	}()
 
+	seenMetadata = mds
 	return nil
 }
 
