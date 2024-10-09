@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
@@ -281,10 +282,14 @@ func (n *netplan) writeNetworkdDropin(interfaces, ipv6Interfaces []string) (bool
 			}
 		}
 
-		if err := data.write(n, iface); err != nil {
+		wrote, err := data.write(n, iface)
+		if err != nil {
 			return false, fmt.Errorf("failed to write systemd drop-in config: %w", err)
 		}
-		requiresReload = true
+
+		if wrote {
+			requiresReload = true
+		}
 	}
 
 	return requiresReload, nil
@@ -302,8 +307,21 @@ func (n *netplan) networkdDropinFile(iface string) string {
 	return filepath.Join(n.networkdDropinDir, fmt.Sprintf("10-netplan-%s.network.d", iface), "override.conf")
 }
 
+// isSame unmarshals netplan networkd dropin config from cfgFile and compares it with
+// own instance. If it fails to read it returns false to allow caller to try
+// overwriting and fix any issues if file already exists.
+func (nd networkdNetplanDropin) isSame(cfgFile string) bool {
+	existingCfgs := networkdNetplanDropin{}
+	if err := readIniFile(cfgFile, &existingCfgs); err != nil {
+		logger.Debugf("Failed to read %q while comparing netplan networkd dropins with error: %v", cfgFile, err)
+		return false
+	}
+
+	return reflect.DeepEqual(nd, existingCfgs)
+}
+
 // write writes systemd's drop-in config file.
-func (nd networkdNetplanDropin) write(n *netplan, iface string) error {
+func (nd networkdNetplanDropin) write(n *netplan, iface string) (bool, error) {
 	dropinFile := n.networkdDropinFile(iface)
 
 	logger.Infof("writing systemd drop in to: %s", dropinFile)
@@ -311,14 +329,19 @@ func (nd networkdNetplanDropin) write(n *netplan, iface string) error {
 	dropinDir := filepath.Dir(dropinFile)
 	err := os.MkdirAll(dropinDir, 0755)
 	if err != nil {
-		return fmt.Errorf("failed to create networkd dropin dir: %w", err)
+		return false, fmt.Errorf("failed to create networkd dropin dir: %w", err)
+	}
+
+	if nd.isSame(dropinFile) {
+		logger.Infof("Exact same config already exists at location %q, skipping overwriting to avoid network reload", dropinFile)
+		return false, nil
 	}
 
 	if err := writeIniFile(dropinFile, &nd); err != nil {
-		return fmt.Errorf("error saving netword drop-in file for %s: %v", iface, err)
+		return false, fmt.Errorf("error saving netword drop-in file for %s: %v", iface, err)
 	}
 
-	return nil
+	return true, nil
 }
 
 // shouldUseDomains returns true if interface index is 0.
@@ -377,11 +400,12 @@ func (n *netplan) writeNetplanEthernetDropin(mtuMap map[string]int, interfaces, 
 		return false, nil
 	}
 
-	if err := n.write(dropin, netplanEthernetSuffix); err != nil {
+	wrote, err := n.write(dropin, netplanEthernetSuffix)
+	if err != nil {
 		return false, fmt.Errorf("failed to write netplan ethernet drop-in config: %+v", err)
 	}
 
-	return true, nil
+	return wrote, nil
 }
 
 // ID returns the Netplan ID used for referencing parent NIC in VLAN NIC
@@ -394,19 +418,37 @@ func (n *netplan) ID(iface string) string {
 	return key
 }
 
+// isSame unmarshals netplan dropin config from cfgFile and compares it with
+// own instance. If it fails to read it returns false to allow caller to try
+// overwriting and fix any issues if file already exists.
+func (nd netplanDropin) isSame(cfgFile string) bool {
+	existingDropin := netplanDropin{}
+	if err := readYamlFile(cfgFile, &existingDropin); err != nil {
+		logger.Debugf("Failed to read %q while comparing netplan dropins with error: %v", cfgFile, err)
+		return false
+	}
+
+	return reflect.DeepEqual(nd, existingDropin)
+}
+
 // write writes the netplan dropin file.
-func (n *netplan) write(nd netplanDropin, suffix string) error {
+func (n *netplan) write(nd netplanDropin, suffix string) (bool, error) {
 	dropinFile := n.dropinFile(suffix)
 	dropinDir := filepath.Dir(dropinFile)
 	err := os.MkdirAll(dropinDir, 0755)
 	if err != nil {
-		return fmt.Errorf("failed to create networkd dropin dir: %w", err)
+		return false, fmt.Errorf("failed to create networkd dropin dir: %w", err)
+	}
+
+	if nd.isSame(dropinFile) {
+		logger.Infof("Exact same config already exists at location %q, skipping overwriting to avoid network reload", dropinFile)
+		return false, nil
 	}
 
 	if err := writeYamlFile(dropinFile, &nd); err != nil {
-		return fmt.Errorf("error saving netplan drop-in file %s: %w", dropinFile, err)
+		return false, fmt.Errorf("error saving netplan drop-in file %s: %w", dropinFile, err)
 	}
-	return nil
+	return true, nil
 }
 
 // dropinFile returns the netplan drop-in file.
@@ -479,11 +521,13 @@ func (n *netplan) writeNetplanVLANDropin(nics *Interfaces) (bool, error) {
 	if len(nics.VlanInterfaces) == 0 {
 		return false, nil
 	}
-	if err := n.write(dropin, netplanVlanSuffix); err != nil {
+
+	wrote, err := n.write(dropin, netplanVlanSuffix)
+	if err != nil {
 		return false, fmt.Errorf("failed to write netplan vlan drop-in config: %+v", err)
 	}
 
-	return true, nil
+	return wrote, nil
 }
 
 func (n *netplan) writeNetworkdVLANDropin(nics *Interfaces) (bool, error) {
@@ -526,11 +570,14 @@ func (n *netplan) writeNetworkdVLANDropin(nics *Interfaces) (bool, error) {
 			},
 		}
 
-		if err := data.write(n, ifaceName); err != nil {
+		wrote, err := data.write(n, ifaceName)
+		if err != nil {
 			return false, fmt.Errorf("failed to write systemd drop-in config for VLAN ID(%s): %w", ifaceName, err)
 		}
 
-		reload = true
+		if wrote {
+			reload = true
+		}
 	}
 
 	return reload, nil
@@ -545,6 +592,14 @@ func (n *netplan) rollbackConfigs(ctx context.Context, nics *Interfaces, removeV
 		return fmt.Errorf("failed to get list of interface names: %v", err)
 	}
 
+	netplanEthernetDropinFile := n.dropinFile(netplanEthernetSuffix)
+	existingEthernetCfgs := netplanDropin{}
+	if fileExists(netplanEthernetDropinFile) {
+		if err := readYamlFile(netplanEthernetDropinFile, &existingEthernetCfgs); err != nil {
+			return fmt.Errorf("unable to read %q trying rollback configs: %w", netplanEthernetDropinFile, err)
+		}
+	}
+
 	var deleteMe []string
 	for _, iface := range interfaces {
 		// Set networkd drop-in override file for removal.
@@ -552,23 +607,35 @@ func (n *netplan) rollbackConfigs(ctx context.Context, nics *Interfaces, removeV
 		deleteMe = append(deleteMe, networkdDropinFile)
 
 		// Set netplan ethernet drop-in file for removal.
-		netplanEthernetDropinFile := n.dropinFile(netplanEthernetSuffix)
-		deleteMe = append(deleteMe, netplanEthernetDropinFile)
-
-		// Set netplan vlan drop-in file for removal.
-		netplanVlanDropinFile := n.dropinFile(netplanVlanSuffix)
-		deleteMe = append(deleteMe, netplanVlanDropinFile)
+		if _, ok := existingEthernetCfgs.Network.Ethernets[iface]; ok {
+			deleteMe = append(deleteMe, netplanEthernetDropinFile)
+		}
 	}
 
 	if removeVlan {
+		existingVlanCfgs := netplanDropin{}
+		netplanVlanDropinFile := n.dropinFile(netplanVlanSuffix)
+		if fileExists(netplanVlanDropinFile) {
+			if err := readYamlFile(netplanVlanDropinFile, &existingVlanCfgs); err != nil {
+				return fmt.Errorf("unable to read %q trying rollback configs: %w", netplanVlanDropinFile, err)
+			}
+		}
+
 		for _, iface := range nics.VlanInterfaces {
+			// Set netplan vlan drop-in file for removal.
 			ifaceName := n.vlanInterfaceName(iface.ParentInterfaceID, iface.Vlan)
+			key := n.ID(ifaceName)
+			if _, ok := existingVlanCfgs.Network.Vlans[key]; ok {
+				deleteMe = append(deleteMe, netplanVlanDropinFile)
+			}
+
 			dropinFile := n.networkdDropinFile(ifaceName)
 			deleteMe = append(deleteMe, dropinFile)
 		}
 	}
 
 	for _, configFile := range deleteMe {
+		logger.Debugf("Removing config file: %q", configFile)
 		if err := os.Remove(configFile); err != nil {
 			if !os.IsNotExist(err) {
 				logger.Debugf("Failed to remove drop-in file(%s): %s", configFile, err)
