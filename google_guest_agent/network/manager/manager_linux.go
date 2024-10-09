@@ -19,7 +19,7 @@ func init() {
 	knownNetworkManagers = []Service{
 		&netplan{
 			netplanConfigDir:  "/run/netplan/",
-			networkdDropinDir: "/etc/systemd/network/",
+			networkdDropinDir: "/run/systemd/network/",
 			priority:          20,
 		},
 		&wicked{

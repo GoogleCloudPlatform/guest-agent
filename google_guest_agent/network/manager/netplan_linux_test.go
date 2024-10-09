@@ -237,3 +237,127 @@ func TestSetupVlanInterface(t *testing.T) {
 
 	verifyRollback(t, nics, netplanCfg, networkdCfg, ifaces[1].Name)
 }
+
+func TestIsNetworkdNetplanConfigSame(t *testing.T) {
+	path1 := filepath.Join(t.TempDir(), "cfg1.yaml")
+	path2 := filepath.Join(t.TempDir(), "cfg2.yaml")
+
+	data := networkdNetplanDropin{
+		Match: systemdMatchConfig{
+			Name: "ens4",
+		},
+		Network: systemdNetworkConfig{
+			DNSDefaultRoute: false,
+			DHCP:            "yes",
+		},
+		DHCPv4: &systemdDHCPConfig{
+			RoutesToDNS: false,
+			RoutesToNTP: false,
+		},
+	}
+
+	if err := writeIniFile(path1, &data); err != nil {
+		t.Fatalf("Failed to create test config: %v", err)
+	}
+
+	data2 := data
+	data2.Network.DHCP = "ipv4"
+	if err := writeIniFile(path2, &data2); err != nil {
+		t.Fatalf("Failed to create test config: %v", err)
+	}
+
+	tests := []struct {
+		name string
+		path string
+		want bool
+	}{
+		{
+			name: "same_file",
+			path: path1,
+			want: true,
+		},
+		{
+			name: "modified_file",
+			path: path2,
+			want: false,
+		},
+		{
+			name: "non_existent_file",
+			path: filepath.Join(t.TempDir(), "cfg3.yaml"),
+			want: false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := data.isSame(test.path); got != test.want {
+				t.Errorf("isSame(%s) = %t, want = %t", test.path, got, test.want)
+			}
+		})
+	}
+}
+
+func TestIsNetplanConfigSame(t *testing.T) {
+	path1 := filepath.Join(t.TempDir(), "cfg1.yaml")
+	path2 := filepath.Join(t.TempDir(), "cfg2.yaml")
+	mtu := 1234
+
+	dropin := netplanDropin{
+		Network: netplanNetwork{
+			Version: netplanConfigVersion,
+			Ethernets: map[string]netplanEthernet{
+				"eth0": {
+					Match:          netplanMatch{Name: "eth0"},
+					MTU:            &mtu,
+					DHCPv4:         makebool(true),
+					DHCP4Overrides: &netplanDHCPOverrides{UseDomains: makebool(false)},
+				},
+			},
+		},
+	}
+
+	if err := writeYamlFile(path1, &dropin); err != nil {
+		t.Fatalf("Failed to create test config: %v", err)
+	}
+
+	dropin2 := dropin
+	dropin2.Network.Vlans = map[string]netplanVlan{
+		"1234.eth0": {
+			ID:   1234,
+			Link: "eth0",
+		},
+	}
+	if err := writeYamlFile(path2, &dropin2); err != nil {
+		t.Fatalf("Failed to create test config: %v", err)
+	}
+
+	tests := []struct {
+		name string
+		path string
+		want bool
+	}{
+		{
+			name: "same_file",
+			path: path1,
+			want: true,
+		},
+		{
+			name: "modified_file",
+			path: path2,
+			want: false,
+		},
+		{
+			name: "non_existent_file",
+			path: filepath.Join(t.TempDir(), "cfg3.yaml"),
+			want: false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := dropin.isSame(test.path); got != test.want {
+				t.Errorf("isSame(%s) = %t, want = %t", test.path, got, test.want)
+			}
+		})
+	}
+}
