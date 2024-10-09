@@ -219,7 +219,7 @@ func TestSetupVlanInterface(t *testing.T) {
 		t.Errorf("SetupVlanInterface(ctx, nil, %+v) failed unexpectedly with error: %v", nics, err)
 	}
 
-	wantCmds := []string{"netplan apply", "networkctl reload"}
+	wantCmds := []string{"netplan generate", "networkctl reload"}
 	gotCmds := runner.executedCommands
 	sort.Strings(gotCmds)
 

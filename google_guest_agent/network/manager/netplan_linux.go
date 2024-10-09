@@ -222,14 +222,14 @@ func (n *netplan) SetupEthernetInterface(ctx context.Context, config *cfg.Sectio
 func (n *netplan) reloadConfigs(ctx context.Context) error {
 	logger.Infof("Reloading netplan configs...")
 
+	// Avoid restarting netplan.
+	if err := run.Quiet(ctx, "netplan", "generate"); err != nil {
+		return fmt.Errorf("error generating netplan based config: %w", err)
+	}
+
 	// Avoid restarting systemd-networkd.
 	if err := run.Quiet(ctx, "networkctl", "reload"); err != nil {
 		return fmt.Errorf("error reloading systemd-networkd network configs: %v", err)
-	}
-
-	// Avoid restarting netplan.
-	if err := run.Quiet(ctx, "netplan", "apply"); err != nil {
-		return fmt.Errorf("error applying netplan changes: %w", err)
 	}
 
 	return nil
