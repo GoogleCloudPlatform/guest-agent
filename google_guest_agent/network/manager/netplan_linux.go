@@ -360,6 +360,12 @@ func (n *netplan) writeNetplanEthernetDropin(mtuMap map[string]int, interfaces, 
 		},
 	}
 
+	info := osinfo.Get()
+	var defaultLinklocal bool
+	if info.OS == "ubuntu" && info.VersionID == "20.04" {
+		defaultLinklocal = true
+	}
+
 	for i, iface := range interfaces {
 		if !shouldManageInterface(i == 0) {
 			logger.Debugf("ManagePrimaryNIC is disabled, skipping writeNetplanEthernetDropin for %s", iface)
@@ -387,6 +393,12 @@ func (n *netplan) writeNetplanEthernetDropin(mtuMap map[string]int, interfaces, 
 				UseDomains: shouldUseDomains(i),
 			}
 			ne.LinkLocal = append(ne.LinkLocal, "ipv6")
+		}
+
+		if defaultLinklocal {
+			logger.Infof("Running on OS: %q, will skip setting LinkLocal", osinfo.Get().PrettyName)
+			// Set it to nil and let it fallback to default.
+			ne.LinkLocal = nil
 		}
 
 		key := n.ID(iface)
