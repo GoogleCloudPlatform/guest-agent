@@ -29,9 +29,15 @@ var (
 
 type mdsClient struct {
 	disableUnknownFailure bool
+	fallback              bool
+	attemptedFallback     bool
 }
 
 func (mds *mdsClient) Get(ctx context.Context) (*metadata.Descriptor, error) {
+	if mds.fallback {
+		mds.attemptedFallback = true
+		return nil, nil
+	}
 	return nil, fmt.Errorf("Get() not yet implemented")
 }
 
@@ -44,6 +50,9 @@ func (mds *mdsClient) GetKeyRecursive(ctx context.Context, key string) (string, 
 }
 
 func (mds *mdsClient) Watch(ctx context.Context) (*metadata.Descriptor, error) {
+	if mds.fallback {
+		return nil, fmt.Errorf("dial tcp 169.254.169.254:80: connect: network is unreachable")
+	}
 	if !mds.disableUnknownFailure {
 		return nil, errUnknown
 	}
@@ -88,7 +97,8 @@ func TestWatcherSuccess(t *testing.T) {
 
 func TestWatcherUnknownFailure(t *testing.T) {
 	watcher := New()
-	watcher.client = &mdsClient{}
+	client := &mdsClient{fallback: true}
+	watcher.client = client
 
 	renew, _, err := watcher.Run(context.Background(), LongpollEvent)
 	if err == nil {
@@ -97,5 +107,9 @@ func TestWatcherUnknownFailure(t *testing.T) {
 
 	if !renew {
 		t.Errorf("watcher.Run(%s) returned renew: %t, expected: true.", LongpollEvent, renew)
+	}
+
+	if !client.attemptedFallback {
+		t.Errorf("watcher.Run(%s) attempted fallback: false, expected: true.", LongpollEvent)
 	}
 }
