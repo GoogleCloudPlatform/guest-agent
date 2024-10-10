@@ -265,9 +265,9 @@ func (j *CredsJob) shouldEnableJob(ctx context.Context, mds *metadata.Descriptor
 		// could be mistaken for a recurring issue, even if mTLS MDS is indeed not supported.
 		if !j.failedPrevious.Load() {
 			logger.Debugf("Skipping scheduling credential generation job, unable to reach client credentials endpoint(%s): %v\nNote that this does not impact any functionality and you might see this message if HTTPS endpoint isn't supported by the Metadata Server on your VM. Refer https://cloud.google.com/compute/docs/metadata/overview#https-mds for more details.", clientCertsKey, err)
-			enable = false
 			j.failedPrevious.Store(true)
 		}
+		enable = false
 	} else {
 		j.failedPrevious.Store(false)
 	}
