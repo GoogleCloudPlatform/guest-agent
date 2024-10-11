@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
@@ -223,12 +223,9 @@ func (n *wicked) writeEthernetConfigs(ifaces []string) error {
 		ifcfg := n.ifcfgFilePath(iface)
 
 		// Avoid writing the configuration file if the configuration already exists.
-		if _, err := os.Stat(ifcfg); err != nil {
-			if os.IsNotExist(err) {
-				logger.Debugf("%s already exists, skipping", ifcfg)
-				continue
-			}
-			return fmt.Errorf("error getting config file %s: %v", ifcfg, err)
+		if fileExists(ifcfg) {
+			logger.Infof("Wicked config %q already exists, will skip writing", ifcfg)
+			continue
 		}
 
 		contents := []string{
@@ -251,7 +248,7 @@ func (n *wicked) writeEthernetConfigs(ifaces []string) error {
 
 // ifcfgFilePath gets the file path for the configuration file for the given interface.
 func (n *wicked) ifcfgFilePath(iface string) string {
-	return path.Join(n.configDir, fmt.Sprintf("ifcfg-%s", iface))
+	return filepath.Join(n.configDir, fmt.Sprintf("ifcfg-%s", iface))
 }
 
 func (n *wicked) removeInterface(ctx context.Context, iface string) error {

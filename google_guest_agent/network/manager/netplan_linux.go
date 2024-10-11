@@ -177,6 +177,11 @@ func (n *netplan) Configure(ctx context.Context, config *cfg.Sections) {
 
 // IsManaging checks whether netplan is present in the system.
 func (n *netplan) IsManaging(ctx context.Context, iface string) (bool, error) {
+	if isUbuntu1804() {
+		logger.Infof("Running on Ubuntu 18.04, skipping use of netplan, falling back to dhclient")
+		return false, nil
+	}
+
 	// Check if the netplan CLI exists.
 	return cliExists("netplan")
 }

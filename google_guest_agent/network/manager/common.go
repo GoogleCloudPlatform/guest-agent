@@ -26,6 +26,7 @@ import (
 	"regexp"
 	"strconv"
 
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/osinfo"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/run"
 	"github.com/GoogleCloudPlatform/guest-agent/metadata"
 	"github.com/GoogleCloudPlatform/guest-agent/utils"
@@ -271,4 +272,14 @@ func fileExists(filepath string) bool {
 		return false
 	}
 	return !s.IsDir()
+}
+
+// isUbuntu1804 checks if agent is running on Ubuntu 18.04. This is a helper
+// method to support some exceptions we have for 18.04.
+func isUbuntu1804() bool {
+	info := osinfo.Get()
+	if info.OS == "ubuntu" && info.VersionID == "18.04" {
+		return true
+	}
+	return false
 }

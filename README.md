@@ -157,6 +157,12 @@ are written.
 If none of the first 4 network manager services are detected on the system, then
 the agent will default to using `dhclient` for managing network interfaces.
 
+Note: Ubuntu 18.04, while having `netplan` installed,  ships a outdated and 
+unsupported version of `networkctl`. This older version lacks essential commands like 
+`networkctl reload`, causing compatibility issues. Guest agent is designed to 
+fallback to dhclient on Ubuntu 18.04, even when netplan is present, to ensure proper
+network configuration.
+
 The following configuration flags can control the behavior:
 
 *   `manage_primary_nic`: When enabled, the agent will start managing the
