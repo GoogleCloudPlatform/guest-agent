@@ -25,6 +25,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/run"
 )
 
@@ -238,6 +239,10 @@ func TestIsManaging(t *testing.T) {
 // TestWriteEthernetConfigs tests whether the wicked configuration files are
 // written correctly and to the right location.
 func TestWriteEthernetConfigs(t *testing.T) {
+	if err := cfg.Load(nil); err != nil {
+		t.Errorf("cfg.Load(nil) failed unexpectedly with error: %v", err)
+	}
+
 	tests := []struct {
 		// name is the name of the test.
 		name string
