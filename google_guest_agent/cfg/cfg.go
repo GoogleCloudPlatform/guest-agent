@@ -97,7 +97,7 @@ restore_debian12_netplan_config = true
 cert_authentication = true
 
 [MDS]
-disable-https-mds-setup = false
+disable-https-mds-setup = true
 enable-https-mds-native-cert-store = false
 
 [Snapshots]

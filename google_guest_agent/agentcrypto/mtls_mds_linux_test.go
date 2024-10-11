@@ -134,7 +134,7 @@ func TestShouldEnable(t *testing.T) {
 			name:   "defaults",
 			mds:    &metadata.Descriptor{},
 			cfgVal: defCfg,
-			want:   true,
+			want:   false,
 		},
 		{
 			name:   "enable_from_cfg",
