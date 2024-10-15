@@ -286,8 +286,7 @@ be used from disk if required.
 Metadata scripts implement support for running user provided
 [startup scripts](https://cloud.google.com/compute/docs/startupscript) and
 [shutdown scripts](https://cloud.google.com/compute/docs/shutdownscript). The
-guest support for metadata scripts is implemented in Python with the following
-design details.
+guest support for metadata scripts consider the following details:
 
 *   Metadata scripts are executed in a shell.
 *   If multiple metadata keys are specified (e.g. `startup-script` and
@@ -295,6 +294,8 @@ design details.
 *   If multiple metadata keys are specified (e.g. `startup-script` and
     `startup-script-url`) a URL is executed first.
 *   The exit status of a metadata script is logged after completed execution.
+
+For Windows specific details refer to: [Use startup scripts on Windows VMs](https://cloud.google.com/compute/docs/instances/startup-scripts/windows).
 
 ## Configuration
 
