@@ -22,3 +22,21 @@ version=$1
 
 GOOS=windows /tmp/go/bin/go build -ldflags "-X main.version=$version" -mod=readonly -o GCEWindowsAgent.exe ./google_guest_agent
 GOOS=windows /tmp/go/bin/go build -ldflags "-X main.version=$version" -mod=readonly -o GCEAuthorizedKeysCommand.exe ./google_authorized_keys
+
+# Script expects guest-agent and google-guest-agent codebase are placed
+# side-by-side within same directory and this script is executed from root of 
+# guest-agent codebase. 
+GUEST_AGENT_REPO="../google-guest-agent"
+
+if [[ ! -f "$GUEST_AGENT_REPO/Makefile" ]]; then
+    # This is a placeholder file for guest-agent package, google-compute-engine-windows.goospec
+    # looks for this file during goopack packaging and will fail if not found.
+    echo "This is a placeholder file so guest agent package build without error. Package will have actual Guest Agent Manager executable instead if both repos are cloned side-by-side." > GCEWindowsAgentManager.exe
+    exit 0
+fi
+
+BUILD_DIR=$(pwd)
+pushd $GUEST_AGENT_REPO
+GOOS=windows VERSION=$version make cmd/google_guest_agent/google_guest_agent
+cp cmd/google_guest_agent/google_guest_agent.exe $BUILD_DIR/GCEWindowsAgentManager.exe
+popd
