@@ -1,0 +1,13 @@
+[Unit]
+Description=Google Compute Engine Guest Agent Plugin Manager
+After=google-guest-agent.service
+Wants=google-guest-agent.service
+
+[Service]
+Type=notify
+ExecStart=/usr/bin/google_guest_agent_manager
+OOMScoreAdjust=-999
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
