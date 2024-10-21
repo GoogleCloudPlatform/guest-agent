@@ -167,9 +167,17 @@ if [ $1 -eq 1 ]; then
 else
   # Package upgrade
   if [ -d /run/systemd/system ]; then
+    systemctl daemon-reload >/dev/null 2>&1 || :
     systemctl try-restart google-guest-agent.service >/dev/null 2>&1 || :
     %if 0%{?build_plugin_manager}
-      systemctl try-restart google-guest-agent-manager.service >/dev/null 2>&1 || :
+      systemctl enable google-guest-agent-manager.service >/dev/null 2>&1 || :
+      systemctl is-active google-guest-agent-manager.service >/dev/null 2>&1 || :
+      # If the unit is active do a try-restart, otherwise start it.
+      if [ $? -eq 0 ]; then
+        systemctl try-restart google-guest-agent-manager.service >/dev/null 2>&1 || :
+      else
+        systemctl start google-guest-agent-manager.service >/dev/null 2>&1 || :
+      if
     %endif
   fi
 fi
