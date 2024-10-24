@@ -7,7 +7,6 @@
   "description": "Google Compute Engine Windows agent",
   "source": "https://github.com/GoogleCloudPlatform/guest-agent/",
   "files": {
-    "GCEWindowsAgentManager.exe": "<ProgramFiles>/Google/Compute Engine/agent/GCEWindowsAgentManager.exe",
     "GCEWindowsAgent.exe": "<ProgramFiles>/Google/Compute Engine/agent/GCEWindowsAgent.exe",
     "GCEAuthorizedKeysCommand.exe": "<ProgramFiles>/Google/Compute Engine/agent/GCEAuthorizedKeysCommand.exe",
     "THIRD_PARTY_LICENSES": "<ProgramFiles>/Google/Compute Engine/THIRD_PARTY_LICENSES/",
@@ -37,7 +36,6 @@
   "sources": [{
       "include": [
         "GCEWindowsAgent.exe",
-        "GCEWindowsAgentManager.exe",
 	"GCEAuthorizedKeysCommand.exe",
         "packaging/googet/agent_install.ps1",
         "packaging/googet/agent_uninstall.ps1",
