@@ -16,12 +16,6 @@ $name = 'GCEAgent'
 $path = '"C:\Program Files\Google\Compute Engine\agent\GCEWindowsAgent.exe"'
 $display_name = 'Google Compute Engine Agent'
 $description = 'Google Compute Engine Agent'
-
-$manager_name = 'GCEAgentManager'
-$manager_path = '"C:\Program Files\Google\Compute Engine\agent\GCEWindowsAgentManager.exe"'
-$manager_display_name = 'Google Compute Engine Agent Manager'
-$manager_description = 'Google Compute Engine Agent Manager'
-
 $initial_config = @'
 # GCE Instance Configuration
 
@@ -35,49 +29,31 @@ $initial_config = @'
 # disable=false
 '@
 
-function Set-ServiceConfig($service_name, $service_binary) {
+function Set-ServiceConfig {
   # Restart service after 1s, then 2s. Reset error counter after 60s.
-  sc.exe failure $service_name reset= 60 actions= restart/1000/restart/2000
+  sc.exe failure $name reset= 60 actions= restart/1000/restart/2000
   # Set dependency and delayed start
-  cmd.exe /c "sc.exe config ${service_name} depend= `"samss`" start= delayed-auto binpath= \`"${service_binary}\`""
+  cmd.exe /c "sc.exe config ${name} depend= `"samss`" start= delayed-auto binpath= \`"${path}\`""
   # Create trigger to start the service on first IP address
-  sc.exe triggerinfo $service_name start/networkon
-}
-
-function Set-New-Service($service_name, $service_display_name, $service_desc, $service_binary) {
-  if (-not (Get-Service $service_name -ErrorAction SilentlyContinue)) {
-    New-Service -Name $service_name `
-                -DisplayName $service_display_name `
-                -BinaryPathName $service_binary `
-                -StartupType Automatic `
-                -Description $service_desc
-  } 
-  else {
-    Set-Service -Name $service_name `
-                -DisplayName $service_display_name `
-                -Description $service_desc
-  }
+  sc.exe triggerinfo $name start/networkon
 }
 
 try {
-  # This is to safeguard from installing agent manager using placeholder file
-  $install_manager = $false
-  if (Test-Path ($manager_path -replace '"', "")) {
-    $contains = Select-String -Path ($manager_path -replace '"', "") -Pattern "This is a placeholder file"
-    if ($contains -eq $null) {
-      $install_manager = $true
-    }
+
+  if (-not (Get-Service $name -ErrorAction SilentlyContinue)) {
+    New-Service -Name $name `
+                -DisplayName $display_name `
+                -BinaryPathName $path `
+                -StartupType Automatic `
+                -Description $description
+  } 
+  else {
+    Set-Service -Name $name `
+                -DisplayName $display_name `
+                -Description $description
   }
 
-  # Guest Agent service
-  Set-New-Service $name $display_name $description $path
-  Set-ServiceConfig $name $path
-
-  # Guest Agent Manager service
-  if ($install_manager) {
-    Set-New-Service $manager_name $manager_display_name $manager_description $manager_path
-    Set-ServiceConfig $manager_name $manager_path
-  }
+  Set-ServiceConfig
 
   $config = "${env:ProgramFiles}\Google\Compute Engine\instance_configs.cfg"
   if (-not (Test-Path $config)) {
@@ -85,10 +61,6 @@ try {
   }
 
   Restart-Service $name -Verbose
-
-  if ($install_manager) {
-    Restart-Service $manager_name -Verbose
-  }
 }
 catch {
   Write-Output $_.InvocationInfo.PositionMessage
