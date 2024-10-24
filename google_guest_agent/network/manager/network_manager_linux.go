@@ -350,16 +350,22 @@ func (n *networkManager) rollbackConfigs(ctx context.Context, nics *Interfaces, 
 		return fmt.Errorf("getting interfaces: %v", err)
 	}
 
-	for _, iface := range ifaces {
-		if err := n.removeInterface(iface); err != nil {
+	reconnectPrimaryNic := false
+
+	for i, iface := range ifaces {
+		removed, err := n.removeInterface(iface)
+		if err != nil {
 			logger.Errorf("Failed to remove %q interface with error: %v", iface, err)
+		}
+		if i == 0 && removed {
+			reconnectPrimaryNic = true
 		}
 	}
 
 	if removeVlan {
 		for _, vnic := range nics.VlanInterfaces {
 			iface := n.vlanInterfaceName(vnic.ParentInterfaceID, vnic.Vlan)
-			if err := n.removeInterface(iface); err != nil {
+			if _, err := n.removeInterface(iface); err != nil {
 				logger.Errorf("Failed to remove %q interface with error: %v", iface, err)
 			}
 		}
@@ -367,6 +373,15 @@ func (n *networkManager) rollbackConfigs(ctx context.Context, nics *Interfaces, 
 
 	if err := run.Quiet(ctx, "nmcli", "conn", "reload"); err != nil {
 		return fmt.Errorf("error reloading NetworkManager config cache: %v", err)
+	}
+
+	// NetworkManager will not create a default connection if we are removing the one
+	// we manage, in that case we need to force it to connect and then with that create
+	// a default connection.
+	if reconnectPrimaryNic {
+		if err := run.Quiet(ctx, "nmcli", "device", "connect", ifaces[0]); err != nil {
+			return fmt.Errorf("error connecting NetworkManager's managed interface: %s, %v", ifaces[0], err)
+		}
 	}
 
 	return nil
@@ -385,29 +400,30 @@ func (n *networkManager) RollbackNics(ctx context.Context, nics *Interfaces) err
 }
 
 // removeInterface verifies .nmconnection is managed by Guest Agent and removes it.
-func (n *networkManager) removeInterface(iface string) error {
+// It returns true if the configuration removal succeeds and false otherwise.
+func (n *networkManager) removeInterface(iface string) (bool, error) {
 	configFilePath := n.networkManagerConfigFilePath(iface)
 
 	_, err := os.Stat(configFilePath)
 	if err != nil {
 		if !os.IsNotExist(err) {
-			return fmt.Errorf("unable to remove %q interface, stat failed on %q: %w", iface, configFilePath, err)
+			return false, fmt.Errorf("unable to remove %q interface, stat failed on %q: %w", iface, configFilePath, err)
 		}
 		logger.Debugf("NetworkManager's configuration file %q doesn't exist, ignoring.", configFilePath)
-		return nil
+		return false, nil
 	}
 
 	config := new(nmConfig)
 	if err := readIniFile(configFilePath, config); err != nil {
-		return fmt.Errorf("failed to load NetworkManager %q file: %v", configFilePath, err)
+		return false, fmt.Errorf("failed to load NetworkManager %q file: %v", configFilePath, err)
 	}
 
 	if config.GuestAgent.ManagedByGuestAgent {
 		logger.Debugf("Attempting to remove NetworkManager configuration %s", configFilePath)
 
 		if err = os.Remove(configFilePath); err != nil {
-			return fmt.Errorf("error deleting config file for %s: %v", iface, err)
+			return false, fmt.Errorf("error deleting config file for %s: %v", iface, err)
 		}
 	}
-	return nil
+	return true, nil
 }
