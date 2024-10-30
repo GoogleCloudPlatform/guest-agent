@@ -32,32 +32,34 @@ import (
 const DefaultPipePath = "/run/google-guest-agent/commands.sock"
 
 func mkdirpWithPerms(dir string, p os.FileMode, uid, gid int) error {
+	parent := path.Dir(dir)
 	stat, err := os.Stat(dir)
 	if err == nil {
-		statT, ok := stat.Sys().(*syscall.Stat_t)
-		if !ok {
-			return fmt.Errorf("could not determine owner of %s", dir)
-		}
-		if !stat.IsDir() {
-			return fmt.Errorf("%s exists and is not a directory", dir)
-		}
-		if morePermissive(int(stat.Mode()), int(p)) {
-			if err := os.Chmod(dir, p); err != nil {
-				return fmt.Errorf("could not correct %s permissions to %d: %v", dir, p, err)
+		if parent != "/" && parent != "" {
+			statT, ok := stat.Sys().(*syscall.Stat_t)
+			if !ok {
+				return fmt.Errorf("could not determine owner of %s", dir)
 			}
-		}
-		if statT.Uid != 0 && statT.Uid != uint32(uid) {
-			if err := os.Chown(dir, uid, -1); err != nil {
-				return fmt.Errorf("could not correct %s owner to %d: %v", dir, uid, err)
+			if !stat.IsDir() {
+				return fmt.Errorf("%s exists and is not a directory", dir)
 			}
-		}
-		if statT.Gid != 0 && statT.Gid != uint32(gid) {
-			if err := os.Chown(dir, -1, gid); err != nil {
-				return fmt.Errorf("could not correct %s group to %d: %v", dir, gid, err)
+			if morePermissive(int(stat.Mode()), int(p)) {
+				if err := os.Chmod(dir, p); err != nil {
+					return fmt.Errorf("could not correct %s permissions to %d: %v", dir, p, err)
+				}
+			}
+			if statT.Uid != 0 && statT.Uid != uint32(uid) {
+				if err := os.Chown(dir, uid, -1); err != nil {
+					return fmt.Errorf("could not correct %s owner to %d: %v", dir, uid, err)
+				}
+			}
+			if statT.Gid != 0 && statT.Gid != uint32(gid) {
+				if err := os.Chown(dir, -1, gid); err != nil {
+					return fmt.Errorf("could not correct %s group to %d: %v", dir, gid, err)
+				}
 			}
 		}
 	} else {
-		parent := path.Dir(dir)
 		if parent != "/" && parent != "" {
 			if err := mkdirpWithPerms(parent, p, uid, gid); err != nil {
 				return err
