@@ -16,8 +16,6 @@ package manager
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 	"sort"
 	"testing"
 
@@ -134,45 +132,6 @@ func TestVlanInterfaceParentMap(t *testing.T) {
 			}
 			if diff := cmp.Diff(test.wantMap, got); diff != "" {
 				t.Errorf("vlanInterfaceParentMap(%+v, %v) returned unexpected diff (-want,+got)\n%s", test.nics, test.allEthernetInterfaces, diff)
-			}
-		})
-	}
-}
-
-func TestFileExists(t *testing.T) {
-	dir := t.TempDir()
-	f, err := os.CreateTemp(dir, "file")
-	if err != nil {
-		t.Fatalf("os.CreateTemp(%s, file) failed unexpectedly with error: %v", dir, err)
-	}
-	defer f.Close()
-
-	tests := []struct {
-		name string
-		want bool
-		path string
-	}{
-		{
-			name: "existing_file",
-			want: true,
-			path: f.Name(),
-		},
-		{
-			name: "existing_dir",
-			want: false,
-			path: dir,
-		},
-		{
-			name: "non_existing_file",
-			want: false,
-			path: filepath.Join(t.TempDir(), "random"),
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			if got := fileExists(test.path); got != test.want {
-				t.Errorf("fileExists(%s) = %t, want = %t", test.path, got, test.want)
 			}
 		})
 	}

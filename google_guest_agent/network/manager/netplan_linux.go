@@ -21,10 +21,12 @@ import (
 	"path/filepath"
 	"reflect"
 	"slices"
+	"strings"
 
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/osinfo"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/run"
+	"github.com/GoogleCloudPlatform/guest-agent/utils"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 )
 
@@ -329,8 +331,7 @@ func (nd networkdNetplanDropin) write(n *netplan, iface string) (bool, error) {
 	logger.Infof("writing systemd drop in to: %s", dropinFile)
 
 	dropinDir := filepath.Dir(dropinFile)
-	err := os.MkdirAll(dropinDir, 0755)
-	if err != nil {
+	if err := os.MkdirAll(dropinDir, 0755); err != nil {
 		return false, fmt.Errorf("failed to create networkd dropin dir: %w", err)
 	}
 
@@ -467,23 +468,152 @@ func (n *netplan) vlanInterfaceName(parentInterface string, vlanID int) string {
 
 // SetupVlanInterface writes the apppropriate vLAN interfaces netplan configuration.
 func (n *netplan) SetupVlanInterface(ctx context.Context, config *cfg.Sections, nics *Interfaces) error {
-	reload1, err := n.writeNetplanVLANDropin(nics)
+	toRemove, err := n.findVlanDiff(nics)
+	if err != nil {
+		return fmt.Errorf("unable to detect vlan nics to delete: %w", err)
+	}
+
+	reload1, err := n.rollbackVlanNics(ctx, toRemove)
+	if err != nil {
+		return fmt.Errorf("unable to remove vlan interfaces (%+v): %w", toRemove, err)
+	}
+
+	reload2, err := n.writeNetplanVLANDropin(nics)
 	if err != nil {
 		return fmt.Errorf("unable to write netplan VLAN dropin: %w", err)
 	}
 
-	reload2, err := n.writeNetworkdVLANDropin(nics)
+	reload3, err := n.writeNetworkdVLANDropin(nics)
 	if err != nil {
 		return fmt.Errorf("unable to write netplan networkd VLAN dropin: %w", err)
 	}
 
-	if reload1 || reload2 {
+	if reload1 || reload2 || reload3 {
 		if err := n.reloadConfigs(ctx); err != nil {
 			return fmt.Errorf("error applying vlan interface configs: %w", err)
 		}
 	}
 
 	return nil
+}
+
+// interfaceFromLink gets the interface name from link name in netplan config.
+// Link name in some cases might not be same as interface name as we prefix with "a"
+// for precedence.
+func (n *netplan) interfaceFromLink(link string) string {
+	iface := link
+	if n.interfacePrefix != "" {
+		iface = strings.TrimPrefix(iface, fmt.Sprintf("%s-", n.interfacePrefix))
+	}
+	return iface
+}
+
+// findVlanDiff compares expectedNics with one configured with netplan config on disk
+// and returns only the vlan interfaces to delete.
+func (n *netplan) findVlanDiff(expectedNics *Interfaces) (*Interfaces, error) {
+	keepInterfaces := make(map[string]string)
+	toRemove := &Interfaces{VlanInterfaces: make(map[int]VlanInterface)}
+
+	existingVlanCfgs := netplanDropin{}
+	netplanVlanDropinFile := n.dropinFile(netplanVlanSuffix)
+	// There's no config file per interface, single netplan config file lists all the interfaces.
+	if !utils.FileExists(netplanVlanDropinFile, utils.TypeFile) {
+		logger.Infof("File %q does not exist, nothing to rollback", netplanVlanDropinFile)
+		return toRemove, nil
+	}
+
+	if err := readYamlFile(netplanVlanDropinFile, &existingVlanCfgs); err != nil {
+		return toRemove, fmt.Errorf("unable to read %q trying rollback configs: %w", netplanVlanDropinFile, err)
+	}
+
+	if len(existingVlanCfgs.Network.Vlans) == 0 {
+		logger.Debugf("No existing VLAN configs found at %q, skipping rollback", netplanVlanDropinFile)
+		return toRemove, nil
+	}
+
+	for _, iface := range expectedNics.VlanInterfaces {
+		// Set netplan vlan drop-in file for removal.
+		ifaceName := n.vlanInterfaceName(iface.ParentInterfaceID, iface.Vlan)
+		key := n.ID(ifaceName)
+		keepInterfaces[key] = ifaceName
+	}
+
+	for vlanKey, vlan := range existingVlanCfgs.Network.Vlans {
+		_, ok := keepInterfaces[vlanKey]
+		if !ok {
+			toRemove.VlanInterfaces[vlan.ID] = VlanInterface{ParentInterfaceID: n.interfaceFromLink(vlan.Link)}
+		}
+	}
+
+	return toRemove, nil
+}
+
+// rollbackVlanNics removes the [nics] and its config (netplan and networkd dropin both) on disk.
+func (n *netplan) rollbackVlanNics(ctx context.Context, nics *Interfaces) (bool, error) {
+	var deleteNics []string
+	var deleteDirs []string
+
+	if len(nics.VlanInterfaces) == 0 {
+		logger.Debugf("No VLAN interfaces in args, skipping rollback")
+		return false, nil
+	}
+
+	existingVlanCfgs := netplanDropin{}
+	netplanVlanDropinFile := n.dropinFile(netplanVlanSuffix)
+	// There's no config file per interface, single netplan config file lists all the interfaces.
+	if utils.FileExists(netplanVlanDropinFile, utils.TypeFile) {
+		if err := readYamlFile(netplanVlanDropinFile, &existingVlanCfgs); err != nil {
+			return false, fmt.Errorf("unable to read %q trying rollback configs: %w", netplanVlanDropinFile, err)
+		}
+	}
+
+	for id, iface := range nics.VlanInterfaces {
+		ifaceName := n.vlanInterfaceName(iface.ParentInterfaceID, id)
+		key := n.ID(ifaceName)
+
+		deleteNics = append(deleteNics, key)
+		delete(existingVlanCfgs.Network.Vlans, key)
+
+		dropin := filepath.Join(n.networkdDropinDir, fmt.Sprintf("10-netplan-%s.network.d", key))
+		if utils.FileExists(dropin, utils.TypeDir) {
+			// Networkd dropin is a directory for each interface with override.conf file.
+			// Remove should delete the complete directory instead of that one file.
+			deleteDirs = append(deleteDirs, dropin)
+		}
+	}
+
+	logger.Infof("Deleting VLAN NICs: %v", deleteNics)
+	// Simply removing configs on disk and reloading netplan/networkctl doesn't remove
+	// existing vlan nics, it requires instance reboot or systemd-networkd restart. Instead,
+	// make sure its removed by [networkctl delete <interfaces>] command.
+	args := []string{"delete"}
+	args = append(args, deleteNics...)
+	if err := run.Quiet(ctx, "networkctl", args...); err != nil {
+		return false, fmt.Errorf("networkctl %v failed with error: %w", args, err)
+	}
+
+	// If no more VLANs exist simply remove the file.
+	if len(existingVlanCfgs.Network.Vlans) == 0 {
+		logger.Infof("Removing %s dropin file for vlan rollback", netplanVlanDropinFile)
+		if err := os.Remove(netplanVlanDropinFile); err != nil {
+			return false, fmt.Errorf("unable to remove netplan vlan dropin (%s): %w", netplanVlanDropinFile, err)
+		}
+	} else {
+		logger.Infof("Updating %s dropin file for vlan rollback", netplanVlanDropinFile)
+		// Otherwise, overwrite configs to reflect expected interfaces.
+		if _, err := n.write(existingVlanCfgs, netplanVlanSuffix); err != nil {
+			return false, fmt.Errorf("unable to update vlan config at (%s): %w", netplanVlanDropinFile, err)
+		}
+	}
+
+	logger.Infof("Removing directories %v as part of vlan rollback", deleteDirs)
+	for _, dir := range deleteDirs {
+		if err := os.RemoveAll(dir); err != nil {
+			return false, fmt.Errorf("unable to remove directory %q: %w", dir, err)
+		}
+	}
+
+	return true, nil
 }
 
 func (n *netplan) writeNetplanVLANDropin(nics *Interfaces) (bool, error) {
@@ -594,7 +724,7 @@ func (n *netplan) rollbackConfigs(ctx context.Context, nics *Interfaces, removeV
 
 	netplanEthernetDropinFile := n.dropinFile(netplanEthernetSuffix)
 	existingEthernetCfgs := netplanDropin{}
-	if fileExists(netplanEthernetDropinFile) {
+	if utils.FileExists(netplanEthernetDropinFile, utils.TypeFile) {
 		if err := readYamlFile(netplanEthernetDropinFile, &existingEthernetCfgs); err != nil {
 			return fmt.Errorf("unable to read %q trying rollback configs: %w", netplanEthernetDropinFile, err)
 		}
@@ -613,24 +743,12 @@ func (n *netplan) rollbackConfigs(ctx context.Context, nics *Interfaces, removeV
 	}
 
 	if removeVlan {
-		existingVlanCfgs := netplanDropin{}
-		netplanVlanDropinFile := n.dropinFile(netplanVlanSuffix)
-		if fileExists(netplanVlanDropinFile) {
-			if err := readYamlFile(netplanVlanDropinFile, &existingVlanCfgs); err != nil {
-				return fmt.Errorf("unable to read %q trying rollback configs: %w", netplanVlanDropinFile, err)
+		if done, err := n.rollbackVlanNics(ctx, nics); err != nil {
+			logger.Debugf("Failed to remove vlan interfaces: %v", err)
+		} else {
+			if done {
+				reload = true
 			}
-		}
-
-		for _, iface := range nics.VlanInterfaces {
-			// Set netplan vlan drop-in file for removal.
-			ifaceName := n.vlanInterfaceName(iface.ParentInterfaceID, iface.Vlan)
-			key := n.ID(ifaceName)
-			if _, ok := existingVlanCfgs.Network.Vlans[key]; ok {
-				deleteMe = append(deleteMe, netplanVlanDropinFile)
-			}
-
-			dropinFile := n.networkdDropinFile(ifaceName)
-			deleteMe = append(deleteMe, dropinFile)
 		}
 	}
 

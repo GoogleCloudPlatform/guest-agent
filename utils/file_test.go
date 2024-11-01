@@ -85,3 +85,64 @@ func TestCopyFileError(t *testing.T) {
 		t.Errorf("CopyFile(%s, %s) succeeded for non-existent file, want error", src, dst)
 	}
 }
+
+func TestFileExists(t *testing.T) {
+	dir := t.TempDir()
+	f, err := os.CreateTemp(dir, "file")
+	if err != nil {
+		t.Fatalf("os.CreateTemp(%s, file) failed unexpectedly with error: %v", dir, err)
+	}
+	defer f.Close()
+
+	tests := []struct {
+		name  string
+		want  bool
+		fType Type
+		path  string
+	}{
+		{
+			name:  "existing_file",
+			want:  true,
+			fType: TypeFile,
+			path:  f.Name(),
+		},
+		{
+			name:  "exists_file_want_dir",
+			want:  false,
+			fType: TypeDir,
+			path:  f.Name(),
+		},
+		{
+			name:  "existing_dir",
+			want:  true,
+			fType: TypeDir,
+			path:  dir,
+		},
+		{
+			name:  "exists_dir_want_file",
+			want:  false,
+			fType: TypeFile,
+			path:  dir,
+		},
+		{
+			name:  "non_existing_file",
+			want:  false,
+			fType: TypeFile,
+			path:  filepath.Join(t.TempDir(), "random"),
+		},
+		{
+			name:  "non_existing_dir",
+			want:  false,
+			fType: TypeDir,
+			path:  filepath.Join(t.TempDir(), "random"),
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := FileExists(test.path, test.fType); got != test.want {
+				t.Errorf("FileExists(%s, %d) = %t, want = %t", test.path, test.fType, got, test.want)
+			}
+		})
+	}
+}

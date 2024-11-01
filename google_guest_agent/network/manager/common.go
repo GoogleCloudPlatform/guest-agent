@@ -264,16 +264,6 @@ func readYamlFile(filepath string, ptr any) error {
 	return yaml.Unmarshal(bytes, ptr)
 }
 
-// fileExists returns true only if file exists and it can successfully run stat
-// on the path.
-func fileExists(filepath string) bool {
-	s, err := os.Stat(filepath)
-	if err != nil && !errors.Is(os.ErrNotExist, err) {
-		return false
-	}
-	return !s.IsDir()
-}
-
 // isUbuntu1804 checks if agent is running on Ubuntu 18.04. This is a helper
 // method to support some exceptions we have for 18.04.
 func isUbuntu1804() bool {
