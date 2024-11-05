@@ -15,6 +15,11 @@
 # Don't build debuginfo packages.
 %define debug_package %{nil}
 
+# The only use for extra source is to build plugin manager.
+%if 0%{?has_extra_source}
+%define build_plugin_manager %{has_extra_source}
+%endif
+
 Name: google-guest-agent
 Epoch:   1
 Version: %{_version}
@@ -23,6 +28,11 @@ Summary: Google Compute Engine guest agent.
 License: ASL 2.0
 Url: https://cloud.google.com/compute/docs/images/guest-environment
 Source0: %{name}_%{version}.orig.tar.gz
+
+%if 0%{?build_plugin_manager}
+Source1: %{name}_extra-%{version}.orig.tar.gz
+%endif
+
 Requires: google-compute-engine-oslogin >= 1:20231003
 
 BuildArch: %{_arch}
@@ -36,7 +46,12 @@ Obsoletes: python-google-compute-engine, python3-google-compute-engine
 Contains the Google guest agent binary.
 
 %prep
+
+%if 0%{?build_plugin_manager}
+%autosetup -a 1
+%else
 %autosetup
+%endif
 
 %build
 for bin in google_guest_agent google_metadata_script_runner gce_workload_cert_refresh; do
@@ -44,6 +59,12 @@ for bin in google_guest_agent google_metadata_script_runner gce_workload_cert_re
   GOPATH=%{_gopath} CGO_ENABLED=0 %{_go} build -ldflags="-s -w -X main.version=%{_version}" -mod=readonly
   popd
 done
+# Build side-by-side both new agent (plugin manager) and legacy agent.
+%if 0%{?build_plugin_manager}
+pushd %{name}-extra-%{version}/
+  VERSION=%{version} make cmd/google_guest_agent/google_guest_agent
+popd
+%endif
 
 %install
 install -d "%{buildroot}/%{_docdir}/%{name}"
@@ -55,6 +76,12 @@ install -p -m 0755 google_metadata_script_runner/google_metadata_script_runner %
 install -p -m 0755 gce_workload_cert_refresh/gce_workload_cert_refresh %{buildroot}%{_bindir}/gce_workload_cert_refresh
 install -d %{buildroot}/usr/share/google-guest-agent
 install -p -m 0644 instance_configs.cfg %{buildroot}/usr/share/google-guest-agent/instance_configs.cfg
+
+# Compat agent, it will become google_guest_agent after the full package transition.
+%if 0%{?build_plugin_manager}
+install -p -m 0755 %{name}-extra-%{version}/cmd/google_guest_agent/google_guest_agent %{buildroot}%{_bindir}/google_guest_agent_manager
+%endif
+
 %if 0%{?el6}
 install -d %{buildroot}/etc/init
 install -p -m 0644 %{name}.conf %{buildroot}/etc/init/
@@ -64,6 +91,11 @@ install -p -m 0644 google-shutdown-scripts.conf %{buildroot}/etc/init/
 install -d %{buildroot}%{_unitdir}
 install -d %{buildroot}%{_presetdir}
 install -p -m 0644 %{name}.service %{buildroot}%{_unitdir}
+
+%if 0%{?build_plugin_manager}
+install -p -m 0644 google-guest-agent-manager.service %{buildroot}%{_unitdir}
+%endif
+
 install -p -m 0644 google-startup-scripts.service %{buildroot}%{_unitdir}
 install -p -m 0644 google-shutdown-scripts.service %{buildroot}%{_unitdir}
 install -p -m 0644 gce-workload-cert-refresh.service %{buildroot}%{_unitdir}
@@ -76,6 +108,11 @@ install -p -m 0644 90-%{name}.preset %{buildroot}%{_presetdir}/90-%{name}.preset
 %defattr(-,root,root,-)
 /usr/share/google-guest-agent/instance_configs.cfg
 %{_bindir}/google_guest_agent
+
+%if 0%{?build_plugin_manager}
+%{_bindir}/google_guest_agent_manager
+%endif
+
 %{_bindir}/google_metadata_script_runner
 %{_bindir}/gce_workload_cert_refresh
 %if 0%{?el6}
@@ -84,6 +121,11 @@ install -p -m 0644 90-%{name}.preset %{buildroot}%{_presetdir}/90-%{name}.preset
 /etc/init/google-shutdown-scripts.conf
 %else
 %{_unitdir}/%{name}.service
+
+%if 0%{?build_plugin_manager}
+%{_unitdir}/google-guest-agent-manager.service
+%endif
+
 %{_unitdir}/google-startup-scripts.service
 %{_unitdir}/google-shutdown-scripts.service
 %{_unitdir}/gce-workload-cert-refresh.service
@@ -108,27 +150,47 @@ if [ $1 -eq 1 ]; then
   systemctl enable google-shutdown-scripts.service >/dev/null 2>&1 || :
   systemctl enable gce-workload-cert-refresh.timer >/dev/null 2>&1 || :
 
+  %if 0%{?build_plugin_manager}
+    systemctl enable google-guest-agent-manager.service >/dev/null 2>&1 || :
+  %endif
+
   if [ -d /run/systemd/system ]; then
     systemctl daemon-reload >/dev/null 2>&1 || :
     systemctl start google-guest-agent.service >/dev/null 2>&1 || :
     systemctl start gce-workload-cert-refresh.timer >/dev/null 2>&1 || :
+    %if 0%{?build_plugin_manager}
+      systemctl start google-guest-agent-manager.service >/dev/null 2>&1 || :
+    %endif
   fi
+
+
 else
   # Package upgrade
   if [ -d /run/systemd/system ]; then
+    systemctl daemon-reload >/dev/null 2>&1 || :
     systemctl try-restart google-guest-agent.service >/dev/null 2>&1 || :
+    %if 0%{?build_plugin_manager}
+      systemctl enable google-guest-agent-manager.service >/dev/null 2>&1 || :
+      systemctl restart google-guest-agent-manager.service >/dev/null 2>&1 || :
+    %endif
   fi
 fi
 
 %preun
 if [ $1 -eq 0 ]; then
   # Package removal, not upgrade
+  %if 0%{?build_plugin_manager}
+    systemctl --no-reload disable google-guest-agent-manager.service >/dev/null 2>&1 || :
+  %endif
   systemctl --no-reload disable google-guest-agent.service >/dev/null 2>&1 || :
   systemctl --no-reload disable google-startup-scripts.service >/dev/null 2>&1 || :
   systemctl --no-reload disable google-shutdown-scripts.service >/dev/null 2>&1 || :
   systemctl --no-reload disable gce-workload-cert-refresh.timer >/dev/null 2>&1 || :
   if [ -d /run/systemd/system ]; then
     systemctl stop google-guest-agent.service >/dev/null 2>&1 || :
+    %if 0%{?build_plugin_manager}
+      systemctl stop google-guest-agent-manager.service >/dev/null 2>&1 || :
+    %endif
   fi
 fi
 
