@@ -337,7 +337,7 @@ func (n *systemdNetworkd) SetupVlanInterface(ctx context.Context, config *cfg.Se
 
 	// Attempt to remove vlan interface configurations that are not known - i.e. they were previously
 	// added by users but are no longer present on their mds configuration.
-	requiresRestart, err := n.removeVlanInterfaces(keepMe)
+	requiresRestart, err := n.removeVlanInterfaces(ctx, keepMe)
 	if err != nil {
 		return fmt.Errorf("failed to remove vlan interface configuration: %+v", err)
 	}
@@ -356,7 +356,7 @@ func (n *systemdNetworkd) SetupVlanInterface(ctx context.Context, config *cfg.Se
 }
 
 // removeVlanInterfaces removes vlan interfaces that are not present in keepMe slice.
-func (n *systemdNetworkd) removeVlanInterfaces(keepMe []string) (bool, error) {
+func (n *systemdNetworkd) removeVlanInterfaces(ctx context.Context, keepMe []string) (bool, error) {
 	files, err := os.ReadDir(n.configDir)
 	if err != nil {
 		return false, fmt.Errorf("failed to read content from %s: %+v", n.configDir, err)
@@ -365,6 +365,9 @@ func (n *systemdNetworkd) removeVlanInterfaces(keepMe []string) (bool, error) {
 	configExp := `(?P<priority>[0-9]+)-(?P<interface>.*\.[0-9]+)-(?P<suffix>.*)\.(?P<extension>network|netdev)`
 	configRegex := regexp.MustCompile(configExp)
 	requiresRestart := false
+
+	var ifacesDeleteMe []string
+	var filesDeleteMe []string
 
 	for _, file := range files {
 		var (
@@ -414,11 +417,27 @@ func (n *systemdNetworkd) removeVlanInterfaces(keepMe []string) (bool, error) {
 			continue
 		}
 
-		if err := os.Remove(filepath.Join(n.configDir, file.Name())); err != nil {
-			return requiresRestart, fmt.Errorf("failed to remove vlan interface config(%s): %+v", file.Name(), err)
+		if extension == "network" {
+			network := ptr.(*systemdConfig)
+			ifacesDeleteMe = append(ifacesDeleteMe, network.Match.Name)
 		}
 
+		filesDeleteMe = append(filesDeleteMe, filePath)
 		requiresRestart = true
+	}
+
+	if len(ifacesDeleteMe) > 0 {
+		args := []string{"delete"}
+		args = append(args, ifacesDeleteMe...)
+		if err := run.Quiet(ctx, "networkctl", args...); err != nil {
+			return false, fmt.Errorf("networkctl %v failed with error: %w", args, err)
+		}
+	}
+
+	for _, filePath := range filesDeleteMe {
+		if err := os.Remove(filePath); err != nil {
+			return requiresRestart, fmt.Errorf("failed to remove vlan interface config(%s): %+v", filePath, err)
+		}
 	}
 
 	return requiresRestart, nil
@@ -590,7 +609,7 @@ func (n *systemdNetworkd) rollbackConfigs(ctx context.Context, nics *Interfaces,
 	vlanRequiresRestart := false
 	// Rollback vlan interfaces.
 	if removeVlan {
-		vlanRequiresRestart, err = n.removeVlanInterfaces(nil)
+		vlanRequiresRestart, err = n.removeVlanInterfaces(ctx, nil)
 		if err != nil {
 			logger.Warningf("Failed to rollback vlan interfaces: %v", err)
 		}
