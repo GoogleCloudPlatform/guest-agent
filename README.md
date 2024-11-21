@@ -365,7 +365,12 @@ We build the following packages for the Windows guest environment:
 google-compute-engine-windows - contains the guest agent executable.
 google-compute-engine-metadata-scripts - contains files to run startup and shutdown scripts.
 
+google-compute-engine-windows contains `GCEAgent` and `GCEAgentManager` windows services.
+
 We build the following packages for the Linux guest environment:
 
-google-guest-agent - contains the guest agent and metadata script runner
-executables, as well as service files for both.
+google-guest-agent - contains the guest agent, google-guest-agent-manager and metadata script runner
+executables, as well as service files for all.
+
+Refer [this](https://github.com/GoogleCloudPlatform/google-guest-agent) repo for further details on
+Google Guest Agent Manager.
