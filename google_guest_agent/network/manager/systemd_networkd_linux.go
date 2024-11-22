@@ -186,8 +186,8 @@ func (n *systemdNetworkd) Configure(ctx context.Context, config *cfg.Sections) {
 // to check if systemd-networkd is managing or has configured the provided interface.
 func (n *systemdNetworkd) IsManaging(ctx context.Context, iface string) (bool, error) {
 	// Check the version.
-	_, err := cliExists("networkctl")
-	if err != nil {
+	exists, err := cliExists("networkctl")
+	if !exists {
 		return false, err
 	}
 
