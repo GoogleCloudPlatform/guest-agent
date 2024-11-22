@@ -19,6 +19,7 @@ package manager
 import (
 	"context"
 	"fmt"
+	"net"
 	"os/exec"
 	"slices"
 	"strings"
@@ -29,6 +30,7 @@ import (
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/osinfo"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/ps"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/run"
+	"github.com/GoogleCloudPlatform/guest-agent/metadata"
 )
 
 // The test DHClient to use in the test.
@@ -510,6 +512,78 @@ func TestDhclientProcessExists(t *testing.T) {
 			}
 
 			dhclientTestTearDown(t)
+		})
+	}
+}
+
+func TestAnyDhclientProcessExists(t *testing.T) {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		t.Fatalf("net.Interfaces() failed unexpectedly with error: %v", err)
+	}
+
+	iface := ifaces[1]
+
+	nics := &Interfaces{EthernetInterfaces: []metadata.NetworkInterfaces{
+		{Mac: iface.HardwareAddr.String()},
+	}}
+
+	tests := []struct {
+		name     string
+		want     bool
+		exists   bool
+		wantErr  bool
+		throwErr bool
+		version  []ipVersion
+	}{
+		{
+			name:    "no_processes",
+			want:    false,
+			exists:  false,
+			wantErr: false,
+		},
+		{
+			name:    "ipv4_processes",
+			want:    true,
+			exists:  true,
+			wantErr: false,
+			version: []ipVersion{ipv4},
+		},
+		{
+			name:    "ipv4_ipv6_processes",
+			want:    true,
+			exists:  true,
+			wantErr: false,
+			version: []ipVersion{ipv4, ipv6},
+		},
+		{
+			name:     "fake_error",
+			want:     false,
+			wantErr:  true,
+			throwErr: true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			opts := dhclientTestOpts{
+				processOpts: dhclientProcessOpts{
+					ifaces:      []string{iface.Name},
+					existFlags:  []bool{test.exists},
+					returnError: test.throwErr,
+					ipVersions:  test.version,
+				},
+			}
+			dhclientTestSetup(t, opts)
+			t.Cleanup(func() { dhclientTestTearDown(t) })
+
+			got, err := anyDhclientProcessExists(nics)
+			if (err != nil) != test.wantErr {
+				t.Errorf("anyDhclientProcessExists(%+v) = %v, want error: %t", nics, err, test.wantErr)
+			}
+			if got != test.want {
+				t.Errorf("anyDhclientProcessExists(%+v) = %t, want process exists: %t", nics, got, test.want)
+			}
 		})
 	}
 }
