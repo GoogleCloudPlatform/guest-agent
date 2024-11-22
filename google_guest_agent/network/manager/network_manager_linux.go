@@ -143,8 +143,8 @@ func (n *networkManager) IsManaging(ctx context.Context, iface string) (bool, er
 
 	// Check for existence of nmcli. Without nmcli, the agent cannot tell NetworkManager
 	// to reload the configs for its connections.
-	_, err := cliExists("nmcli")
-	if err != nil {
+	exists, err := cliExists("nmcli")
+	if !exists {
 		return false, err
 	}
 
