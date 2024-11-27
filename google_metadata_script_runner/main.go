@@ -162,9 +162,7 @@ func downloadScript(ctx context.Context, path string, file *os.File) error {
 			return nil
 		}
 
-		if err != nil {
-			logger.Infof("Failed to download object [%s] from GCS bucket [%s], err: %+v", object, bucket, err)
-		}
+		logger.Infof("Failed to download object [%s] from GCS bucket [%s], err: %+v", object, bucket, err)
 
 		logger.Infof("Trying unauthenticated download")
 		path = fmt.Sprintf("https://%s/%s/%s", storageURL, bucket, object)
@@ -437,6 +435,10 @@ func main() {
 	if err := cfg.Load(nil); err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to load instance configuration: %+v", err)
 		os.Exit(1)
+	}
+
+	if !cfg.Get().Core.CloudLoggingEnabled {
+		opts.DisableCloudLogging = true
 	}
 
 	// The keys to check vary based on the argument and the OS. Also functions to validate arguments.
