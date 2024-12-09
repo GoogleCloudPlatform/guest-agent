@@ -29,6 +29,13 @@ The repository contains these components:
 *   **google-metadata-script-runner** binary to run user-provided scripts at VM
     startup and shutdown.
 
+Note: Starting in December 2024 guest agent installs a secondary systemd unit
+named google-guest-agent-manager, this unit manages on demand plugins lifecycle,
+such plugin architecture will support expansion of the guest agent in the future.
+In the upcoming releases both google-guest-agent and google-guest-agent-manager
+will be consolidated in a single unit. The source code for plugin manager can
+be found [here](https://github.com/GoogleCloudPlatform/google-guest-agent).
+
 ## Features
 
 The guest agent functionality can be separated into various areas of
