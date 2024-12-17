@@ -21,6 +21,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -28,6 +29,7 @@ import (
 
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/run"
 	"github.com/GoogleCloudPlatform/guest-agent/metadata"
+	"github.com/GoogleCloudPlatform/guest-agent/utils"
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -235,6 +237,10 @@ func TestSetupVlanInterface(t *testing.T) {
 		t.Errorf("netplan.Rollback(ctx, %+v) failed unexpectedly with error: %v", nics, err)
 	}
 
+	want := fmt.Sprintf("networkctl delete gcp.%s.5 gcp.%s.6", ifaces[1].Name, ifaces[1].Name)
+	if !slices.Contains(runner.executedCommands, want) {
+		t.Errorf("mgr.Rollback did not run %q, found commands: %v", want, runner.executedCommands)
+	}
 	verifyRollback(t, nics, netplanCfg, networkdCfg, ifaces[1].Name)
 }
 
@@ -359,5 +365,125 @@ func TestIsNetplanConfigSame(t *testing.T) {
 				t.Errorf("isSame(%s) = %t, want = %t", test.path, got, test.want)
 			}
 		})
+	}
+}
+
+func TestPartialVlanRemoval(t *testing.T) {
+	netplan := &netplan{
+		netplanConfigDir:  t.TempDir(),
+		networkdDropinDir: t.TempDir(),
+	}
+
+	netplandropin := netplanDropin{
+		Network: netplanNetwork{
+			Version: 2,
+			Vlans: map[string]netplanVlan{
+				"gcp.ens4.5": {
+					ID:                 5,
+					Link:               "ens4",
+					DHCPv4:             makebool(true),
+					OverrideMacAddress: "mac-address",
+					MTU:                1460,
+					DHCP4Overrides:     &netplanDHCPOverrides{UseDomains: makebool(false)},
+					DHCP6Overrides:     &netplanDHCPOverrides{UseDomains: makebool(false)},
+				},
+				"gcp.ens4.6": {
+					ID:                 6,
+					Link:               "ens4",
+					DHCPv4:             makebool(true),
+					DHCPv6:             makebool(true),
+					OverrideMacAddress: "mac-address2",
+					MTU:                1500,
+					DHCP4Overrides:     &netplanDHCPOverrides{UseDomains: makebool(false)},
+					DHCP6Overrides:     &netplanDHCPOverrides{UseDomains: makebool(false)},
+				},
+			},
+		},
+	}
+
+	if ok, err := netplan.write(netplandropin, netplanVlanSuffix); err != nil || !ok {
+		t.Fatalf("netplan write for test dropin file returned - err: %v, wrote: %t", err, ok)
+	}
+
+	// 	nic1Override := filepath.Join(networdCfg, fmt.Sprintf("10-netplan-gcp.%s.5.network.d", ifaceName), "override.conf")
+	// Test networkd dropin configs.
+	ens45DropinDir := filepath.Join(netplan.networkdDropinDir, "10-netplan-gcp.ens4.5.network.d")
+	ens46DropinDir := filepath.Join(netplan.networkdDropinDir, "10-netplan-gcp.ens4.6.network.d")
+	if err := os.MkdirAll(ens45DropinDir, 0755); err != nil {
+		t.Fatalf("os.MkdirAll(%s, 0755) failed unexpectedly with error: %v", ens45DropinDir, err)
+	}
+	if err := os.MkdirAll(ens46DropinDir, 0755); err != nil {
+		t.Fatalf("os.MkdirAll(%s, 0755) failed unexpectedly with error: %v", ens46DropinDir, err)
+	}
+
+	ens45Override := filepath.Join(ens45DropinDir, "override.conf")
+	if _, err := os.Create(ens45Override); err != nil {
+		t.Fatalf("os.Create(%s) failed unexpectedly with error: %v", ens45Override, err)
+	}
+	ens46Override := filepath.Join(ens46DropinDir, "override.conf")
+	if _, err := os.Create(ens46Override); err != nil {
+		t.Fatalf("os.Create(%s) failed unexpectedly with error: %v", ens46Override, err)
+	}
+
+	nics := &Interfaces{
+		VlanInterfaces: map[int]VlanInterface{
+			5: {
+				VlanInterface: metadata.VlanInterface{
+					Mac:  "mac-address",
+					Vlan: 5,
+					MTU:  1460,
+				},
+				ParentInterfaceID: "ens4",
+			},
+		},
+	}
+
+	wantNics := &Interfaces{
+		VlanInterfaces: map[int]VlanInterface{
+			6: {
+				ParentInterfaceID: "ens4",
+			},
+		},
+	}
+
+	got, err := netplan.findVlanDiff(nics)
+	if err != nil {
+		t.Fatalf("netplan.findVlanDiff(%+v) failed unexpectedly with error: %v", nics, err)
+	}
+
+	if diff := cmp.Diff(wantNics, got); diff != "" {
+		t.Errorf("netplan.findVlanDiff(%+v) returned diff on vlans to remove (-want,+got)\n%s", nics, diff)
+	}
+
+	runner := setupNetplanRunner(t)
+
+	reload, err := netplan.rollbackVlanNics(context.Background(), got)
+	if err != nil {
+		t.Fatalf("netplan.rollbackVlanNics(ctx, %+v) failed unexpectedly with error: %v", got, err)
+	}
+	if !reload {
+		t.Fatalf("netplan.rollbackVlanNics(ctx, %+v) returned false for reload want true ", err)
+	}
+
+	// Verify we did networctl delete.
+	wantCmd := "networkctl delete gcp.ens4.6"
+	if !slices.Contains(runner.executedCommands, wantCmd) {
+		t.Errorf("netplan.rollbackVlanNics did not run %s, executed %+v", wantCmd, runner.executedCommands)
+	}
+
+	// Netplan dropin should still exist for gcp.ens4.5 but not for gcp.ens4.6.
+	content, err := os.ReadFile(netplan.dropinFile(netplanVlanSuffix))
+	if err != nil {
+		t.Fatalf("os.ReadFile(%s) failed unexpectedly with error: %v", netplan.dropinFile(netplanVlanSuffix), err)
+	}
+	gotContent := string(content)
+	if strings.Contains(gotContent, "gcp.ens4.6") || !strings.Contains(gotContent, "gcp.ens4.5") {
+		t.Errorf("%s after netplan.rollbackVlanNics =\n %s, gcp.ens4.5 should exist but not gcp.ens4.6.", netplan.dropinFile(netplanVlanSuffix), gotContent)
+	}
+	if !utils.FileExists(ens45Override, utils.TypeFile) {
+		t.Errorf("netplan.rollbackVlanNics unexpectedly removed %s", ens45Override)
+	}
+	if utils.FileExists(ens46DropinDir, utils.TypeDir) {
+		t.Errorf("netplan.rollbackVlanNics did not remove %s", ens46DropinDir)
 	}
 }

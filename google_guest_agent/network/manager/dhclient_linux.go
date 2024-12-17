@@ -478,10 +478,55 @@ func dhclientProcessExists(_ context.Context, iface string, ipVersion ipVersion)
 	return false, nil
 }
 
+// anyDhclientProcessExists returns true if there's at-least one dhclient process
+// running for any of the known ethernet interfaces, regarless of Ipv4/Ipv6 stack.
+func anyDhclientProcessExists(nics *Interfaces) (bool, error) {
+	processes, err := ps.Find(".*dhclient.*")
+	if err != nil {
+		return false, fmt.Errorf("error finding dhclient process: %v", err)
+	}
+
+	if len(processes) == 0 {
+		return false, nil
+	}
+
+	interfaces, err := interfaceNames(nics.EthernetInterfaces)
+	if err != nil {
+		return false, fmt.Errorf("error getting interface names: %v", err)
+	}
+
+	for _, process := range processes {
+		commandLine := process.CommandLine
+		for _, iface := range interfaces {
+			if slices.Contains(commandLine, iface) {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
+}
+
 // Rollback releases all leases from DHClient, effectively undoing the dhclient configurations.
 func (n *dhclient) Rollback(ctx context.Context, nics *Interfaces) error {
 	if err := n.RollbackNics(ctx, nics); err != nil {
 		return fmt.Errorf("failed to rollback ethernet interfaces: %w", err)
+	}
+
+	// This prevents incorrect rollback by dhclient where NICs are managed by netplan.
+	// VLAN interfaces does not have dhclient process running and IPs are assigned
+	// directly by running [ipAddressSet] command. Attempt to rollback any VLAN interfaces
+	// only if network stack is managed by dhclient (at-least one dhclient process for
+	// known ethernet interfaces). Simple dhclient existence does not prove this its managed by
+	// dhcliet as in case of Debian-12 we have dhclient but NICs are managed by netplan/networkd.
+
+	managed, err := anyDhclientProcessExists(nics)
+	if err != nil {
+		return fmt.Errorf("unable to detect if nics are dhclient managed: %w", err)
+	}
+
+	if !managed {
+		logger.Infof("No dhclient process found for any of the known ethernet interfaces, skipping vlan rollback.")
+		return nil
 	}
 
 	if err := n.removeVlanInterfaces(ctx, nil); err != nil {

@@ -223,7 +223,7 @@ func (n *wicked) writeEthernetConfigs(ifaces []string) error {
 		ifcfg := n.ifcfgFilePath(iface)
 
 		// Avoid writing the configuration file if the configuration already exists.
-		if fileExists(ifcfg) {
+		if utils.FileExists(ifcfg, utils.TypeFile) {
 			logger.Infof("Wicked config %q already exists, will skip writing", ifcfg)
 			continue
 		}
