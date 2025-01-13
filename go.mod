@@ -6,7 +6,7 @@ replace github.com/GoogleCloudPlatform/guest-agent/metadata => ../metadata
 
 require (
 	cloud.google.com/go/storage v1.31.0
-	github.com/GoogleCloudPlatform/guest-logging-go v0.0.0-20230710215706-450679fd88a9
+	github.com/GoogleCloudPlatform/guest-logging-go v0.0.0-20250108002221-76154e4b3bd9
 	github.com/Microsoft/go-winio v0.6.1
 	github.com/go-ini/ini v1.66.6
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da
