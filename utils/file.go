@@ -23,6 +23,16 @@ import (
 	"path/filepath"
 )
 
+// Type is the type of file.
+type Type int
+
+const (
+	// TypeDir is the type of directory.
+	TypeDir Type = iota
+	// TypeFile is the type of file.
+	TypeFile
+)
+
 // SaferWriteFile writes to a temporary file and then replaces the expected output file.
 // This prevents other processes from reading partial content while the writer is still writing.
 func SaferWriteFile(content []byte, outputFile string, perm fs.FileMode) error {
@@ -77,4 +87,22 @@ func WriteFile(content []byte, outputFile string, perm fs.FileMode) error {
 		return fmt.Errorf("unable to create required directories for %q: %w", outputFile, err)
 	}
 	return os.WriteFile(outputFile, content, perm)
+}
+
+// FileExists returns true if the file exists and match ftype.
+func FileExists(fpath string, ftype Type) bool {
+	stat, err := os.Stat(fpath)
+	if err != nil {
+		return false
+	}
+
+	if ftype == TypeDir && stat.IsDir() {
+		return true
+	}
+
+	if ftype == TypeFile && !stat.IsDir() {
+		return true
+	}
+
+	return false
 }
