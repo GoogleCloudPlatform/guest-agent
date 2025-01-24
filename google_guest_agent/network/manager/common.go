@@ -86,9 +86,16 @@ func interfaceNames(nics []metadata.NetworkInterfaces) ([]string, error) {
 	for _, ni := range nics {
 		iface, err := GetInterfaceByMAC(ni.Mac)
 		if err != nil {
-			return nil, err
+			if _, found := badMAC[ni.Mac]; !found {
+				logger.Errorf("error getting interface: %v", err)
+				badMAC[ni.Mac] = iface
+				continue
+			}
 		}
 		ifaces = append(ifaces, iface.Name)
+	}
+	if len(ifaces) == 0 {
+		return nil, fmt.Errorf("no valid interfaces found")
 	}
 	return ifaces, nil
 }
