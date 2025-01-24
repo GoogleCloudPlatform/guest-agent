@@ -242,7 +242,7 @@ func (n *netplan) reloadConfigs(ctx context.Context) error {
 
 // writeNetworkdDropin writes the overloading network-manager's drop-in file for the configurations
 // not supported by netplan.
-func (n *netplan) writeNetworkdDropin(interfaces, ipv6Interfaces []string) (bool, error) {
+func (n *netplan) writeNetworkdDropin(interfaces, ipv6Interfaces []EthernetInterface) (bool, error) {
 	var requiresReload bool
 	stat, err := os.Stat(n.networkdDropinDir)
 	if err != nil {
@@ -253,22 +253,26 @@ func (n *netplan) writeNetworkdDropin(interfaces, ipv6Interfaces []string) (bool
 		return false, fmt.Errorf("systemd-networkd drop-in dir(%s) is not a dir", n.networkdDropinDir)
 	}
 
-	for i, iface := range interfaces {
-		if !shouldManageInterface(i == 0) {
-			logger.Debugf("ManagePrimaryNIC is disabled, skipping writeNetworkdDropin for %s", iface)
+	for _, iface := range interfaces {
+		if !iface.isValid {
+			logger.Debugf("Invalid interface %s, skipping", iface.Mac)
+		}
+		if !shouldManageInterface(iface) {
+			logger.Debugf("ManagePrimaryNIC is disabled, skipping writeNetworkdDropin for %s", iface.name)
 			continue
 		}
-		logger.Debugf("writing systemd-networkd drop-in config for %s", iface)
+
+		logger.Debugf("writing systemd-networkd drop-in config for %s", iface.name)
 
 		var dhcp = "ipv4"
-		if slices.Contains(ipv6Interfaces, iface) {
+		if interfacesContains(ipv6Interfaces, iface) {
 			dhcp = "yes"
 		}
 
 		// Create and setup ini file.
 		data := networkdNetplanDropin{
 			Match: systemdMatchConfig{
-				Name: iface,
+				Name: iface.name,
 			},
 			Network: systemdNetworkConfig{
 				DNSDefaultRoute: true,
@@ -278,7 +282,7 @@ func (n *netplan) writeNetworkdDropin(interfaces, ipv6Interfaces []string) (bool
 
 		// We are only interested on DHCP offered routes on the primary nic,
 		// ignore it for the secondary ones.
-		if i != 0 {
+		if !iface.isPrimary {
 			data.Network.DNSDefaultRoute = false
 			data.DHCPv4 = &systemdDHCPConfig{
 				RoutesToDNS: false,
@@ -286,7 +290,7 @@ func (n *netplan) writeNetworkdDropin(interfaces, ipv6Interfaces []string) (bool
 			}
 		}
 
-		wrote, err := data.write(n, iface)
+		wrote, err := data.write(n, iface.name)
 		if err != nil {
 			return false, fmt.Errorf("failed to write systemd drop-in config: %w", err)
 		}
@@ -300,15 +304,15 @@ func (n *netplan) writeNetworkdDropin(interfaces, ipv6Interfaces []string) (bool
 }
 
 // networkdDropinFile returns an interface's netplan drop-in file path.
-func (n *netplan) networkdDropinFile(iface string) string {
+func (n *netplan) networkdDropinFile(ifaceName string) string {
 	// We are hardcoding the netplan priority to 10 since we are deriving the netplan
 	// networkd configuration name based on the interface name only - aligning with
 	// the commonly used value for netplan.
 	if n.interfacePrefix != "" {
-		return filepath.Join(n.networkdDropinDir, fmt.Sprintf("10-netplan-%s-%s.network.d", n.interfacePrefix, iface), "override.conf")
+		return filepath.Join(n.networkdDropinDir, fmt.Sprintf("10-netplan-%s-%s.network.d", n.interfacePrefix, ifaceName), "override.conf")
 	}
 
-	return filepath.Join(n.networkdDropinDir, fmt.Sprintf("10-netplan-%s.network.d", iface), "override.conf")
+	return filepath.Join(n.networkdDropinDir, fmt.Sprintf("10-netplan-%s.network.d", ifaceName), "override.conf")
 }
 
 // isSame unmarshals netplan networkd dropin config from cfgFile and compares it with
@@ -325,8 +329,8 @@ func (nd networkdNetplanDropin) isSame(cfgFile string) bool {
 }
 
 // write writes systemd's drop-in config file.
-func (nd networkdNetplanDropin) write(n *netplan, iface string) (bool, error) {
-	dropinFile := n.networkdDropinFile(iface)
+func (nd networkdNetplanDropin) write(n *netplan, ifaceName string) (bool, error) {
+	dropinFile := n.networkdDropinFile(ifaceName)
 
 	logger.Infof("writing systemd drop in to: %s", dropinFile)
 
@@ -341,21 +345,20 @@ func (nd networkdNetplanDropin) write(n *netplan, iface string) (bool, error) {
 	}
 
 	if err := writeIniFile(dropinFile, &nd); err != nil {
-		return false, fmt.Errorf("error saving netword drop-in file for %s: %v", iface, err)
+		return false, fmt.Errorf("error saving netword drop-in file for %s: %v", ifaceName, err)
 	}
 
 	return true, nil
 }
 
 // shouldUseDomains returns true if interface index is 0.
-func shouldUseDomains(idx int) *bool {
-	res := idx == 0
-	return &res
+func shouldUseDomains(nic EthernetInterface) *bool {
+	return &nic.isPrimary
 }
 
 // writeNetplanEthernetDropin selects the ethernet configuration, transforms it
 // into a netplan dropin format and writes it down to the netplan's drop-in directory.
-func (n *netplan) writeNetplanEthernetDropin(mtuMap map[string]int, interfaces, ipv6Interfaces []string) (bool, error) {
+func (n *netplan) writeNetplanEthernetDropin(mtuMap map[string]int, interfaces, ipv6Interfaces []EthernetInterface) (bool, error) {
 	dropin := netplanDropin{
 		Network: netplanNetwork{
 			Version:   netplanConfigVersion,
@@ -364,33 +367,37 @@ func (n *netplan) writeNetplanEthernetDropin(mtuMap map[string]int, interfaces, 
 	}
 
 	for i, iface := range interfaces {
-		if !shouldManageInterface(i == 0) {
-			logger.Debugf("ManagePrimaryNIC is disabled, skipping writeNetplanEthernetDropin for %s", iface)
+		if !iface.isValid {
+			logger.Debugf("Invalid interface %s, skipping", iface.Mac)
 			continue
 		}
-		logger.Debugf("Adding %s(%d) to drop-in configuration.", iface, i)
+		if !shouldManageInterface(iface) {
+			logger.Debugf("ManagePrimaryNIC is disabled, skipping writeNetplanEthernetDropin for %s", iface.name)
+			continue
+		}
+		logger.Debugf("Adding %s(%d) to drop-in configuration.", iface.name, i)
 
 		trueVal := true
 		ne := netplanEthernet{
-			Match:  netplanMatch{Name: iface},
+			Match:  netplanMatch{Name: iface.name},
 			DHCPv4: &trueVal,
 			DHCP4Overrides: &netplanDHCPOverrides{
-				UseDomains: shouldUseDomains(i),
+				UseDomains: shouldUseDomains(iface),
 			},
 		}
 
-		if mtu, found := mtuMap[iface]; found {
+		if mtu, found := mtuMap[iface.name]; found {
 			ne.MTU = &mtu
 		}
 
-		if slices.Contains(ipv6Interfaces, iface) {
+		if interfacesContains(ipv6Interfaces, iface) {
 			ne.DHCPv6 = &trueVal
 			ne.DHCP6Overrides = &netplanDHCPOverrides{
-				UseDomains: shouldUseDomains(i),
+				UseDomains: shouldUseDomains(iface),
 			}
 		}
 
-		key := n.ID(iface)
+		key := n.ID(iface.name)
 		dropin.Network.Ethernets[key] = ne
 	}
 
@@ -411,10 +418,10 @@ func (n *netplan) writeNetplanEthernetDropin(mtuMap map[string]int, interfaces, 
 
 // ID returns the Netplan ID used for referencing parent NIC in VLAN NIC
 // configuration and the key in ethernet based NIC configuration.
-func (n *netplan) ID(iface string) string {
-	key := iface
+func (n *netplan) ID(ifaceName string) string {
+	key := ifaceName
 	if n.interfacePrefix != "" {
-		key = fmt.Sprintf("%s-%s", n.interfacePrefix, iface)
+		key = fmt.Sprintf("%s-%s", n.interfacePrefix, ifaceName)
 	}
 	return key
 }
@@ -717,11 +724,6 @@ func (n *netplan) writeNetworkdVLANDropin(nics *Interfaces) (bool, error) {
 // If removeVlan is true both regular nics and vlan nics are rolled back.
 func (n *netplan) rollbackConfigs(ctx context.Context, nics *Interfaces, removeVlan bool) error {
 	var reload bool
-	interfaces, err := interfaceNames(nics.EthernetInterfaces)
-	if err != nil {
-		return fmt.Errorf("failed to get list of interface names: %v", err)
-	}
-
 	netplanEthernetDropinFile := n.dropinFile(netplanEthernetSuffix)
 	existingEthernetCfgs := netplanDropin{}
 	if utils.FileExists(netplanEthernetDropinFile, utils.TypeFile) {
@@ -731,13 +733,17 @@ func (n *netplan) rollbackConfigs(ctx context.Context, nics *Interfaces, removeV
 	}
 
 	var deleteMe []string
-	for _, iface := range interfaces {
+	for _, iface := range nics.EthernetInterfaces {
+		if !iface.isValid {
+			continue
+		}
+
 		// Set networkd drop-in override file for removal.
-		networkdDropinFile := n.networkdDropinFile(iface)
+		networkdDropinFile := n.networkdDropinFile(iface.name)
 		deleteMe = append(deleteMe, networkdDropinFile)
 
 		// Set netplan ethernet drop-in file for removal.
-		if _, ok := existingEthernetCfgs.Network.Ethernets[iface]; ok {
+		if _, ok := existingEthernetCfgs.Network.Ethernets[iface.name]; ok {
 			deleteMe = append(deleteMe, netplanEthernetDropinFile)
 		}
 	}

@@ -92,12 +92,7 @@ func (n *wicked) IsManaging(ctx context.Context, iface string) (bool, error) {
 
 // SetupEthernetInterface writes the necessary configuration files for each interface and enables them.
 func (n *wicked) SetupEthernetInterface(ctx context.Context, cfg *cfg.Sections, nics *Interfaces) error {
-	ifaces, err := interfaceNames(nics.EthernetInterfaces)
-	if err != nil {
-		return fmt.Errorf("failed to get network interfaces: %v", err)
-	}
-
-	if err = n.writeEthernetConfigs(ifaces); err != nil {
+	if err := n.writeEthernetConfigs(nics.EthernetInterfaces); err != nil {
 		return fmt.Errorf("error writing wicked configurations: %v", err)
 	}
 
@@ -105,7 +100,7 @@ func (n *wicked) SetupEthernetInterface(ctx context.Context, cfg *cfg.Sections, 
 	// Apply any configuration changes on all interface. If unchanged ifreload
 	// does not touch specified interfaces.
 	args := []string{"ifreload", "all"}
-	if err = run.Quiet(ctx, n.wickedCommand, args...); err != nil {
+	if err := run.Quiet(ctx, n.wickedCommand, args...); err != nil {
 		return fmt.Errorf("error enabling interfaces: %v", err)
 	}
 	return nil
@@ -209,18 +204,21 @@ func (n *wicked) cleanupVlanInterfaces(ctx context.Context, keepMe []string) err
 
 // writeEthernetConfigs writes config files for the given ifaces in the given configuration
 // directory.
-func (n *wicked) writeEthernetConfigs(ifaces []string) error {
+func (n *wicked) writeEthernetConfigs(ifaces []EthernetInterface) error {
 	var priority = 10100
 
 	// Write the config for all the non-primary network interfaces.
-	for i, iface := range ifaces {
-		if !shouldManageInterface(i == 0) {
-			logger.Debugf("ManagePrimaryNIC is disabled, skipping wicked writeEthernetConfig for %s", iface)
+	for _, iface := range ifaces {
+		if !iface.isValid {
+			logger.Debugf("Invalid interface %s, skipping", iface.Mac)
 			continue
 		}
-
-		logger.Debugf("write enabling ifcfg-%s config", iface)
-		ifcfg := n.ifcfgFilePath(iface)
+		if !shouldManageInterface(iface) {
+			logger.Debugf("ManagePrimaryNIC is disabled, skipping wicked writeEthernetConfig for %s", iface.name)
+			continue
+		}
+		logger.Debugf("write enabling ifcfg-%s config", iface.name)
+		ifcfg := n.ifcfgFilePath(iface.name)
 
 		// Avoid writing the configuration file if the configuration already exists.
 		if utils.FileExists(ifcfg, utils.TypeFile) {
@@ -239,7 +237,7 @@ func (n *wicked) writeEthernetConfigs(ifaces []string) error {
 
 		// Write the file.
 		if err := os.WriteFile(ifcfg, contentBytes, 0644); err != nil {
-			return fmt.Errorf("error writing config file for %s: %v", iface, err)
+			return fmt.Errorf("error writing config file for %s: %v", iface.name, err)
 		}
 		priority += 100
 	}
@@ -324,16 +322,13 @@ func (n *wicked) Rollback(ctx context.Context, nics *Interfaces) error {
 // Rollback deletes all the ifcfg files written by Setup for regular nics only,
 // then reloads wicked.service.
 func (n *wicked) RollbackNics(ctx context.Context, nics *Interfaces) error {
-	ifaces, err := interfaceNames(nics.EthernetInterfaces)
-	if err != nil {
-		return fmt.Errorf("failed to get network interfaces: %v", err)
-	}
-
 	// Since configuration files are only written for non-primary, only check
 	// for non-primary configuration files.
-	for _, iface := range ifaces[1:] {
-		if err := n.removeInterface(ctx, iface); err != nil {
-			return fmt.Errorf("failed to rollback wicked ethernet interface: %+v", err)
+	for _, iface := range nics.EthernetInterfaces[1:] {
+		if iface.isValid {
+			if err := n.removeInterface(ctx, iface.name); err != nil {
+				return fmt.Errorf("failed to rollback wicked ethernet interface: %+v", err)
+			}
 		}
 	}
 

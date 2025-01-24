@@ -193,14 +193,14 @@ func (n *dhclient) SetupEthernetInterface(ctx context.Context, config *cfg.Secti
 
 	// Release IPv6 leases.
 	for _, iface := range releaseIpv6Interfaces {
-		if err := runDhclient(ctx, ipv6, iface, true); err != nil {
+		if err := runDhclient(ctx, ipv6, iface.name, true); err != nil {
 			logger.Errorf("failed to run dhclient: %+x", err)
 		}
 	}
 
 	// Setup IPV4.
 	for _, iface := range obtainIpv4Interfaces {
-		if err := runDhclient(ctx, ipv4, iface, false); err != nil {
+		if err := runDhclient(ctx, ipv4, iface.name, false); err != nil {
 			logger.Errorf("failed to run dhclient: %+x", err)
 		}
 	}
@@ -210,24 +210,32 @@ func (n *dhclient) SetupEthernetInterface(ctx context.Context, config *cfg.Secti
 	}
 
 	// Wait for tentative IPs to resolve as part of SLAAC for primary network interface.
-	tentative := []string{"-6", "-o", "a", "s", "dev", googleInterfaces[0], "scope", "link", "tentative"}
-	for i := 0; i < 5; i++ {
-		res := run.WithOutput(ctx, "ip", tentative...)
-		if res.ExitCode == 0 && res.StdOut == "" {
-			break
+	primaryNIC, err := getPrimaryNIC(nics.EthernetInterfaces)
+	if err != nil {
+		logger.Errorf("Error getting primary NIC: %v", err)
+	}
+
+	// If the primary NIC couldn't be found from the previous step, this is false by default.
+	if primaryNIC.isValid {
+		tentative := []string{"-6", "-o", "a", "s", "dev", primaryNIC.name, "scope", "link", "tentative"}
+		for i := 0; i < 5; i++ {
+			res := run.WithOutput(ctx, "ip", tentative...)
+			if res.ExitCode == 0 && res.StdOut == "" {
+				break
+			}
+			time.Sleep(1 * time.Second)
 		}
-		time.Sleep(1 * time.Second)
 	}
 
 	// Setup IPv6.
 	for _, iface := range obtainIpv6Interfaces {
 		// Set appropriate system values.
-		val := fmt.Sprintf("net.ipv6.conf.%s.accept_ra_rt_info_max_plen=128", iface)
+		val := fmt.Sprintf("net.ipv6.conf.%s.accept_ra_rt_info_max_plen=128", iface.name)
 		if err := run.Quiet(ctx, "sysctl", val); err != nil {
 			return err
 		}
 
-		if err := runDhclient(ctx, ipv6, iface, false); err != nil {
+		if err := runDhclient(ctx, ipv6, iface.name, false); err != nil {
 			logger.Errorf("failed to run dhclient: %+x", err)
 		}
 	}
@@ -404,26 +412,32 @@ func runDhclient(ctx context.Context, ipVersion ipVersion, nic string, release b
 // It will skip primary NIC for IPv4 if process is already running or disabled via config.
 // Secondary NICs will be configured as long as there's no already existing dhclient
 // process managing it.
-func partitionInterfaces(ctx context.Context, interfaces, ipv6Interfaces []string) ([]string, []string, []string, error) {
-	var obtainIpv4Interfaces []string
-	var obtainIpv6Interfaces []string
-	var releaseIpv6Interfaces []string
+func partitionInterfaces(ctx context.Context, interfaces, ipv6Interfaces []EthernetInterface) ([]EthernetInterface, []EthernetInterface, []EthernetInterface, error) {
+	var obtainIpv4Interfaces []EthernetInterface
+	var obtainIpv6Interfaces []EthernetInterface
+	var releaseIpv6Interfaces []EthernetInterface
 
-	for i, iface := range interfaces {
-		if !shouldManageInterface(i == 0) {
-			// Do not setup anything for this interface to avoid duplicate processes.
-			logger.Debugf("ManagePrimaryNIC is disabled, skipping dhclient launch for %s", iface)
+	for _, iface := range interfaces {
+		if !iface.isValid {
+			logger.Debugf("Invalid interface %s, skipping...", iface.Mac)
 			continue
 		}
+
+		if !shouldManageInterface(iface) {
+			// Do not setup anything for this interface to avoid duplicate processes.
+			logger.Debugf("ManagePrimaryNIC is disabled, skipping dhclient launch for %s", iface.name)
+			continue
+		}
+
 		// On 18.04 we fallback to dhclient as networkctl is very old and has not reload support for example.
 		// Default netplan config will take care of it, do not launch dhclient for primary NIC on 18.04.
-		if (i == 0) && isUbuntu1804() {
+		if iface.isPrimary && isUbuntu1804() {
 			logger.Debugf("ManagePrimaryNIC is enabled, but skipping primary nic as its managed by default OS config")
 			continue
 		}
 
 		// Check for IPv4 interfaces for which to obtain a lease.
-		processExists, err := dhclientProcessExists(ctx, iface, ipv4)
+		processExists, err := dhclientProcessExists(ctx, iface.name, ipv4)
 		if err != nil {
 			return nil, nil, nil, err
 		}
@@ -432,15 +446,15 @@ func partitionInterfaces(ctx context.Context, interfaces, ipv6Interfaces []strin
 		}
 
 		// Check for IPv6 interfaces for which to obtain a lease.
-		processExists, err = dhclientProcessExists(ctx, iface, ipv6)
+		processExists, err = dhclientProcessExists(ctx, iface.name, ipv6)
 		if err != nil {
 			return nil, nil, nil, err
 		}
 
-		if slices.Contains(ipv6Interfaces, iface) && !processExists {
+		if interfacesContains(ipv6Interfaces, iface) && !processExists {
 			// Obtain a lease and spin up the DHClient process.
 			obtainIpv6Interfaces = append(obtainIpv6Interfaces, iface)
-		} else if !slices.Contains(ipv6Interfaces, iface) && processExists {
+		} else if !interfacesContains(ipv6Interfaces, iface) && processExists {
 			// Release the lease since the DHClient IPv6 process is running,
 			// but the interface is no longer IPv6.
 			releaseIpv6Interfaces = append(releaseIpv6Interfaces, iface)
@@ -490,15 +504,10 @@ func anyDhclientProcessExists(nics *Interfaces) (bool, error) {
 		return false, nil
 	}
 
-	interfaces, err := interfaceNames(nics.EthernetInterfaces)
-	if err != nil {
-		return false, fmt.Errorf("error getting interface names: %v", err)
-	}
-
 	for _, process := range processes {
 		commandLine := process.CommandLine
-		for _, iface := range interfaces {
-			if slices.Contains(commandLine, iface) {
+		for _, iface := range nics.EthernetInterfaces {
+			if slices.Contains(commandLine, iface.name) {
 				return true, nil
 			}
 		}
@@ -549,24 +558,32 @@ func (n *dhclient) RollbackNics(ctx context.Context, nics *Interfaces) error {
 
 	// Release all the interface leases from dhclient.
 	for _, iface := range googleInterfaces {
-		ipv4Exists, err := dhclientProcessExists(ctx, iface, ipv4)
+		if !iface.isValid {
+			continue
+		}
+
+		ipv4Exists, err := dhclientProcessExists(ctx, iface.name, ipv4)
 		if err != nil {
-			return fmt.Errorf("error checking if ipv4 dhclient process for %s exists: %v", iface, err)
+			return fmt.Errorf("error checking if ipv4 dhclient process for %s exists: %v", iface.name, err)
 		}
 		if ipv4Exists {
-			if err = runDhclient(ctx, ipv4, iface, true); err != nil {
+			if err = runDhclient(ctx, ipv4, iface.name, true); err != nil {
 				return err
 			}
 		}
 	}
 
 	for _, iface := range googleIpv6Interfaces {
-		ipv6Exists, err := dhclientProcessExists(ctx, iface, ipv6)
+		if !iface.isValid {
+			continue
+		}
+
+		ipv6Exists, err := dhclientProcessExists(ctx, iface.name, ipv6)
 		if err != nil {
-			return fmt.Errorf("error checking if ipv6 dhclient process for %s exists: %v", iface, err)
+			return fmt.Errorf("error checking if ipv6 dhclient process for %s exists: %v", iface.name, err)
 		}
 		if ipv6Exists {
-			if err = runDhclient(ctx, ipv6, iface, true); err != nil {
+			if err = runDhclient(ctx, ipv6, iface.name, true); err != nil {
 				return err
 			}
 		}

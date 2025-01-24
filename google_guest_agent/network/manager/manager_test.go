@@ -289,36 +289,25 @@ func TestFallbackToDefault(t *testing.T) {
 	}
 }
 
-func TestBuildInterfacesFromAllPhysicalNICs(t *testing.T) {
-	nics, err := buildInterfacesFromAllPhysicalNICs()
-	if err != nil {
-		t.Fatalf("buildInterfacesFromAllPhysicalNICs() = %v, want nil", err)
-	}
-
-	for _, nic := range nics.EthernetInterfaces {
-		if _, err := GetInterfaceByMAC(nic.Mac); err != nil {
-			t.Errorf("GetInterfaceByMAC(%q) = %v, want nil)", nic.Mac, err)
-		}
-	}
-}
-
 func TestShouldManageInterface(t *testing.T) {
 	if err := cfg.Load(nil); err != nil {
 		t.Fatalf("cfg.Load(nil) = %v, want nil", err)
 	}
-	if shouldManageInterface(true) {
+	primary := EthernetInterface{isPrimary: true, isValid: true}
+	secondary := EthernetInterface{isValid: true}
+	if shouldManageInterface(primary) {
 		t.Error("with default config, shouldManageInterface(isPrimary = true) = true, want false")
 	}
-	if !shouldManageInterface(false) {
+	if !shouldManageInterface(secondary) {
 		t.Error("with default config, shouldManageInterface(isPrimary = false) = false, want true")
 	}
 	if err := cfg.Load([]byte("[NetworkInterfaces]\nmanage_primary_nic=true")); err != nil {
 		t.Fatalf("cfg.Load(%q) = %v, want nil", "[NetworkInterfaces]\nmanage_primary_nic=true", err)
 	}
-	if !shouldManageInterface(true) {
+	if !shouldManageInterface(primary) {
 		t.Error("with manage_primary_nic=false, shouldManageInterface(isPrimary = true) = false, want true")
 	}
-	if !shouldManageInterface(false) {
+	if !shouldManageInterface(secondary) {
 		t.Error("with manage_primary_nic=false, shouldManageInterface(isPrimary = false) = false, want true")
 	}
 }
@@ -335,16 +324,19 @@ func TestReformatVlanNics(t *testing.T) {
 			},
 		},
 	}}
-	nics := &Interfaces{VlanInterfaces: map[int]VlanInterface{}}
+	ethernetInterfaces := []EthernetInterface{
+		{name: "eth0"},
+		{name: "eth1"},
+	}
+
+	nics := &Interfaces{EthernetInterfaces: ethernetInterfaces, VlanInterfaces: map[int]VlanInterface{}}
 	want := &Interfaces{VlanInterfaces: map[int]VlanInterface{
 		5: {VlanInterface: metadata.VlanInterface{Mac: "a", ParentInterface: "/computeMetadata/v1/instance/network-interfaces/0/", Vlan: 5}, ParentInterfaceID: "eth0"},
 		6: {VlanInterface: metadata.VlanInterface{Mac: "b", Vlan: 6, IP: "1.2.3.4"}, ParentInterfaceID: "eth0"},
 		7: {VlanInterface: metadata.VlanInterface{Mac: "c", Vlan: 7, DHCPv6Refresh: "123456"}, ParentInterfaceID: "eth1"},
 	}}
 
-	ethernetInterfaces := []string{"eth0", "eth1"}
-
-	if err := reformatVlanNics(mds, nics, ethernetInterfaces); err != nil {
+	if err := reformatVlanNics(mds, nics); err != nil {
 		t.Fatalf("reformatVlanNics(%+v, %+v, %+v) failed unexpectedly with error: %v", mds, nics, ethernetInterfaces, err)
 	}
 
@@ -370,12 +362,14 @@ func TestReformatVlanNicsError(t *testing.T) {
 	tests := []struct {
 		name               string
 		mds                *metadata.Descriptor
-		ethernetInterfaces []string
+		ethernetInterfaces []EthernetInterface
 	}{
 		{
-			name:               "invalid_parentId",
-			mds:                mds,
-			ethernetInterfaces: []string{"eth0"},
+			name: "invalid_parentId",
+			mds:  mds,
+			ethernetInterfaces: []EthernetInterface{
+				{name: "eth0"},
+			},
 		},
 		{
 			name: "all_invalid_parentIds",
@@ -385,7 +379,8 @@ func TestReformatVlanNicsError(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if err := reformatVlanNics(mds, nics, test.ethernetInterfaces); err == nil {
+			nics.EthernetInterfaces = test.ethernetInterfaces
+			if err := reformatVlanNics(mds, nics); err == nil {
 				t.Fatalf("reformatVlanNics(%+v, %+v, %+v) succeeded, want error", mds, nics, test.ethernetInterfaces)
 			}
 		})

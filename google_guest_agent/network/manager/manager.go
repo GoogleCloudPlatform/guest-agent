@@ -67,25 +67,6 @@ type serviceStatus struct {
 	active bool
 }
 
-// VlanInterface are [metadata.VlanInterface] offered by MDS with derived Parent Interface
-// name added to it for convenience.
-type VlanInterface struct {
-	metadata.VlanInterface
-	// ParentInterfaceID is the interface name on the host. All network managers should refer
-	// this interface name instead of one present in [metadata.VlanInterface] which is just an
-	// index to interface in [EthernetInterfaces]
-	ParentInterfaceID string
-}
-
-// Interfaces wraps both ethernet and vlan interfaces.
-type Interfaces struct {
-	// EthernetInterfaces are the regular ethernet interfaces descriptors offered by metadata.
-	EthernetInterfaces []metadata.NetworkInterfaces
-
-	// VlanInterfaces are the vLAN interfaces descriptors offered by metadata.
-	VlanInterfaces map[int]VlanInterface
-}
-
 // guestAgentSection is the section added to guest-agent-written ini files to indicate
 // that the ini file is managed by the agent.
 type guestAgentSection struct {
@@ -156,14 +137,14 @@ func detectNetworkManager(ctx context.Context, iface string) (*serviceStatus, er
 
 // reformatVlanNics reads VLAN NIC information from metadata descriptor and formats
 // it into [Interfaces.VlanInterfaces] that every network manager understands.
-func reformatVlanNics(mds *metadata.Descriptor, nics *Interfaces, ethernetInterfaces []string) error {
+func reformatVlanNics(mds *metadata.Descriptor, nics *Interfaces) error {
 	for parentID, vlans := range mds.Instance.VlanNetworkInterfaces {
-		if parentID >= len(ethernetInterfaces) {
-			return fmt.Errorf("invalid parent index(%d), known interfaces count: %d", parentID, len(ethernetInterfaces))
+		if parentID >= len(nics.EthernetInterfaces) {
+			return fmt.Errorf("invalid parent index(%d), known interfaces count: %d", parentID, len(nics.EthernetInterfaces))
 		}
 
 		for vlanID, vlan := range vlans {
-			nics.VlanInterfaces[vlanID] = VlanInterface{VlanInterface: vlan, ParentInterfaceID: ethernetInterfaces[parentID]}
+			nics.VlanInterfaces[vlanID] = VlanInterface{VlanInterface: vlan, ParentInterfaceID: nics.EthernetInterfaces[parentID].name}
 		}
 	}
 	return nil
@@ -190,23 +171,23 @@ func SetupInterfaces(ctx context.Context, config *cfg.Sections, mds *metadata.De
 	}
 
 	nics := &Interfaces{
-		EthernetInterfaces: mds.Instance.NetworkInterfaces,
+		EthernetInterfaces: []EthernetInterface{},
 		VlanInterfaces:     map[int]VlanInterface{},
 	}
 
-	interfaces, err := interfaceNames(nics.EthernetInterfaces)
+	primaryNic, interfaces, err := parseInterfaces(mds.Instance.NetworkInterfaces)
 	if err != nil {
-		return fmt.Errorf("error getting interface names: %v", err)
+		return fmt.Errorf("error parsing network interfaces: %v", err)
 	}
-	primaryInterface := interfaces[0]
+	nics.EthernetInterfaces = interfaces
 
 	// Get the network manager.
-	activeService, err := detectNetworkManager(ctx, primaryInterface)
+	activeService, err := detectNetworkManager(ctx, primaryNic.name)
 	if err != nil {
 		return fmt.Errorf("error detecting network manager service: %v", err)
 	}
 
-	if err := rollbackLeftoverConfigs(ctx, config, mds); err != nil {
+	if err := rollbackLeftoverConfigs(ctx, config, primaryNic); err != nil {
 		logger.Errorf("Failed to rollback left over configs: %v", err)
 	}
 
@@ -233,7 +214,7 @@ func SetupInterfaces(ctx context.Context, config *cfg.Sections, mds *metadata.De
 
 	if config.Unstable.VlanSetupEnabled {
 		logger.Infof("VLAN setup is enabled via config file, setting up interfaces")
-		if err := reformatVlanNics(mds, nics, interfaces); err != nil {
+		if err := reformatVlanNics(mds, nics); err != nil {
 			return fmt.Errorf("unable to read vlans, invalid format: %w", err)
 		}
 		if err = activeService.manager.SetupVlanInterface(ctx, config, nics); err != nil {
@@ -255,7 +236,7 @@ func SetupInterfaces(ctx context.Context, config *cfg.Sections, mds *metadata.De
 }
 
 // Remove only primary nics left over configs.
-func rollbackLeftoverConfigs(ctx context.Context, config *cfg.Sections, mds *metadata.Descriptor) error {
+func rollbackLeftoverConfigs(ctx context.Context, config *cfg.Sections, primaryNic EthernetInterface) error {
 	// If we are running debian 12 and failed to restore default netplan config
 	// we should not rollback dangling/left over configs.
 	if err := restoreDebian12NetplanConfig(config); err != nil {
@@ -268,9 +249,8 @@ func rollbackLeftoverConfigs(ctx context.Context, config *cfg.Sections, mds *met
 		return nil
 	}
 
-	primaryInterface := mds.Instance.NetworkInterfaces[0]
 	nic := &Interfaces{
-		EthernetInterfaces: []metadata.NetworkInterfaces{primaryInterface},
+		EthernetInterfaces: []EthernetInterface{primaryNic},
 	}
 
 	for _, svc := range knownNetworkManagers {
@@ -348,9 +328,14 @@ func buildInterfacesFromAllPhysicalNICs() (*Interfaces, error) {
 		if mac == "" {
 			continue
 		}
-		nics.EthernetInterfaces = append(nics.EthernetInterfaces, metadata.NetworkInterfaces{
-			Mac: mac,
-		})
+		ei := EthernetInterface{
+			NetworkInterfaces: metadata.NetworkInterfaces{
+				Mac: mac,
+			},
+			name:    iface.Name,
+			isValid: true,
+		}
+		nics.EthernetInterfaces = append(nics.EthernetInterfaces, ei)
 	}
 
 	return nics, nil
@@ -358,8 +343,8 @@ func buildInterfacesFromAllPhysicalNICs() (*Interfaces, error) {
 
 // shouldManageInterface returns whether the guest agent should manage an interface
 // provided whether the interface of interest is the primary interface or not.
-func shouldManageInterface(isPrimary bool) bool {
-	if isPrimary {
+func shouldManageInterface(nic EthernetInterface) bool {
+	if nic.isPrimary {
 		return cfg.Get().NetworkInterfaces.ManagePrimaryNIC
 	}
 	return true
