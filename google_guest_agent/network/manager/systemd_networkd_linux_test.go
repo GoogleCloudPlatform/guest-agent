@@ -647,10 +647,11 @@ func TestSetupVlanInterfaceSuccess(t *testing.T) {
 				dhclientTestTearDown(t)
 			})
 
+			mapIdx := fmt.Sprintf("%s-%d", curr.parentID, curr.vlanInterface.Vlan)
 			nics := &Interfaces{
 				EthernetInterfaces: []metadata.NetworkInterfaces{curr.ethernetInterface},
-				VlanInterfaces: map[int]VlanInterface{
-					curr.vlanInterface.Vlan: {VlanInterface: curr.vlanInterface, ParentInterfaceID: curr.parentID},
+				VlanInterfaces: map[string]VlanInterface{
+					mapIdx: {VlanInterface: curr.vlanInterface, ParentInterfaceID: curr.parentID},
 				},
 			}
 

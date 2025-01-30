@@ -446,8 +446,8 @@ func TestVlanInterface(t *testing.T) {
 		EthernetInterfaces: []metadata.NetworkInterfaces{{
 			Mac: ifaces[1].HardwareAddr.String(),
 		}},
-		VlanInterfaces: map[int]VlanInterface{
-			22: {
+		VlanInterfaces: map[string]VlanInterface{
+			"0-22": {
 				VlanInterface: metadata.VlanInterface{
 					Mac:             "foobar",
 					ParentInterface: "/computeMetadata/v1/instance/network-interfaces/0/",

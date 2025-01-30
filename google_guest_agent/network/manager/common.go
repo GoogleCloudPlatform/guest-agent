@@ -108,18 +108,6 @@ func vlanInterfaceParentMap(nics map[int]metadata.VlanInterface, allEthernetInte
 	return vlans, nil
 }
 
-// vlanInterfaceListsIpv6 gets a list of VLAN IDs that support IPv6.
-func vlanInterfaceListsIpv6(nics map[int]VlanInterface) []int {
-	var googleIpv6Interfaces []int
-
-	for _, ni := range nics {
-		if ni.DHCPv6Refresh != "" {
-			googleIpv6Interfaces = append(googleIpv6Interfaces, ni.Vlan)
-		}
-	}
-	return googleIpv6Interfaces
-}
-
 // interfaceListsIpv4Ipv6 gets a list of interface names. The first list is a list of all
 // interfaces, and the second list consists of only interfaces that support IPv6.
 func interfaceListsIpv4Ipv6(nics []metadata.NetworkInterfaces) ([]string, []string) {
