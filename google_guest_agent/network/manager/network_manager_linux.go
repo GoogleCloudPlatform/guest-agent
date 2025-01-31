@@ -167,12 +167,7 @@ func (n *networkManager) IsManaging(ctx context.Context, iface string) (bool, er
 
 // Setup sets up the necessary configurations for NetworkManager.
 func (n *networkManager) SetupEthernetInterface(ctx context.Context, config *cfg.Sections, nics *Interfaces) error {
-	ifaces, err := interfaceNames(nics.EthernetInterfaces)
-	if err != nil {
-		return fmt.Errorf("error getting interfaces: %v", err)
-	}
-
-	interfaces, err := n.writeNetworkManagerConfigs(ifaces)
+	interfaces, err := n.writeNetworkManagerConfigs(nics.EthernetInterfaces)
 	if err != nil {
 		return fmt.Errorf("error writing NetworkManager connection configs: %v", err)
 	}
@@ -190,9 +185,9 @@ func (n *networkManager) SetupEthernetInterface(ctx context.Context, config *cfg
 	}
 
 	// Enable the new connections. Ignore the primary interface as it will already be up.
-	for _, ifname := range interfaces[1:] {
-		if err = run.Quiet(ctx, "nmcli", "conn", "up", "ifname", ifname); err != nil {
-			return fmt.Errorf("error enabling connection %s: %v", ifname, err)
+	for _, iface := range interfaces[1:] {
+		if err = run.Quiet(ctx, "nmcli", "conn", "up", "ifname", iface); err != nil {
+			return fmt.Errorf("error enabling connection %s: %v", iface, err)
 		}
 	}
 	return nil
@@ -281,19 +276,23 @@ func (n *networkManager) ifcfgFilePath(iface string) string {
 }
 
 // writeNetworkManagerConfigs writes the configuration files for NetworkManager.
-func (n *networkManager) writeNetworkManagerConfigs(ifaces []string) ([]string, error) {
+func (n *networkManager) writeNetworkManagerConfigs(ifaces []EthernetInterface) ([]string, error) {
 	var result []string
 
-	for i, iface := range ifaces {
-		if !shouldManageInterface(i == 0) {
-			logger.Debugf("ManagePrimaryNIC is disabled, skipping writeNetworkManagerConfigs for %s", iface)
+	for _, iface := range ifaces {
+		if !iface.isValid {
+			logger.Debugf("Invalid interface %s, skipping", iface.Mac)
 			continue
 		}
+		if !shouldManageInterface(iface) {
+			logger.Debugf("ManagePrimaryNIC is disabled, skipping writeNetworkManagerConfigs for %s", iface.name)
+			continue
+		}
+		ifaceName := iface.name
+		logger.Debugf("Writing nmconnection file for %s", ifaceName)
 
-		logger.Debugf("writing nmconnection file for %s", iface)
-
-		configFilePath := n.networkManagerConfigFilePath(iface)
-		connID := fmt.Sprintf("google-guest-agent-%s", iface)
+		configFilePath := n.networkManagerConfigFilePath(ifaceName)
+		connID := fmt.Sprintf("google-guest-agent-%s", ifaceName)
 
 		// Create the ini file.
 		config := nmConfig{
@@ -301,7 +300,7 @@ func (n *networkManager) writeNetworkManagerConfigs(ifaces []string) ([]string, 
 				ManagedByGuestAgent: true,
 			},
 			Connection: nmConnectionSection{
-				InterfaceName: iface,
+				InterfaceName: ifaceName,
 				ID:            connID,
 				ConnType:      "ethernet",
 			},
@@ -315,17 +314,17 @@ func (n *networkManager) writeNetworkManagerConfigs(ifaces []string) ([]string, 
 
 		// Save the config.
 		if err := writeIniFile(configFilePath, &config); err != nil {
-			return []string{}, fmt.Errorf("error saving connection config for %s: %v", iface, err)
+			return []string{}, fmt.Errorf("error saving connection config for %s: %v", ifaceName, err)
 		}
 
 		// The permissions need to be 600 in order for nmcli to load and use the file correctly.
 		if err := os.Chmod(configFilePath, nmConfigFileMode); err != nil {
-			return []string{}, fmt.Errorf("error updating permissions for %s connection config: %v", iface, err)
+			return []string{}, fmt.Errorf("error updating permissions for %s connection config: %v", ifaceName, err)
 		}
 
 		// Clean up the files written by the old agent. Make sure they're managed
 		// by the agent before deleting them.
-		ifcfgFilePath := n.ifcfgFilePath(iface)
+		ifcfgFilePath := n.ifcfgFilePath(ifaceName)
 		contents, err := os.ReadFile(ifcfgFilePath)
 		if err != nil && !os.IsNotExist(err) {
 			return nil, fmt.Errorf("failed to read ifcfg file(%s): %v", ifcfgFilePath, err)
@@ -338,26 +337,21 @@ func (n *networkManager) writeNetworkManagerConfigs(ifaces []string) ([]string, 
 			}
 		}
 
-		result = append(result, iface)
+		result = append(result, ifaceName)
 	}
 
 	return result, nil
 }
 
 func (n *networkManager) rollbackConfigs(ctx context.Context, nics *Interfaces, removeVlan bool) error {
-	ifaces, err := interfaceNames(nics.EthernetInterfaces)
-	if err != nil {
-		return fmt.Errorf("getting interfaces: %v", err)
-	}
-
 	reconnectPrimaryNic := false
 
-	for i, iface := range ifaces {
-		removed, err := n.removeInterface(iface)
+	for _, iface := range nics.EthernetInterfaces {
+		removed, err := n.removeInterface(iface.name)
 		if err != nil {
-			logger.Errorf("Failed to remove %q interface with error: %v", iface, err)
+			logger.Errorf("Failed to remove %q interface with error: %v", iface.name, err)
 		}
-		if i == 0 && removed {
+		if iface.isPrimary && removed {
 			reconnectPrimaryNic = true
 		}
 	}
@@ -379,8 +373,9 @@ func (n *networkManager) rollbackConfigs(ctx context.Context, nics *Interfaces, 
 	// we manage, in that case we need to force it to connect and then with that create
 	// a default connection.
 	if reconnectPrimaryNic {
-		if err := run.Quiet(ctx, "nmcli", "device", "connect", ifaces[0]); err != nil {
-			return fmt.Errorf("error connecting NetworkManager's managed interface: %s, %v", ifaces[0], err)
+		primaryNicName := nics.EthernetInterfaces[0].name
+		if err := run.Quiet(ctx, "nmcli", "device", "connect", primaryNicName); err != nil {
+			return fmt.Errorf("error connecting NetworkManager's managed interface: %s, %v", primaryNicName, err)
 		}
 	}
 

@@ -515,8 +515,10 @@ func TestSystemdNetworkdConfig(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			cfg.Get().NetworkInterfaces.ManagePrimaryNIC = test.managePrimary
 			systemdTestSetup(t, systemdTestOpts{})
+			testEthernetInterfaces := createInterfaces(test.testInterfaces)
+			testIpv6Interfaces := createInterfaces(test.testIpv6Interfaces)
 
-			if err := mockSystemd.writeEthernetConfig(test.testInterfaces, test.testIpv6Interfaces); err != nil {
+			if err := mockSystemd.writeEthernetConfig(testEthernetInterfaces, testIpv6Interfaces); err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
 
@@ -587,8 +589,12 @@ func TestSetupVlanInterfaceSuccess(t *testing.T) {
 		t.Fatalf("could not list local interfaces: %+v", err)
 	}
 
+	ei := EthernetInterface{
+		NetworkInterfaces: metadata.NetworkInterfaces{Mac: ifaces[1].HardwareAddr.String()},
+	}
+
 	tests := []struct {
-		ethernetInterface metadata.NetworkInterfaces
+		ethernetInterface EthernetInterface
 		parentID          string
 		vlanInterface     metadata.VlanInterface
 	}{
@@ -598,10 +604,8 @@ func TestSetupVlanInterfaceSuccess(t *testing.T) {
 				ParentInterface: "/computeMetadata/v1/instance/network-interfaces/0/",
 				Vlan:            22,
 			},
-			parentID: ifaces[1].Name,
-			ethernetInterface: metadata.NetworkInterfaces{
-				Mac: ifaces[1].HardwareAddr.String(),
-			},
+			parentID:          ifaces[1].Name,
+			ethernetInterface: ei,
 		},
 		{
 			vlanInterface: metadata.VlanInterface{
@@ -609,10 +613,8 @@ func TestSetupVlanInterfaceSuccess(t *testing.T) {
 				ParentInterface: "/computeMetadata/v1/instance/network-interfaces/0/",
 				Vlan:            33,
 			},
-			parentID: ifaces[1].Name,
-			ethernetInterface: metadata.NetworkInterfaces{
-				Mac: ifaces[1].HardwareAddr.String(),
-			},
+			parentID:          ifaces[1].Name,
+			ethernetInterface: ei,
 		},
 	}
 
@@ -648,7 +650,7 @@ func TestSetupVlanInterfaceSuccess(t *testing.T) {
 			})
 
 			nics := &Interfaces{
-				EthernetInterfaces: []metadata.NetworkInterfaces{curr.ethernetInterface},
+				EthernetInterfaces: []EthernetInterface{curr.ethernetInterface},
 				VlanInterfaces: map[int]VlanInterface{
 					curr.vlanInterface.Vlan: {VlanInterface: curr.vlanInterface, ParentInterfaceID: curr.parentID},
 				},

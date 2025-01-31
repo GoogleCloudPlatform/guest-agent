@@ -387,8 +387,9 @@ func TestWriteNetworkManagerConfigs(t *testing.T) {
 				t.Fatalf("error creating temp dir: %v", err)
 			}
 			testNetworkManager.configDir = configDir
+			testEthernetInterfaces := createInterfaces(test.testInterfaces)
 
-			conns, err := testNetworkManager.writeNetworkManagerConfigs(test.testInterfaces)
+			conns, err := testNetworkManager.writeNetworkManagerConfigs(testEthernetInterfaces)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -443,8 +444,8 @@ func TestVlanInterface(t *testing.T) {
 	interfaceName := ifaces[1].Name
 
 	validNics := &Interfaces{
-		EthernetInterfaces: []metadata.NetworkInterfaces{{
-			Mac: ifaces[1].HardwareAddr.String(),
+		EthernetInterfaces: []EthernetInterface{{
+			NetworkInterfaces: metadata.NetworkInterfaces{Mac: ifaces[1].HardwareAddr.String()},
 		}},
 		VlanInterfaces: map[int]VlanInterface{
 			22: {

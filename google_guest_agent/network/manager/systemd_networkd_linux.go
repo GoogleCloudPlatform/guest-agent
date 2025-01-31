@@ -249,11 +249,11 @@ func (n *systemdNetworkd) SetupEthernetInterface(ctx context.Context, config *cf
 	// Make sure to rollback previously supported and now deprecated .network and .netdev
 	// config files.
 	for _, iface := range googleInterfaces {
-		if _, err := n.rollbackNetwork(n.deprecatedNetworkFile(iface)); err != nil {
+		if _, err := n.rollbackNetwork(n.deprecatedNetworkFile(iface.name)); err != nil {
 			logger.Infof("Failed to rollback .network file: %v", err)
 		}
 
-		if _, err := n.rollbackNetwork(n.deprecatedNetdevFile(iface)); err != nil {
+		if _, err := n.rollbackNetwork(n.deprecatedNetdevFile(iface.name)); err != nil {
 			logger.Infof("Failed to rollback .netdev file: %v", err)
 		}
 	}
@@ -505,17 +505,21 @@ func (sc systemdConfig) isGuestAgentManaged() bool {
 
 // writeEthernetConfig writes the systemd config for all the provided interfaces in the
 // provided directory using the given priority.
-func (n *systemdNetworkd) writeEthernetConfig(interfaces, ipv6Interfaces []string) error {
+func (n *systemdNetworkd) writeEthernetConfig(interfaces, ipv6Interfaces []EthernetInterface) error {
 	for i, iface := range interfaces {
-		if !shouldManageInterface(i == 0) {
-			logger.Debugf("ManagePrimaryNIC is disabled, skipping systemdNetworkd writeEthernetConfig for %s", iface)
+		if !iface.isValid {
+			logger.Debugf("Invalid interface %s, skipping", iface.Mac)
+			continue
+		}
+		if !shouldManageInterface(iface) {
+			logger.Debugf("ManagePrimaryNIC is disabled, skipping systemdNetworkd writeEthernetConfig for %s", iface.name)
 			continue
 		}
 
-		logger.Debugf("write systemd-networkd network config for %s", iface)
+		logger.Debugf("write systemd-networkd network config for %s", iface.name)
 
 		var dhcp = "ipv4"
-		if slices.Contains(ipv6Interfaces, iface) {
+		if interfacesContains(ipv6Interfaces, iface) {
 			dhcp = "yes"
 		}
 
@@ -525,7 +529,7 @@ func (n *systemdNetworkd) writeEthernetConfig(interfaces, ipv6Interfaces []strin
 				ManagedByGuestAgent: true,
 			},
 			Match: systemdMatchConfig{
-				Name: iface,
+				Name: iface.name,
 			},
 			Network: systemdNetworkConfig{
 				DHCP:            dhcp,
@@ -547,7 +551,7 @@ func (n *systemdNetworkd) writeEthernetConfig(interfaces, ipv6Interfaces []strin
 			}
 		}
 
-		if err := data.write(n, iface); err != nil {
+		if err := data.write(n, iface.name); err != nil {
 			return fmt.Errorf("failed to write systemd's ethernet interface config: %+v", err)
 		}
 	}
@@ -572,31 +576,26 @@ func (n *systemdNetworkd) RollbackNics(ctx context.Context, nics *Interfaces) er
 // otherwise only regular nics are removed.
 func (n *systemdNetworkd) rollbackConfigs(ctx context.Context, nics *Interfaces, removeVlan bool) error {
 	logger.Infof("rolling back changes for %s", n.Name())
-	interfaces, err := interfaceNames(nics.EthernetInterfaces)
-	if err != nil {
-		return fmt.Errorf("failed to get list of interface names: %v", err)
-	}
-
 	ethernetRequiresRestart := false
 
 	// Rollback ethernet interfaces.
-	for _, iface := range interfaces {
-		reqRestart1, err := n.rollbackNetwork(n.networkFile(iface))
+	for _, iface := range nics.EthernetInterfaces {
+		reqRestart1, err := n.rollbackNetwork(n.networkFile(iface.name))
 		if err != nil {
 			logger.Infof("Failed to rollback .network file: %v", err)
 		}
 
-		reqRestart2, err := n.rollbackNetdev(n.networkFile(iface))
+		reqRestart2, err := n.rollbackNetdev(n.networkFile(iface.name))
 		if err != nil {
 			logger.Warningf("Failed to rollback .network file: %v", err)
 		}
 
-		reqRestart3, err := n.rollbackNetwork(n.deprecatedNetworkFile(iface))
+		reqRestart3, err := n.rollbackNetwork(n.deprecatedNetworkFile(iface.name))
 		if err != nil {
 			logger.Warningf("Failed to rollback .network file: %v", err)
 		}
 
-		reqRestart4, err := n.rollbackNetdev(n.deprecatedNetdevFile(iface))
+		reqRestart4, err := n.rollbackNetdev(n.deprecatedNetdevFile(iface.name))
 		if err != nil {
 			logger.Warningf("Failed to rollback .network file: %v", err)
 		}
@@ -607,6 +606,7 @@ func (n *systemdNetworkd) rollbackConfigs(ctx context.Context, nics *Interfaces,
 	}
 
 	vlanRequiresRestart := false
+	var err error
 	// Rollback vlan interfaces.
 	if removeVlan {
 		vlanRequiresRestart, err = n.removeVlanInterfaces(ctx, nil)

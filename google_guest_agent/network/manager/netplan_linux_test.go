@@ -185,12 +185,15 @@ func TestSetupVlanInterface(t *testing.T) {
 	if err != nil {
 		t.Fatalf("could not list local interfaces: %+v", err)
 	}
+	ifaceName := ifaces[1].Name
 
 	mgr := &netplan{netplanConfigDir: netplanCfg, networkdDropinDir: networkdCfg, priority: 20}
 	nics := &Interfaces{
-		EthernetInterfaces: []metadata.NetworkInterfaces{
+		EthernetInterfaces: []EthernetInterface{
 			{
-				Mac: ifaces[1].HardwareAddr.String(),
+				NetworkInterfaces: metadata.NetworkInterfaces{Mac: ifaces[1].HardwareAddr.String()},
+				isValid:           true,
+				name:              ifaceName,
 			},
 		},
 		VlanInterfaces: map[int]VlanInterface{
@@ -200,7 +203,7 @@ func TestSetupVlanInterface(t *testing.T) {
 					Vlan: 5,
 					MTU:  1460,
 				},
-				ParentInterfaceID: ifaces[1].Name,
+				ParentInterfaceID: ifaceName,
 			},
 			6: {
 				VlanInterface: metadata.VlanInterface{
@@ -210,7 +213,7 @@ func TestSetupVlanInterface(t *testing.T) {
 					IPv6:          []string{"::0"},
 					DHCPv6Refresh: "123456",
 				},
-				ParentInterfaceID: ifaces[1].Name,
+				ParentInterfaceID: ifaceName,
 			},
 		},
 	}
@@ -237,11 +240,18 @@ func TestSetupVlanInterface(t *testing.T) {
 		t.Errorf("netplan.Rollback(ctx, %+v) failed unexpectedly with error: %v", nics, err)
 	}
 
-	want := fmt.Sprintf("networkctl delete gcp.%s.5 gcp.%s.6", ifaces[1].Name, ifaces[1].Name)
-	if !slices.Contains(runner.executedCommands, want) {
+	var found bool
+	for _, cmd := range runner.executedCommands {
+		args := strings.Split(cmd, " ")
+		if slices.Contains(args, "networkctl") && slices.Contains(args, "delete") && slices.Contains(args, fmt.Sprintf("gcp.%s.5", ifaceName)) && slices.Contains(args, fmt.Sprintf("gcp.%s.6", ifaceName)) {
+			found = true
+		}
+	}
+	if !found {
+		want := fmt.Sprintf("networkctl delete gcp.%[1]s.5, gcp.%[1]s.6", ifaceName)
 		t.Errorf("mgr.Rollback did not run %q, found commands: %v", want, runner.executedCommands)
 	}
-	verifyRollback(t, nics, netplanCfg, networkdCfg, ifaces[1].Name)
+	verifyRollback(t, nics, netplanCfg, networkdCfg, ifaceName)
 }
 
 func TestIsNetworkdNetplanConfigSame(t *testing.T) {

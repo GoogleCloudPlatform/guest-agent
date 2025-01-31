@@ -275,8 +275,9 @@ func TestWriteEthernetConfigs(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			wickedTestSetup(t, wickedTestOpts{})
+			testEthernetInterfaces := createInterfaces(test.testInterfaces)
 
-			err := mockWicked.writeEthernetConfigs(test.testInterfaces)
+			err := mockWicked.writeEthernetConfigs(testEthernetInterfaces)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}

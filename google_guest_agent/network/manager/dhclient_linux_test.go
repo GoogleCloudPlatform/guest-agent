@@ -49,7 +49,7 @@ func (d dhclientMockRunner) Quiet(ctx context.Context, name string, args ...stri
 		for _, arg := range args {
 			msg += fmt.Sprintf(" %v", arg)
 		}
-		return fmt.Errorf(msg)
+		return fmt.Errorf("%s", msg)
 	}
 	return nil
 }
@@ -334,18 +334,25 @@ func TestPartitionInterfaces(t *testing.T) {
 				},
 			}
 			dhclientTestSetup(t, opts)
+			testInterfaces := createInterfaces(test.testInterfaces)
+			testIpv6Interfaces := createInterfaces(test.testIpv6Interfaces)
 
-			obtainIpv4, obtainIpv6, releaseIpv6, err := partitionInterfaces(ctx, test.testInterfaces, test.testIpv6Interfaces)
+			obtainIpv4, obtainIpv6, releaseIpv6, err := partitionInterfaces(ctx, testInterfaces, testIpv6Interfaces)
 			if err != nil {
 				t.Fatalf("partitionInterfaces return error when none expected: %v", err)
 			}
-			if !slices.Equal(obtainIpv4, test.expectedObtainIpv4) {
+
+			obtainIpv4Names := extractNames(obtainIpv4)
+			obtainIpv6Names := extractNames(obtainIpv6)
+			releaseIpv6Names := extractNames(releaseIpv6)
+
+			if !slices.Equal(obtainIpv4Names, test.expectedObtainIpv4) {
 				t.Errorf("partitionInterfaces(ctx, %v, %v) = obtainIpv4 %v, wanted %v", test.testInterfaces, test.testIpv6Interfaces, obtainIpv4, test.expectedObtainIpv4)
 			}
-			if !slices.Equal(obtainIpv6, test.expectedObtainIpv6) {
+			if !slices.Equal(obtainIpv6Names, test.expectedObtainIpv6) {
 				t.Errorf("partitionInterfaces(ctx, %v, %v) = obtainIpv6 %v, wanted %v", test.testInterfaces, test.testIpv6Interfaces, obtainIpv6, test.expectedObtainIpv6)
 			}
-			if !slices.Equal(releaseIpv6, test.expectedReleaseIpv6) {
+			if !slices.Equal(releaseIpv6Names, test.expectedReleaseIpv6) {
 				t.Errorf("partitionInterfaces(ctx, %v, %v) = releaseIpv6 %v, wanted %v", test.testInterfaces, test.testIpv6Interfaces, releaseIpv6, test.expectedReleaseIpv6)
 			}
 
@@ -523,9 +530,8 @@ func TestAnyDhclientProcessExists(t *testing.T) {
 	}
 
 	iface := ifaces[1]
-
-	nics := &Interfaces{EthernetInterfaces: []metadata.NetworkInterfaces{
-		{Mac: iface.HardwareAddr.String()},
+	nics := &Interfaces{EthernetInterfaces: []EthernetInterface{
+		{NetworkInterfaces: metadata.NetworkInterfaces{Mac: iface.HardwareAddr.String()}, name: iface.Name},
 	}}
 
 	tests := []struct {
