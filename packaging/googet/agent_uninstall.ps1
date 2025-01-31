@@ -16,8 +16,11 @@ Stop-Service GCEAgent -Verbose
 & sc.exe delete GCEAgent
 
 $name = 'GCEAgentManager'
+$cleanup_exe = "C:\Program Files\Google\Compute Engine\agent\ggactl_plugin_cleanup.exe"
+
 if (Get-Service $name -ErrorAction SilentlyContinue) {
     Stop-Service $name -Verbose
+    & $cleanup_exe all
     & sc.exe delete $name
 }
 

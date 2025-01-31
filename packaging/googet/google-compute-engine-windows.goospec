@@ -10,6 +10,7 @@
     "GCEWindowsAgentManager.exe": "<ProgramFiles>/Google/Compute Engine/agent/GCEWindowsAgentManager.exe",
     "GCEWindowsAgent.exe": "<ProgramFiles>/Google/Compute Engine/agent/GCEWindowsAgent.exe",
     "GCEAuthorizedKeysCommand.exe": "<ProgramFiles>/Google/Compute Engine/agent/GCEAuthorizedKeysCommand.exe",
+    "ggactl_plugin_cleanup.exe": "<ProgramFiles>/Google/Compute Engine/agent/ggactl_plugin_cleanup.exe",
     "THIRD_PARTY_LICENSES": "<ProgramFiles>/Google/Compute Engine/THIRD_PARTY_LICENSES/",
     "LICENSE": "<ProgramFiles>/Google/Compute Engine/agent/LICENSE.txt"
   },
@@ -36,6 +37,7 @@
   ],
   "sources": [{
       "include": [
+        "ggactl_plugin_cleanup.exe",
         "GCEWindowsAgent.exe",
         "GCEWindowsAgentManager.exe",
 	"GCEAuthorizedKeysCommand.exe",

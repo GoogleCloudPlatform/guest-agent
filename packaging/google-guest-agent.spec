@@ -63,6 +63,7 @@ done
 %if 0%{?build_plugin_manager}
 pushd %{name}-extra-%{version}/
   VERSION=%{version} make cmd/google_guest_agent/google_guest_agent
+  VERSION=%{version} make cmd/ggactl/ggactl_plugin_cleanup
 popd
 %endif
 
@@ -80,6 +81,7 @@ install -p -m 0644 instance_configs.cfg %{buildroot}/usr/share/google-guest-agen
 # Compat agent, it will become google_guest_agent after the full package transition.
 %if 0%{?build_plugin_manager}
 install -p -m 0755 %{name}-extra-%{version}/cmd/google_guest_agent/google_guest_agent %{buildroot}%{_bindir}/google_guest_agent_manager
+install -p -m 0755 %{name}-extra-%{version}/cmd/ggactl/ggactl_plugin_cleanup %{buildroot}%{_bindir}/ggactl_plugin_cleanup
 %endif
 
 %if 0%{?el6}
@@ -111,6 +113,7 @@ install -p -m 0644 90-%{name}.preset %{buildroot}%{_presetdir}/90-%{name}.preset
 
 %if 0%{?build_plugin_manager}
 %{_bindir}/google_guest_agent_manager
+%{_bindir}/ggactl_plugin_cleanup
 %endif
 
 %{_bindir}/google_metadata_script_runner
@@ -190,6 +193,7 @@ if [ $1 -eq 0 ]; then
     systemctl stop google-guest-agent.service >/dev/null 2>&1 || :
     %if 0%{?build_plugin_manager}
       systemctl stop google-guest-agent-manager.service >/dev/null 2>&1 || :
+      ggactl_plugin_cleanup all >/dev/null 2>&1 || :
     %endif
   fi
 fi
