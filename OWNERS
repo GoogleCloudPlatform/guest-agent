@@ -2,7 +2,6 @@
 # See the OWNERS docs at https://go.k8s.io/owners
 
 approvers:
-  - a-crate
   - ajorg
   - bkatyl
   - chaitanyakulkarni28
@@ -13,4 +12,3 @@ approvers:
   - karnvadaliya
   - koln67
   - lpleahy
-  - zmarano
