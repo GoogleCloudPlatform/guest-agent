@@ -193,8 +193,8 @@ func TestSetupVlanInterface(t *testing.T) {
 				Mac: ifaces[1].HardwareAddr.String(),
 			},
 		},
-		VlanInterfaces: map[int]VlanInterface{
-			5: {
+		VlanInterfaces: map[string]VlanInterface{
+			"0-5": {
 				VlanInterface: metadata.VlanInterface{
 					Mac:  "mac-address",
 					Vlan: 5,
@@ -202,7 +202,7 @@ func TestSetupVlanInterface(t *testing.T) {
 				},
 				ParentInterfaceID: ifaces[1].Name,
 			},
-			6: {
+			"0-6": {
 				VlanInterface: metadata.VlanInterface{
 					Mac:           "mac-address2",
 					Vlan:          6,
@@ -426,8 +426,8 @@ func TestPartialVlanRemoval(t *testing.T) {
 	}
 
 	nics := &Interfaces{
-		VlanInterfaces: map[int]VlanInterface{
-			5: {
+		VlanInterfaces: map[string]VlanInterface{
+			"ens4-5": {
 				VlanInterface: metadata.VlanInterface{
 					Mac:  "mac-address",
 					Vlan: 5,
@@ -439,8 +439,11 @@ func TestPartialVlanRemoval(t *testing.T) {
 	}
 
 	wantNics := &Interfaces{
-		VlanInterfaces: map[int]VlanInterface{
-			6: {
+		VlanInterfaces: map[string]VlanInterface{
+			"ens4-6": {
+				VlanInterface: metadata.VlanInterface{
+					Vlan: 6,
+				},
 				ParentInterfaceID: "ens4",
 			},
 		},
@@ -449,6 +452,10 @@ func TestPartialVlanRemoval(t *testing.T) {
 	got, err := netplan.findVlanDiff(nics)
 	if err != nil {
 		t.Fatalf("netplan.findVlanDiff(%+v) failed unexpectedly with error: %v", nics, err)
+	}
+
+	if got == nil {
+		t.Fatalf("netplan.findVlanDiff(%+v) return nil, expected non nil", nics)
 	}
 
 	if diff := cmp.Diff(wantNics, got); diff != "" {

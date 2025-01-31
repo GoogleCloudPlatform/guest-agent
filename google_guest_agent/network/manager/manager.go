@@ -83,7 +83,7 @@ type Interfaces struct {
 	EthernetInterfaces []metadata.NetworkInterfaces
 
 	// VlanInterfaces are the vLAN interfaces descriptors offered by metadata.
-	VlanInterfaces map[int]VlanInterface
+	VlanInterfaces map[string]VlanInterface
 }
 
 // guestAgentSection is the section added to guest-agent-written ini files to indicate
@@ -163,7 +163,8 @@ func reformatVlanNics(mds *metadata.Descriptor, nics *Interfaces, ethernetInterf
 		}
 
 		for vlanID, vlan := range vlans {
-			nics.VlanInterfaces[vlanID] = VlanInterface{VlanInterface: vlan, ParentInterfaceID: ethernetInterfaces[parentID]}
+			mapID := fmt.Sprintf("%d-%d", parentID, vlanID)
+			nics.VlanInterfaces[mapID] = VlanInterface{VlanInterface: vlan, ParentInterfaceID: ethernetInterfaces[parentID]}
 		}
 	}
 	return nil
@@ -191,7 +192,7 @@ func SetupInterfaces(ctx context.Context, config *cfg.Sections, mds *metadata.De
 
 	nics := &Interfaces{
 		EthernetInterfaces: mds.Instance.NetworkInterfaces,
-		VlanInterfaces:     map[int]VlanInterface{},
+		VlanInterfaces:     map[string]VlanInterface{},
 	}
 
 	interfaces, err := interfaceNames(nics.EthernetInterfaces)
@@ -335,7 +336,7 @@ func FallbackToDefault(ctx context.Context) error {
 func buildInterfacesFromAllPhysicalNICs() (*Interfaces, error) {
 	nics := &Interfaces{
 		EthernetInterfaces: nil,
-		VlanInterfaces:     map[int]VlanInterface{},
+		VlanInterfaces:     map[string]VlanInterface{},
 	}
 
 	interfaces, err := net.Interfaces()

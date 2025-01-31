@@ -335,11 +335,11 @@ func TestReformatVlanNics(t *testing.T) {
 			},
 		},
 	}}
-	nics := &Interfaces{VlanInterfaces: map[int]VlanInterface{}}
-	want := &Interfaces{VlanInterfaces: map[int]VlanInterface{
-		5: {VlanInterface: metadata.VlanInterface{Mac: "a", ParentInterface: "/computeMetadata/v1/instance/network-interfaces/0/", Vlan: 5}, ParentInterfaceID: "eth0"},
-		6: {VlanInterface: metadata.VlanInterface{Mac: "b", Vlan: 6, IP: "1.2.3.4"}, ParentInterfaceID: "eth0"},
-		7: {VlanInterface: metadata.VlanInterface{Mac: "c", Vlan: 7, DHCPv6Refresh: "123456"}, ParentInterfaceID: "eth1"},
+	nics := &Interfaces{VlanInterfaces: map[string]VlanInterface{}}
+	want := &Interfaces{VlanInterfaces: map[string]VlanInterface{
+		"0-5": {VlanInterface: metadata.VlanInterface{Mac: "a", ParentInterface: "/computeMetadata/v1/instance/network-interfaces/0/", Vlan: 5}, ParentInterfaceID: "eth0"},
+		"0-6": {VlanInterface: metadata.VlanInterface{Mac: "b", Vlan: 6, IP: "1.2.3.4"}, ParentInterfaceID: "eth0"},
+		"1-7": {VlanInterface: metadata.VlanInterface{Mac: "c", Vlan: 7, DHCPv6Refresh: "123456"}, ParentInterfaceID: "eth1"},
 	}}
 
 	ethernetInterfaces := []string{"eth0", "eth1"}
@@ -365,7 +365,7 @@ func TestReformatVlanNicsError(t *testing.T) {
 			},
 		},
 	}}
-	nics := &Interfaces{VlanInterfaces: map[int]VlanInterface{}}
+	nics := &Interfaces{VlanInterfaces: map[string]VlanInterface{}}
 
 	tests := []struct {
 		name               string

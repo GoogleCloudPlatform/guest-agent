@@ -49,7 +49,7 @@ func (d dhclientMockRunner) Quiet(ctx context.Context, name string, args ...stri
 		for _, arg := range args {
 			msg += fmt.Sprintf(" %v", arg)
 		}
-		return fmt.Errorf(msg)
+		return fmt.Errorf("%s", msg)
 	}
 	return nil
 }

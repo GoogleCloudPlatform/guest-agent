@@ -26,6 +26,7 @@ import (
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/osinfo"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/run"
+	"github.com/GoogleCloudPlatform/guest-agent/metadata"
 	"github.com/GoogleCloudPlatform/guest-agent/utils"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 )
@@ -468,28 +469,33 @@ func (n *netplan) vlanInterfaceName(parentInterface string, vlanID int) string {
 
 // SetupVlanInterface writes the apppropriate vLAN interfaces netplan configuration.
 func (n *netplan) SetupVlanInterface(ctx context.Context, config *cfg.Sections, nics *Interfaces) error {
+	var reload1, reload2, reload3 bool
+	var err error
+
 	toRemove, err := n.findVlanDiff(nics)
 	if err != nil {
 		return fmt.Errorf("unable to detect vlan nics to delete: %w", err)
 	}
 
-	reload1, err := n.rollbackVlanNics(ctx, toRemove)
-	if err != nil {
-		return fmt.Errorf("unable to remove vlan interfaces (%+v): %w", toRemove, err)
+	if toRemove != nil {
+		reload1, err = n.rollbackVlanNics(ctx, toRemove)
+		if err != nil {
+			return fmt.Errorf("unable to remove vlan interfaces (%+v): %w", toRemove, err)
+		}
 	}
 
-	reload2, err := n.writeNetplanVLANDropin(nics)
+	reload2, err = n.writeNetplanVLANDropin(nics)
 	if err != nil {
 		return fmt.Errorf("unable to write netplan VLAN dropin: %w", err)
 	}
 
-	reload3, err := n.writeNetworkdVLANDropin(nics)
+	reload3, err = n.writeNetworkdVLANDropin(nics)
 	if err != nil {
 		return fmt.Errorf("unable to write netplan networkd VLAN dropin: %w", err)
 	}
 
 	if reload1 || reload2 || reload3 {
-		if err := n.reloadConfigs(ctx); err != nil {
+		if err = n.reloadConfigs(ctx); err != nil {
 			return fmt.Errorf("error applying vlan interface configs: %w", err)
 		}
 	}
@@ -512,23 +518,23 @@ func (n *netplan) interfaceFromLink(link string) string {
 // and returns only the vlan interfaces to delete.
 func (n *netplan) findVlanDiff(expectedNics *Interfaces) (*Interfaces, error) {
 	keepInterfaces := make(map[string]string)
-	toRemove := &Interfaces{VlanInterfaces: make(map[int]VlanInterface)}
+	toRemove := Interfaces{VlanInterfaces: make(map[string]VlanInterface)}
 
 	existingVlanCfgs := netplanDropin{}
 	netplanVlanDropinFile := n.dropinFile(netplanVlanSuffix)
 	// There's no config file per interface, single netplan config file lists all the interfaces.
 	if !utils.FileExists(netplanVlanDropinFile, utils.TypeFile) {
 		logger.Infof("File %q does not exist, nothing to rollback", netplanVlanDropinFile)
-		return toRemove, nil
+		return nil, nil
 	}
 
 	if err := readYamlFile(netplanVlanDropinFile, &existingVlanCfgs); err != nil {
-		return toRemove, fmt.Errorf("unable to read %q trying rollback configs: %w", netplanVlanDropinFile, err)
+		return nil, fmt.Errorf("unable to read %q trying rollback configs: %w", netplanVlanDropinFile, err)
 	}
 
 	if len(existingVlanCfgs.Network.Vlans) == 0 {
 		logger.Debugf("No existing VLAN configs found at %q, skipping rollback", netplanVlanDropinFile)
-		return toRemove, nil
+		return nil, nil
 	}
 
 	for _, iface := range expectedNics.VlanInterfaces {
@@ -541,11 +547,18 @@ func (n *netplan) findVlanDiff(expectedNics *Interfaces) (*Interfaces, error) {
 	for vlanKey, vlan := range existingVlanCfgs.Network.Vlans {
 		_, ok := keepInterfaces[vlanKey]
 		if !ok {
-			toRemove.VlanInterfaces[vlan.ID] = VlanInterface{ParentInterfaceID: n.interfaceFromLink(vlan.Link)}
+			parentID := n.interfaceFromLink(vlan.Link)
+			vlanID := fmt.Sprintf("%s-%d", parentID, vlan.ID)
+			toRemove.VlanInterfaces[vlanID] = VlanInterface{
+				ParentInterfaceID: parentID,
+				VlanInterface: metadata.VlanInterface{
+					Vlan: vlan.ID,
+				},
+			}
 		}
 	}
 
-	return toRemove, nil
+	return &toRemove, nil
 }
 
 // rollbackVlanNics removes the [nics] and its config (netplan and networkd dropin both) on disk.
@@ -567,8 +580,8 @@ func (n *netplan) rollbackVlanNics(ctx context.Context, nics *Interfaces) (bool,
 		}
 	}
 
-	for id, iface := range nics.VlanInterfaces {
-		ifaceName := n.vlanInterfaceName(iface.ParentInterfaceID, id)
+	for _, iface := range nics.VlanInterfaces {
+		ifaceName := n.vlanInterfaceName(iface.ParentInterfaceID, iface.VlanInterface.Vlan)
 		key := n.ID(ifaceName)
 
 		deleteNics = append(deleteNics, key)
@@ -663,8 +676,6 @@ func (n *netplan) writeNetplanVLANDropin(nics *Interfaces) (bool, error) {
 func (n *netplan) writeNetworkdVLANDropin(nics *Interfaces) (bool, error) {
 	var reload bool
 
-	googleIpv6Interfaces := vlanInterfaceListsIpv6(nics.VlanInterfaces)
-
 	stat, err := os.Stat(n.networkdDropinDir)
 	if err != nil {
 		return false, fmt.Errorf("failed to stat systemd-networkd's drop-in root dir: %w", err)
@@ -678,7 +689,7 @@ func (n *netplan) writeNetworkdVLANDropin(nics *Interfaces) (bool, error) {
 		logger.Debugf("writing systemd-networkd drop-in config for VLAN ID: %d", iface.Vlan)
 
 		var dhcp = "ipv4"
-		if slices.Contains(googleIpv6Interfaces, iface.Vlan) {
+		if iface.DHCPv6Refresh != "" {
 			dhcp = "yes"
 		}
 

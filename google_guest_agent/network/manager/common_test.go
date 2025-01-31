@@ -16,7 +16,6 @@ package manager
 
 import (
 	"fmt"
-	"sort"
 	"testing"
 
 	"github.com/GoogleCloudPlatform/guest-agent/metadata"
@@ -75,22 +74,6 @@ func TestVlanParentInterfaceFailure(t *testing.T) {
 				t.Fatalf("vlanParentInterface(%s) = nil, want: non-nil", curr)
 			}
 		})
-	}
-}
-
-func TestVlanInterfaceListsIpv6(t *testing.T) {
-	nics := map[int]VlanInterface{
-		0: {VlanInterface: metadata.VlanInterface{Vlan: 4, DHCPv6Refresh: "123456"}},
-		1: {VlanInterface: metadata.VlanInterface{Vlan: 5}},
-		2: {VlanInterface: metadata.VlanInterface{Vlan: 6, MTU: 1234}},
-		3: {VlanInterface: metadata.VlanInterface{Vlan: 7, Mac: "acd", ParentInterface: "/parent/0", DHCPv6Refresh: "7890"}},
-	}
-	want := []int{4, 7}
-	got := vlanInterfaceListsIpv6(nics)
-	sort.Ints(got)
-
-	if diff := cmp.Diff(want, got); diff != "" {
-		t.Errorf("vlanInterfaceListsIpv6(%+v) returned unexpected diff (-want,+got)\n%s", nics, diff)
 	}
 }
 
