@@ -511,7 +511,10 @@ func (n *systemdNetworkd) writeEthernetConfig(interfaces, ipv6Interfaces []strin
 			logger.Debugf("ManagePrimaryNIC is disabled, skipping systemdNetworkd writeEthernetConfig for %s", iface)
 			continue
 		}
-
+		if strings.Contains(iface, "invalid") {
+			logger.Debugf("Invalid interface %s, skipping", iface)
+			continue
+		}
 		logger.Debugf("write systemd-networkd network config for %s", iface)
 
 		var dhcp = "ipv4"

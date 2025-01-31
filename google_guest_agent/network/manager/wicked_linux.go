@@ -218,7 +218,10 @@ func (n *wicked) writeEthernetConfigs(ifaces []string) error {
 			logger.Debugf("ManagePrimaryNIC is disabled, skipping wicked writeEthernetConfig for %s", iface)
 			continue
 		}
-
+		if strings.Contains(iface, "invalid") {
+			logger.Debugf("Invalid interface %s, skipping", iface)
+			continue
+		}
 		logger.Debugf("write enabling ifcfg-%s config", iface)
 		ifcfg := n.ifcfgFilePath(iface)
 

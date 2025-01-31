@@ -259,6 +259,10 @@ func (n *netplan) writeNetworkdDropin(interfaces, ipv6Interfaces []string) (bool
 			logger.Debugf("ManagePrimaryNIC is disabled, skipping writeNetworkdDropin for %s", iface)
 			continue
 		}
+		if strings.Contains(iface, "invalid") {
+			logger.Debugf("Invalid interface %s, skipping", iface)
+			continue
+		}
 		logger.Debugf("writing systemd-networkd drop-in config for %s", iface)
 
 		var dhcp = "ipv4"
@@ -367,6 +371,10 @@ func (n *netplan) writeNetplanEthernetDropin(mtuMap map[string]int, interfaces, 
 	for i, iface := range interfaces {
 		if !shouldManageInterface(i == 0) {
 			logger.Debugf("ManagePrimaryNIC is disabled, skipping writeNetplanEthernetDropin for %s", iface)
+			continue
+		}
+		if strings.Contains(iface, "invalid") {
+			logger.Debugf("Invalid interface %s, skipping", iface)
 			continue
 		}
 		logger.Debugf("Adding %s(%d) to drop-in configuration.", iface, i)
