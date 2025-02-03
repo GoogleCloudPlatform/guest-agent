@@ -110,6 +110,11 @@ func interfaceNames(nics []metadata.NetworkInterfaces) ([]string, error) {
 // indices, which will cause problems with both network setup (especially in cases
 // where the primary NIC is disabled for some reason) and VLAN setup, which depends
 // on properly pairing with respective NIC indices.
+//
+// For example, if the primary NIC was disabled, then the current network
+// setup implementation will start treating the first secondary NIC as the
+// primary NIC. In VLAN's case, a VLAN NIC may be improperly paired with the
+// wrong parent NIC.
 func isInvalid(iface string) bool {
 	invalid := strings.Contains(iface, "invalid")
 	if invalid {
