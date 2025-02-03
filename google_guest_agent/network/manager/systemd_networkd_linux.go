@@ -403,7 +403,7 @@ func (n *systemdNetworkd) removeVlanInterfaces(ctx context.Context, keepMe []str
 
 		ptr, foundPtr := ptrMap[extension]
 		if !foundPtr {
-			return requiresRestart, fmt.Errorf("regex matching failed, invalid etension: %s", extension)
+			return requiresRestart, fmt.Errorf("regex matching failed, invalid extension: %s", extension)
 		}
 
 		filePath := filepath.Join(n.configDir, file.Name())
@@ -511,7 +511,9 @@ func (n *systemdNetworkd) writeEthernetConfig(interfaces, ipv6Interfaces []strin
 			logger.Debugf("ManagePrimaryNIC is disabled, skipping systemdNetworkd writeEthernetConfig for %s", iface)
 			continue
 		}
-
+		if isInvalid(iface) {
+			continue
+		}
 		logger.Debugf("write systemd-networkd network config for %s", iface)
 
 		var dhcp = "ipv4"

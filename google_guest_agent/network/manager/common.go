@@ -23,13 +23,11 @@ import (
 	"net"
 	"os"
 	"os/exec"
-	"regexp"
-	"strconv"
+	"strings"
 
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/osinfo"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/run"
 	"github.com/GoogleCloudPlatform/guest-agent/metadata"
-	"github.com/GoogleCloudPlatform/guest-agent/utils"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 	"github.com/go-ini/ini"
 
@@ -85,27 +83,30 @@ func interfaceNames(nics []metadata.NetworkInterfaces) ([]string, error) {
 	var ifaces []string
 	for _, ni := range nics {
 		iface, err := GetInterfaceByMAC(ni.Mac)
+		ifaceName := iface.Name
 		if err != nil {
-			return nil, err
+			if _, found := badMAC[ni.Mac]; !found {
+				logger.Errorf("Error getting interface %s: %v", ni.Mac, err)
+				badMAC[ni.Mac] = iface
+			}
+			// Add invalid tag to mark as invalid, and include its Mac.
+			ifaceName = fmt.Sprintf("invalid-%s", ni.Mac)
 		}
-		ifaces = append(ifaces, iface.Name)
+		ifaces = append(ifaces, ifaceName)
 	}
 	return ifaces, nil
 }
 
-// vlanInterfaceParentMap gets a map of VLAN IDs and its parent NIC.
-func vlanInterfaceParentMap(nics map[int]metadata.VlanInterface, allEthernetInterfaces []string) (map[int]string, error) {
-	vlans := make(map[int]string)
-
-	for _, ni := range nics {
-		parentInterface, err := vlanParentInterface(allEthernetInterfaces, ni)
-		if err != nil {
-			return nil, fmt.Errorf("failed to determine vlan's parent interface: %+v", err)
-		}
-		vlans[ni.Vlan] = parentInterface
+// isInvalid checks if the provided interface is invalid. This is used to skip
+// writing configurations for interfaces that have been disabled or otherwise
+// made invalid. The `invalid` tag is added to ifaces whose MACs are invalid.
+// This logic is handled in the `interfaceListsIpv4Ipv6 function below.
+func isInvalid(iface string) bool {
+	invalid := strings.Contains(iface, "invalid")
+	if invalid {
+		logger.Debugf("Invalid interface %s, skipping", iface)
 	}
-
-	return vlans, nil
+	return invalid
 }
 
 // interfaceListsIpv4Ipv6 gets a list of interface names. The first list is a list of all
@@ -116,17 +117,19 @@ func interfaceListsIpv4Ipv6(nics []metadata.NetworkInterfaces) ([]string, []stri
 
 	for _, ni := range nics {
 		iface, err := GetInterfaceByMAC(ni.Mac)
+		ifaceName := iface.Name
 		if err != nil {
 			if _, found := badMAC[ni.Mac]; !found {
 				logger.Errorf("error getting interface: %s", err)
 				badMAC[ni.Mac] = iface
 			}
-			continue
+			// Mark the iface as invalid, and include its Mac.
+			ifaceName = fmt.Sprintf("invalid-%s", ni.Mac)
 		}
 		if ni.DHCPv6Refresh != "" {
-			googleIpv6Interfaces = append(googleIpv6Interfaces, iface.Name)
+			googleIpv6Interfaces = append(googleIpv6Interfaces, ifaceName)
 		}
-		googleInterfaces = append(googleInterfaces, iface.Name)
+		googleInterfaces = append(googleInterfaces, ifaceName)
 	}
 	return googleInterfaces, googleIpv6Interfaces
 }
@@ -169,30 +172,6 @@ func GetInterfaceByMAC(mac string) (net.Interface, error) {
 		}
 	}
 	return net.Interface{}, fmt.Errorf("no interface found with MAC %s", mac)
-}
-
-// vlanParentInterface returns the interface name of the parent interface of a vlan interface.
-func vlanParentInterface(ethernetInterfaces []string, vlan metadata.VlanInterface) (string, error) {
-	regexStr := "(?P<prefix>.*network-interfaces)/(?P<interface>[0-9]+)/"
-	parentRegex := regexp.MustCompile(regexStr)
-
-	groups := utils.RegexGroupsMap(parentRegex, vlan.ParentInterface)
-
-	ifaceIndex, found := groups["interface"]
-	if !found {
-		return "", fmt.Errorf("invalid vlan's ParentInterface reference, no interface index found")
-	}
-
-	index, err := strconv.Atoi(ifaceIndex)
-	if err != nil {
-		return "", fmt.Errorf("failed to parse parent index(%s): %+v", ifaceIndex, err)
-	}
-
-	if index >= len(ethernetInterfaces) {
-		return "", fmt.Errorf("invalid parent index(%d), known interfaces count: %d", index, len(ethernetInterfaces))
-	}
-
-	return ethernetInterfaces[index], nil
 }
 
 // readIniFile reads and parses the content of filePath and loads it into ptr.

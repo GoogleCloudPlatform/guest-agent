@@ -289,7 +289,9 @@ func (n *networkManager) writeNetworkManagerConfigs(ifaces []string) ([]string, 
 			logger.Debugf("ManagePrimaryNIC is disabled, skipping writeNetworkManagerConfigs for %s", iface)
 			continue
 		}
-
+		if isInvalid(iface) {
+			continue
+		}
 		logger.Debugf("writing nmconnection file for %s", iface)
 
 		configFilePath := n.networkManagerConfigFilePath(iface)

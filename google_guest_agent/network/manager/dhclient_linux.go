@@ -415,6 +415,9 @@ func partitionInterfaces(ctx context.Context, interfaces, ipv6Interfaces []strin
 			logger.Debugf("ManagePrimaryNIC is disabled, skipping dhclient launch for %s", iface)
 			continue
 		}
+		if isInvalid(iface) {
+			continue
+		}
 		// On 18.04 we fallback to dhclient as networkctl is very old and has not reload support for example.
 		// Default netplan config will take care of it, do not launch dhclient for primary NIC on 18.04.
 		if (i == 0) && isUbuntu1804() {
