@@ -39,5 +39,5 @@ fi
 BUILD_DIR=$(pwd)
 pushd $GUEST_AGENT_REPO
 GOOS=windows VERSION=$version make cmd/google_guest_agent/google_guest_agent
-cp cmd/google_guest_agent/google_guest_agent.exe $BUILD_DIR/GCEWindowsAgentManager.exe
+cp cmd/google_guest_agent/google_guest_agent $BUILD_DIR/GCEWindowsAgentManager.exe
 popd
