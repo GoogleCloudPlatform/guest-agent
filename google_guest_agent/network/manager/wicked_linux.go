@@ -218,8 +218,7 @@ func (n *wicked) writeEthernetConfigs(ifaces []string) error {
 			logger.Debugf("ManagePrimaryNIC is disabled, skipping wicked writeEthernetConfig for %s", iface)
 			continue
 		}
-		if strings.Contains(iface, "invalid") {
-			logger.Debugf("Invalid interface %s, skipping", iface)
+		if isInvalid(iface) {
 			continue
 		}
 		logger.Debugf("write enabling ifcfg-%s config", iface)
@@ -336,7 +335,7 @@ func (n *wicked) RollbackNics(ctx context.Context, nics *Interfaces) error {
 	// for non-primary configuration files.
 	for _, iface := range ifaces[1:] {
 		if err := n.removeInterface(ctx, iface); err != nil {
-			return fmt.Errorf("failed to rollback wicked ethernet interface: %+v", err)
+			logger.Errorf("failed to rollback wicked ethernet interface: %+v", err)
 		}
 	}
 

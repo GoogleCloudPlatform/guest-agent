@@ -289,8 +289,7 @@ func (n *networkManager) writeNetworkManagerConfigs(ifaces []string) ([]string, 
 			logger.Debugf("ManagePrimaryNIC is disabled, skipping writeNetworkManagerConfigs for %s", iface)
 			continue
 		}
-		if strings.Contains(iface, "invalid") {
-			logger.Debugf("Invalid interface %s, skipping", iface)
+		if isInvalid(iface) {
 			continue
 		}
 		logger.Debugf("writing nmconnection file for %s", iface)

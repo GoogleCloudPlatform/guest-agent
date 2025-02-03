@@ -415,8 +415,7 @@ func partitionInterfaces(ctx context.Context, interfaces, ipv6Interfaces []strin
 			logger.Debugf("ManagePrimaryNIC is disabled, skipping dhclient launch for %s", iface)
 			continue
 		}
-		if strings.Contains(iface, "invalid") {
-			logger.Debugf("Invalid interface %s, skipping", iface)
+		if isInvalid(iface) {
 			continue
 		}
 		// On 18.04 we fallback to dhclient as networkctl is very old and has not reload support for example.

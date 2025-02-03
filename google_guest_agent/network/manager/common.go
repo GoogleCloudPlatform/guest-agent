@@ -23,6 +23,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"strings"
 
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/osinfo"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/run"
@@ -88,11 +89,24 @@ func interfaceNames(nics []metadata.NetworkInterfaces) ([]string, error) {
 				logger.Errorf("Error getting interface %s: %v", ni.Mac, err)
 				badMAC[ni.Mac] = iface
 			}
+			// Add invalid tag to mark as invalid, and include its Mac.
 			ifaceName = fmt.Sprintf("invalid-%s", ni.Mac)
 		}
 		ifaces = append(ifaces, ifaceName)
 	}
 	return ifaces, nil
+}
+
+// isInvalid checks if the provided interface is invalid. This is used to skip
+// writing configurations for interfaces that have been disabled or otherwise
+// made invalid. The `invalid` tag is added to ifaces whose MACs are invalid.
+// This logic is handled in the `interfaceListsIpv4Ipv6 function below.
+func isInvalid(iface string) bool {
+	invalid := strings.Contains(iface, "invalid")
+	if invalid {
+		logger.Debugf("Invalid interface %s, skipping", iface)
+	}
+	return invalid
 }
 
 // interfaceListsIpv4Ipv6 gets a list of interface names. The first list is a list of all
@@ -109,6 +123,7 @@ func interfaceListsIpv4Ipv6(nics []metadata.NetworkInterfaces) ([]string, []stri
 				logger.Errorf("error getting interface: %s", err)
 				badMAC[ni.Mac] = iface
 			}
+			// Mark the iface as invalid, and include its Mac.
 			ifaceName = fmt.Sprintf("invalid-%s", ni.Mac)
 		}
 		if ni.DHCPv6Refresh != "" {
