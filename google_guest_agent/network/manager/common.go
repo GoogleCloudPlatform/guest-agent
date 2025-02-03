@@ -89,7 +89,9 @@ func interfaceNames(nics []metadata.NetworkInterfaces) ([]string, error) {
 				logger.Errorf("Error getting interface %s: %v", ni.Mac, err)
 				badMAC[ni.Mac] = iface
 			}
-			// Add invalid tag to mark as invalid, and include its Mac.
+			// Mark the iface as invalid, and include its Mac. This is important
+			// to avoid shifting indices if a MAC is invalid, which will cause
+			// problems with network and VLAN setup.
 			ifaceName = fmt.Sprintf("invalid-%s", ni.Mac)
 		}
 		ifaces = append(ifaces, ifaceName)
@@ -100,7 +102,19 @@ func interfaceNames(nics []metadata.NetworkInterfaces) ([]string, error) {
 // isInvalid checks if the provided interface is invalid. This is used to skip
 // writing configurations for interfaces that have been disabled or otherwise
 // made invalid. The `invalid` tag is added to ifaces whose MACs are invalid.
-// This logic is handled in the `interfaceListsIpv4Ipv6 function below.
+// This logic is handled in the `interfaceListsIpv4Ipv6` function below.
+//
+// Marking an interface as invalid allows us to keep consistency with the lists
+// of interfaces returned by `interfaceNames` and `interfaceListsIpv4Ipv6`. In
+// cases where a NIC is disabled, skipping them would result in shifting of
+// indices, which will cause problems with both network setup (especially in cases
+// where the primary NIC is disabled for some reason) and VLAN setup, which depends
+// on properly pairing with respective NIC indices.
+//
+// For example, if the primary NIC was disabled, then the current network
+// setup implementation will start treating the first secondary NIC as the
+// primary NIC. In VLAN's case, a VLAN NIC may be improperly paired with the
+// wrong parent NIC.
 func isInvalid(iface string) bool {
 	invalid := strings.Contains(iface, "invalid")
 	if invalid {
@@ -123,7 +137,9 @@ func interfaceListsIpv4Ipv6(nics []metadata.NetworkInterfaces) ([]string, []stri
 				logger.Errorf("error getting interface: %s", err)
 				badMAC[ni.Mac] = iface
 			}
-			// Mark the iface as invalid, and include its Mac.
+			// Mark the iface as invalid, and include its Mac. This is important
+			// to avoid shifting indices if a MAC is invalid, which will cause
+			// problems with network and VLAN setup.
 			ifaceName = fmt.Sprintf("invalid-%s", ni.Mac)
 		}
 		if ni.DHCPv6Refresh != "" {
