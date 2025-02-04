@@ -92,6 +92,7 @@ ip_forwarding = true
 setup = true
 manage_primary_nic =
 restore_debian12_netplan_config = true
+vlan_setup_enabled = false
 
 [OSLogin]
 cert_authentication = true
@@ -111,7 +112,6 @@ command_monitor_enabled = false
 command_pipe_mode = 0770
 command_pipe_group =
 command_request_timeout = 10s
-vlan_setup_enabled = false
 systemd_config_dir = /usr/lib/systemd/network
 `
 )
@@ -288,6 +288,7 @@ type NetworkInterfaces struct {
 	Setup                        bool   `ini:"setup,omitempty"`
 	ManagePrimaryNIC             bool   `ini:"manage_primary_nic,omitempty"`
 	RestoreDebian12NetplanConfig bool   `ini:"restore_debian12_netplan_config,omitempty"`
+	VlanSetupEnabled             bool   `ini:"vlan_setup_enabled,omitempty"`
 }
 
 // Snapshots contains the configurations of Snapshots section.
@@ -307,7 +308,6 @@ type Unstable struct {
 	CommandRequestTimeout string `ini:"command_request_timeout,omitempty"`
 	CommandPipeMode       string `ini:"command_pipe_mode,omitempty"`
 	CommandPipeGroup      string `ini:"command_pipe_group,omitempty"`
-	VlanSetupEnabled      bool   `ini:"vlan_setup_enabled,omitempty"`
 	SystemdConfigDir      string `ini:"systemd_config_dir,omitempty"`
 }
 
