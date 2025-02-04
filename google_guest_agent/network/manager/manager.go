@@ -232,7 +232,7 @@ func SetupInterfaces(ctx context.Context, config *cfg.Sections, mds *metadata.De
 		return fmt.Errorf("manager(%s): error setting up ethernet interfaces: %v", activeService.manager.Name(), err)
 	}
 
-	if config.Unstable.VlanSetupEnabled {
+	if config.NetworkInterfaces.VlanSetupEnabled {
 		logger.Infof("VLAN setup is enabled via config file, setting up interfaces")
 		if err := reformatVlanNics(mds, nics, interfaces); err != nil {
 			return fmt.Errorf("unable to read vlans, invalid format: %w", err)
