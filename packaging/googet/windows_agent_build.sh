@@ -33,11 +33,14 @@ if [[ ! -f "$GUEST_AGENT_REPO/Makefile" ]]; then
     # This is a placeholder file for guest-agent package, google-compute-engine-windows.goospec
     # looks for this file during goopack packaging and will fail if not found.
     echo "This is a placeholder file so guest agent package build without error. Package will have actual Guest Agent Manager executable instead if both repos are cloned side-by-side." > GCEWindowsAgentManager.exe
+    echo "This is a placeholder file so guest agent package build without error. Package will have actual Guest Agent Manager executable instead if both repos are cloned side-by-side." > ggactl_plugin_cleanup.exe
     exit 0
 fi
 
 BUILD_DIR=$(pwd)
 pushd $GUEST_AGENT_REPO
 GOOS=windows VERSION=$version make cmd/google_guest_agent/google_guest_agent
+GOOS=windows VERSION=$version make cmd/ggactl/ggactl_plugin_cleanup
 cp cmd/google_guest_agent/google_guest_agent $BUILD_DIR/GCEWindowsAgentManager.exe
+cp cmd/ggactl/ggactl_plugin_cleanup $BUILD_DIR/ggactl_plugin_cleanup.exe
 popd
