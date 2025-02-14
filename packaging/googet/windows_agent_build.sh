@@ -35,6 +35,7 @@ if [[ ! -f "$GUEST_AGENT_REPO/Makefile" ]]; then
     echo "This is a placeholder file so guest agent package build without error. Package will have actual Guest Agent Manager executable instead if both repos are cloned side-by-side." > GCEWindowsAgentManager.exe
     echo "This is a placeholder file so guest agent package build without error. Package will have actual Guest Agent Manager executable instead if both repos are cloned side-by-side." > ggactl_plugin_cleanup.exe
     echo "This is a placeholder file so guest agent package build without error. Package will have actual Guest Agent Manager executable instead if both repos are cloned side-by-side." > GCEWindowsCompatManager.exe
+    echo "This is a placeholder file so guest agent package build without error. Package will have actual Guest Agent Manager executable instead if both repos are cloned side-by-side." > CorePlugin.exe
     exit 0
 fi
 
@@ -43,8 +44,10 @@ pushd $GUEST_AGENT_REPO
 GOOS=windows VERSION=$version make cmd/google_guest_agent/google_guest_agent
 GOOS=windows VERSION=$version make cmd/ggactl/ggactl_plugin_cleanup
 GOOS=windows VERSION=$version make cmd/google_guest_compat_manager/google_guest_compat_manager
+GOOS=windows VERSION=%{version} make cmd/core_plugin/core_plugin
 
 cp cmd/google_guest_agent/google_guest_agent $BUILD_DIR/GCEWindowsAgentManager.exe
 cp cmd/ggactl/ggactl_plugin_cleanup $BUILD_DIR/ggactl_plugin_cleanup.exe
 cp cmd/google_guest_compat_manager/google_guest_compat_manager $BUILD_DIR/GCEWindowsCompatManager.exe
+cp cmd/core_plugin/core_plugin $BUILD_DIR/CorePlugin.exe
 popd
