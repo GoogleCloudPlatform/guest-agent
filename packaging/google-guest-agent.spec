@@ -66,6 +66,7 @@ pushd %{name}-extra-%{version}/
   VERSION=%{version} make cmd/ggactl/ggactl_plugin_cleanup
   VERSION=%{version} make cmd/google_guest_compat_manager/google_guest_compat_manager
   VERSION=%{version} make cmd/core_plugin/core_plugin
+  VERSION=%{version} make cmd/gce_metadata_script_runner/gce_metadata_script_runner
 popd
 %endif
 
@@ -83,6 +84,7 @@ install -p -m 0644 instance_configs.cfg %{buildroot}/usr/share/google-guest-agen
 # Compat agent, it will become google_guest_agent after the full package transition.
 %if 0%{?build_plugin_manager}
 install -d %{buildroot}%{_exec_prefix}/lib/google/guest_agent
+install -p -m 0755 %{name}-extra-%{version}/cmd/gce_metadata_script_runner/gce_metadata_script_runner %{buildroot}%{_bindir}/gce_metadata_script_runner
 install -p -m 0755 %{name}-extra-%{version}/cmd/google_guest_agent/google_guest_agent %{buildroot}%{_bindir}/google_guest_agent_manager
 install -p -m 0755 %{name}-extra-%{version}/cmd/ggactl/ggactl_plugin_cleanup %{buildroot}%{_bindir}/ggactl_plugin_cleanup
 install -p -m 0755 %{name}-extra-%{version}/cmd/google_guest_compat_manager/google_guest_compat_manager %{buildroot}%{_bindir}/google_guest_compat_manager
@@ -118,6 +120,7 @@ install -p -m 0644 90-%{name}.preset %{buildroot}%{_presetdir}/90-%{name}.preset
 %{_bindir}/google_guest_agent
 
 %if 0%{?build_plugin_manager}
+%{_bindir}/gce_metadata_script_runner
 %{_bindir}/google_guest_compat_manager
 %{_bindir}/google_guest_agent_manager
 %{_bindir}/ggactl_plugin_cleanup
