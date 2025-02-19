@@ -25,6 +25,7 @@ override_dh_auto_install:
 	install -p -m 0644 gce-workload-cert-refresh.timer debian/google-guest-agent/lib/systemd/system/
 	if [ -d google-guest-agent ]; then\
 		install -d debian/google-guest-agent/usr/lib/google/guest-agent;\
+		install -p -m 0755 google-guest-agent/cmd/gce_metadata_script_runner/gce_metadata_script_runner debian/google-guest-agent/usr/bin/gce_metadata_script_runner;\
 		install -p -m 0755 google-guest-agent/cmd/google_guest_compat_manager/google_guest_compat_manager debian/google-guest-agent/usr/bin/google_guest_compat_manager;\
 		install -p -m 0755 google-guest-agent/cmd/google_guest_agent/google_guest_agent debian/google-guest-agent/usr/bin/google_guest_agent_manager;\
 		install -p -m 0755 google-guest-agent/cmd/ggactl/ggactl_plugin_cleanup debian/google-guest-agent/usr/bin/ggactl_plugin_cleanup;\
@@ -41,6 +42,7 @@ override_dh_auto_build:
 		VERSION=$(VERSION) make -C google-guest-agent cmd/google_guest_agent/google_guest_agent;\
 		VERSION=$(VERSION) make -C google-guest-agent cmd/ggactl/ggactl_plugin_cleanup;\
 		VERSION=$(VERSION) make -C google-guest-agent cmd/core_plugin/core_plugin;\
+		VERSION=$(VERSION) make -C google-guest-agent cmd/gce_metadata_script_runner/gce_metadata_script_runner;\
 	fi
 
 override_dh_installinit:
