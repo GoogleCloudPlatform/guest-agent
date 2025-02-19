@@ -44,7 +44,7 @@ pushd $GUEST_AGENT_REPO
 GOOS=windows VERSION=$version make cmd/google_guest_agent/google_guest_agent
 GOOS=windows VERSION=$version make cmd/ggactl/ggactl_plugin_cleanup
 GOOS=windows VERSION=$version make cmd/google_guest_compat_manager/google_guest_compat_manager
-GOOS=windows VERSION=%{version} make cmd/core_plugin/core_plugin
+GOOS=windows VERSION=$version make cmd/core_plugin/core_plugin
 
 cp cmd/google_guest_agent/google_guest_agent $BUILD_DIR/GCEWindowsAgentManager.exe
 cp cmd/ggactl/ggactl_plugin_cleanup $BUILD_DIR/ggactl_plugin_cleanup.exe
