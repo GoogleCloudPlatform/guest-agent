@@ -8,7 +8,7 @@ Type=oneshot
 ExecStart=/bin/true
 RemainAfterExit=true
 # This service does nothing on start, and runs shutdown scripts on stop.
-ExecStop=/usr/bin/google_metadata_script_runner shutdown
+ExecStop=/bin/sh -c 'if [ -e /usr/bin/gce_compat_metadata_script_runner ]; then /usr/bin/gce_compat_metadata_script_runner shutdown; else /usr/bin/google_metadata_script_runner shutdown; fi'
 TimeoutStopSec=0
 KillMode=process
 
