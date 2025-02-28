@@ -207,6 +207,7 @@ func runAgent(ctx context.Context) {
 	// TODO: move all this metadata dependent code to its own metadata event handler.
 	if newMetadata != nil {
 		opts.ProjectName = newMetadata.Project.ProjectID
+		opts.MIG = newMetadata.Instance.Attributes.CreatedBy
 		if err := logger.Init(ctx, opts); err != nil {
 			logger.Errorf("Error initializing logger: %v", err)
 		}
