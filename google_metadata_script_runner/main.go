@@ -452,6 +452,8 @@ func main() {
 	if err == nil {
 		opts.ProjectName = projectID
 	}
+	createdBy, _ := getMetadataKey(ctx, "/instance/attributes/created-by")
+	opts.MIG = createdBy
 
 	if err := logger.Init(ctx, opts); err != nil {
 		fmt.Printf("Error initializing logger: %+v", err)
