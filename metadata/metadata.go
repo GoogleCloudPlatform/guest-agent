@@ -205,6 +205,7 @@ type Project struct {
 
 // Attributes describes the project's attributes keys.
 type Attributes struct {
+	CreatedBy		  string
 	BlockProjectKeys          bool
 	HTTPSMDSEnableNativeStore *bool
 	DisableHTTPSMdsSetup      *bool
@@ -234,6 +235,7 @@ func (a *Attributes) UnmarshalJSON(b []byte) error {
 	}
 	// Unmarshal to literal JSON types before doing anything else.
 	type inner struct {
+		CreatedBy		  string      `json:"created-by"`
 		BlockProjectKeys          string      `json:"block-project-ssh-keys"`
 		Diagnostics               string      `json:"diagnostics"`
 		DisableAccountManager     string      `json:"disable-account-manager"`
@@ -262,6 +264,7 @@ func (a *Attributes) UnmarshalJSON(b []byte) error {
 	a.WSFCAddresses = temp.WSFCAddresses
 	a.WSFCAgentPort = temp.WSFCAgentPort
 	a.WindowsKeys = temp.WindowsKeys
+	a.CreatedBy = temp.CreatedBy
 
 	value, err := strconv.ParseBool(temp.DisableHTTPSMdsSetup)
 	if err == nil {
