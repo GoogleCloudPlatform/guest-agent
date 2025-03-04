@@ -1,7 +1,7 @@
 [Unit]
 Description=Google Compute Engine Guest Agent Plugin Manager
-After=network-online.target syslog.service
-After=network.service networking.service NetworkManager.service systemd-networkd.service
+After=google-guest-agent.service
+Wants=google-guest-agent.service
 
 [Service]
 Type=notify
