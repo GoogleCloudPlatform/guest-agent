@@ -22,11 +22,6 @@ $manager_path = '"C:\Program Files\Google\Compute Engine\agent\GCEWindowsAgentMa
 $manager_display_name = 'Google Compute Engine Agent Manager'
 $manager_description = 'Google Compute Engine Agent Manager'
 
-$compat_manager = 'GCEWindowsCompatManager'
-$compat_path = '"C:\Program Files\Google\Compute Engine\agent\GCEWindowsCompatManager.exe"'
-$compat_display_name = 'Google Compute Engine Compat Manager'
-$compat_description = 'Google Compute Engine Compat Manager'
-
 $initial_config = @'
 # GCE Instance Configuration
 
@@ -77,19 +72,11 @@ try {
   Set-New-Service $name $display_name $description $path
   Set-ServiceConfig $name $path
 
-  # Guest Agent Manager and Compat Manager service
+  # Guest Agent Manager service
   if ($install_manager) {
-    Set-New-Service $compat_manager $compat_display_name $compat_description $compat_path
-    Set-ServiceConfig $compat_manager $compat_path
-
     Set-New-Service $manager_name $manager_display_name $manager_description $manager_path
     Set-ServiceConfig $manager_name $manager_path
   } else {
-    if (Get-Service $compat_manager -ErrorAction SilentlyContinue) {
-      Stop-Service $compat_manager
-      & sc.exe delete $compat_manager
-    }
-
     if (Get-Service $manager_name -ErrorAction SilentlyContinue) {
       Stop-Service $manager_name
       & sc.exe delete $manager_name
@@ -104,7 +91,6 @@ try {
   Restart-Service $name -Verbose
 
   if ($install_manager) {
-    Restart-Service $compat_manager -Verbose
     Restart-Service $manager_name -Verbose
   }
 }
