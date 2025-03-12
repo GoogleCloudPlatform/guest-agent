@@ -63,6 +63,9 @@ done
 %if 0%{?build_plugin_manager}
 pushd %{name}-extra-%{version}/
   VERSION=%{version} make cmd/google_guest_agent/google_guest_agent
+  VERSION=%{version} make cmd/ggactl/ggactl_plugin_cleanup
+  VERSION=%{version} make cmd/google_guest_compat_manager/google_guest_compat_manager
+  VERSION=%{version} make cmd/core_plugin/core_plugin
 popd
 %endif
 
@@ -79,7 +82,11 @@ install -p -m 0644 instance_configs.cfg %{buildroot}/usr/share/google-guest-agen
 
 # Compat agent, it will become google_guest_agent after the full package transition.
 %if 0%{?build_plugin_manager}
+install -d %{buildroot}%{_exec_prefix}/lib/google/guest_agent
 install -p -m 0755 %{name}-extra-%{version}/cmd/google_guest_agent/google_guest_agent %{buildroot}%{_bindir}/google_guest_agent_manager
+install -p -m 0755 %{name}-extra-%{version}/cmd/ggactl/ggactl_plugin_cleanup %{buildroot}%{_bindir}/ggactl_plugin_cleanup
+install -p -m 0755 %{name}-extra-%{version}/cmd/google_guest_compat_manager/google_guest_compat_manager %{buildroot}%{_bindir}/google_guest_compat_manager
+install -p -m 0755 %{name}-extra-%{version}/cmd/core_plugin/core_plugin %{buildroot}%{_exec_prefix}/lib/google/guest_agent/core_plugin
 %endif
 
 %if 0%{?el6}
@@ -94,6 +101,7 @@ install -p -m 0644 %{name}.service %{buildroot}%{_unitdir}
 
 %if 0%{?build_plugin_manager}
 install -p -m 0644 google-guest-agent-manager.service %{buildroot}%{_unitdir}
+install -p -m 0644 google-guest-compat-manager.service %{buildroot}%{_unitdir}
 %endif
 
 install -p -m 0644 google-startup-scripts.service %{buildroot}%{_unitdir}
@@ -110,7 +118,10 @@ install -p -m 0644 90-%{name}.preset %{buildroot}%{_presetdir}/90-%{name}.preset
 %{_bindir}/google_guest_agent
 
 %if 0%{?build_plugin_manager}
+%{_bindir}/google_guest_compat_manager
 %{_bindir}/google_guest_agent_manager
+%{_bindir}/ggactl_plugin_cleanup
+%{_exec_prefix}/lib/google/guest_agent/core_plugin
 %endif
 
 %{_bindir}/google_metadata_script_runner
@@ -124,6 +135,7 @@ install -p -m 0644 90-%{name}.preset %{buildroot}%{_presetdir}/90-%{name}.preset
 
 %if 0%{?build_plugin_manager}
 %{_unitdir}/google-guest-agent-manager.service
+%{_unitdir}/google-guest-compat-manager.service
 %endif
 
 %{_unitdir}/google-startup-scripts.service
@@ -151,6 +163,7 @@ if [ $1 -eq 1 ]; then
   systemctl enable gce-workload-cert-refresh.timer >/dev/null 2>&1 || :
 
   %if 0%{?build_plugin_manager}
+    systemctl enable google-guest-compat-manager.service >/dev/null 2>&1 || :
     systemctl enable google-guest-agent-manager.service >/dev/null 2>&1 || :
   %endif
 
@@ -159,6 +172,7 @@ if [ $1 -eq 1 ]; then
     systemctl start google-guest-agent.service >/dev/null 2>&1 || :
     systemctl start gce-workload-cert-refresh.timer >/dev/null 2>&1 || :
     %if 0%{?build_plugin_manager}
+      systemctl start google-guest-compat-manager.service >/dev/null 2>&1 || :
       systemctl start google-guest-agent-manager.service >/dev/null 2>&1 || :
     %endif
   fi
@@ -170,6 +184,8 @@ else
     systemctl daemon-reload >/dev/null 2>&1 || :
     systemctl try-restart google-guest-agent.service >/dev/null 2>&1 || :
     %if 0%{?build_plugin_manager}
+      systemctl enable google-guest-compat-manager.service >/dev/null 2>&1 || :
+      systemctl restart google-guest-compat-manager.service >/dev/null 2>&1 || :
       systemctl enable google-guest-agent-manager.service >/dev/null 2>&1 || :
       systemctl restart google-guest-agent-manager.service >/dev/null 2>&1 || :
     %endif
@@ -180,6 +196,7 @@ fi
 if [ $1 -eq 0 ]; then
   # Package removal, not upgrade
   %if 0%{?build_plugin_manager}
+    systemctl --no-reload disable google-guest-compat-manager.service >/dev/null 2>&1 || :
     systemctl --no-reload disable google-guest-agent-manager.service >/dev/null 2>&1 || :
   %endif
   systemctl --no-reload disable google-guest-agent.service >/dev/null 2>&1 || :
@@ -189,7 +206,9 @@ if [ $1 -eq 0 ]; then
   if [ -d /run/systemd/system ]; then
     systemctl stop google-guest-agent.service >/dev/null 2>&1 || :
     %if 0%{?build_plugin_manager}
+      systemctl stop google-guest-compat-manager.service >/dev/null 2>&1 || :
       systemctl stop google-guest-agent-manager.service >/dev/null 2>&1 || :
+      ggactl_plugin_cleanup all >/dev/null 2>&1 || :
     %endif
   fi
 fi
