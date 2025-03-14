@@ -8,6 +8,7 @@
   "source": "https://github.com/GoogleCloudPlatform/guest-agent/",
   "files": {
     "CorePlugin.exe": "<ProgramFiles>/Google/Compute Engine/agent/CorePlugin.exe",
+    "GCEMetadataScriptRunner.exe": "<ProgramFiles>/Google/Compute Engine/agent/GCEMetadataScriptRunner.exe",
     "GCEWindowsAgentManager.exe": "<ProgramFiles>/Google/Compute Engine/agent/GCEWindowsAgentManager.exe",
     "GCEWindowsCompatManager.exe": "<ProgramFiles>/Google/Compute Engine/agent/GCEWindowsCompatManager.exe",
     "GCEWindowsAgent.exe": "<ProgramFiles>/Google/Compute Engine/agent/GCEWindowsAgent.exe",
@@ -43,6 +44,7 @@
         "ggactl_plugin_cleanup.exe",
         "GCEWindowsAgent.exe",
         "GCEWindowsCompatManager.exe",
+        "GCEMetadataScriptRunner.exe",
         "GCEWindowsAgentManager.exe",
 	"GCEAuthorizedKeysCommand.exe",
         "packaging/googet/agent_install.ps1",
