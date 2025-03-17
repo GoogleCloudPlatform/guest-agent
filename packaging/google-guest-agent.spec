@@ -67,6 +67,7 @@ pushd %{name}-extra-%{version}/
   VERSION=%{version} make cmd/google_guest_compat_manager/google_guest_compat_manager
   VERSION=%{version} make cmd/core_plugin/core_plugin
   VERSION=%{version} make cmd/gce_metadata_script_runner/gce_metadata_script_runner
+  VERSION=%{version} make cmd/metadata_script_runner_compat/gce_compat_metadata_script_runner
 popd
 %endif
 
@@ -89,6 +90,7 @@ install -p -m 0755 %{name}-extra-%{version}/cmd/google_guest_agent/google_guest_
 install -p -m 0755 %{name}-extra-%{version}/cmd/ggactl/ggactl_plugin_cleanup %{buildroot}%{_bindir}/ggactl_plugin_cleanup
 install -p -m 0755 %{name}-extra-%{version}/cmd/google_guest_compat_manager/google_guest_compat_manager %{buildroot}%{_bindir}/google_guest_compat_manager
 install -p -m 0755 %{name}-extra-%{version}/cmd/core_plugin/core_plugin %{buildroot}%{_exec_prefix}/lib/google/guest_agent/core_plugin
+install -p -m 0755 %{name}-extra-%{version}/cmd/metadata_script_runner_compat/gce_compat_metadata_script_runner %{buildroot}%{_bindir}/gce_compat_metadata_script_runner
 %endif
 
 %if 0%{?el6}
@@ -122,6 +124,7 @@ install -p -m 0644 90-%{name}.preset %{buildroot}%{_presetdir}/90-%{name}.preset
 %if 0%{?build_plugin_manager}
 %{_bindir}/gce_metadata_script_runner
 %{_bindir}/google_guest_compat_manager
+%{_bindir}/gce_compat_metadata_script_runner
 %{_bindir}/google_guest_agent_manager
 %{_bindir}/ggactl_plugin_cleanup
 %{_exec_prefix}/lib/google/guest_agent/core_plugin
