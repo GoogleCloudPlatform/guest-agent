@@ -149,12 +149,13 @@ type outputOpts struct {
 
 func main() {
 	ctx := context.Background()
-
+	createdByBytes, _ := getMetadata(ctx, "/instance/attributes/created-by")
 	opts := logger.LogOpts{
 		LoggerName:     programName,
 		FormatFunction: logFormat,
 		// No need for syslog.
 		DisableLocalLogging: true,
+		MIG:                 string(createdByBytes),
 	}
 
 	opts.Writers = []io.Writer{os.Stderr}
