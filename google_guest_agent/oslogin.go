@@ -228,7 +228,7 @@ func cleanupDeprecatedLines(fpath string, directives []string) error {
 		return nil
 	}
 
-	err = os.WriteFile(fpath, []byte(strings.Join(updatedLines, "\n")), stat.Mode())
+	err = os.WriteFile(fpath, []byte(strings.Join(updatedLines, "\n")+"\n"), stat.Mode())
 	if err != nil {
 		return fmt.Errorf("failed to update deprecated configuration directives: %+v", err)
 	}
@@ -264,6 +264,14 @@ func filterGoogleLines(contents string) []string {
 		default:
 			filtered = append(filtered, line)
 		}
+	}
+	// Unix text files should end with a final "\n"
+	// which strings.Split will account for with a terminal ""
+	// so we remove that here, to avoid adding more empty lines.
+	// But we can't assume that every file does end in a newline,
+	// so only remove it if it's empty as expected.
+	if len(filtered) > 0 && filtered[len(filtered)-1] == "" {
+		filtered = filtered[:len(filtered)-1]
 	}
 	return filtered
 }
@@ -331,7 +339,7 @@ func updateSSHConfig(sshConfig string, enable, twofactor, skey, reqCerts bool) s
 		}
 	}
 
-	return strings.Join(filtered, "\n")
+	return strings.Join(filtered, "\n") + "\n"
 }
 
 func writeSSHConfig(enable, twofactor, skey, reqCerts bool) error {
@@ -365,6 +373,7 @@ func updateNSSwitchConfig(nsswitch string, enable bool) string {
 		}
 		filtered = append(filtered, line)
 	}
+	// No trailing "\n" here because `filtered` will include an empty element at the end to account for it.
 	return strings.Join(filtered, "\n")
 }
 
@@ -402,7 +411,7 @@ func updatePAMsshdPamless(pamsshd string, enable, twofactor bool) string {
 		filtered = append(topOfFile, filtered...)
 		filtered = append(filtered, bottomOfFile...)
 	}
-	return strings.Join(filtered, "\n")
+	return strings.Join(filtered, "\n") + "\n"
 }
 
 func writePAMConfig(enable, twofactor bool) error {
@@ -429,7 +438,7 @@ func updateGroupConf(groupconf string, enable bool) string {
 		filtered = append(filtered, []string{googleComment, config}...)
 	}
 
-	return strings.Join(filtered, "\n")
+	return strings.Join(filtered, "\n") + "\n"
 }
 
 func writeGroupConf(enable bool) error {
