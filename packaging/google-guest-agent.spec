@@ -199,6 +199,15 @@ else
       systemctl restart google-guest-agent-manager.service >/dev/null 2>&1 || :
     %endif
   fi
+
+  # Re-enable the guest agent service if core plugin was enabled, since the
+  # service would have been disabled, and stay disabled post-upgrade.
+  if [ ! -f "/usr/bin/google_guest_compat_manager" ]; then
+    if [ -f "/etc/google-guest-agent/core-plugin-enabled" ] && [ ! -z $(grep "true" "/etc/google-guest-agent/core-plugin-enabled") ]; then
+      systemctl enable google-guest-agent.service > /dev/null 2>&1 || :
+      systemctl enable gce-workload-cert-refresh.timer > /dev/null 2>&1 || :
+    fi
+  fi
 fi
 
 %preun
