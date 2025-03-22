@@ -186,13 +186,16 @@ if [ $1 -eq 1 ]; then
 
 else
   # Package upgrade
+  %if 0%{?build_plugin_manager}
+      systemctl enable google-guest-compat-manager.service >/dev/null 2>&1 || :
+      systemctl enable google-guest-agent-manager.service >/dev/null 2>&1 || :
+  %endif
+    
   if [ -d /run/systemd/system ]; then
     systemctl daemon-reload >/dev/null 2>&1 || :
     systemctl try-restart google-guest-agent.service >/dev/null 2>&1 || :
     %if 0%{?build_plugin_manager}
-      systemctl enable google-guest-compat-manager.service >/dev/null 2>&1 || :
       systemctl restart google-guest-compat-manager.service >/dev/null 2>&1 || :
-      systemctl enable google-guest-agent-manager.service >/dev/null 2>&1 || :
       systemctl restart google-guest-agent-manager.service >/dev/null 2>&1 || :
     %endif
   fi
