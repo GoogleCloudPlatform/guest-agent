@@ -121,8 +121,7 @@ func TestFilterGoogleLines(t *testing.T) {
 	}
 
 	for idx, tt := range tests {
-		// The additional "\n" at the end is because Unix text files are expected to end in a newline
-		if res := filterGoogleLines(strings.Join(tt.contents, "\n") + "\n"); !cmpslice(res, tt.want) {
+		if res := filterGoogleLines(strings.Join(tt.contents, "\n")); !cmpslice(res, tt.want) {
 			t.Errorf("test %v\nwant:\n%v\ngot:\n%v\n", idx, tt.want, res)
 		}
 	}
@@ -190,8 +189,8 @@ func TestUpdateNSSwitchConfig(t *testing.T) {
 	}
 
 	for idx, tt := range tests {
-		contents := strings.Join(tt.contents, "\n") + "\n"
-		want := strings.Join(tt.want, "\n") + "\n"
+		contents := strings.Join(tt.contents, "\n")
+		want := strings.Join(tt.want, "\n")
 
 		if res := updateNSSwitchConfig(contents, tt.enable); res != want {
 			t.Errorf("test %v\nwant:\n%v\ngot:\n%v\n", idx, want, res)
@@ -518,8 +517,8 @@ func TestUpdateSSHConfig(t *testing.T) {
 	defaultCertAuthConfig := config.OSLogin.CertAuthentication
 
 	for idx, tt := range tests {
-		contents := strings.Join(tt.contents, "\n") + "\n"
-		want := strings.Join(tt.want, "\n") + "\n"
+		contents := strings.Join(tt.contents, "\n")
+		want := strings.Join(tt.want, "\n")
 		config.OSLogin.CertAuthentication = tt.cfgCert
 
 		if res := updateSSHConfig(contents, tt.enable, tt.twofactor, tt.skey, tt.reqCerts); res != want {
@@ -596,8 +595,8 @@ func TestUpdatePAMsshdPamless(t *testing.T) {
 
 	for idx, tt := range tests {
 		t.Run(fmt.Sprintf("test-%d", idx), func(t *testing.T) {
-			contents := strings.Join(tt.contents, "\n") + "\n"
-			want := strings.Join(tt.want, "\n") + "\n"
+			contents := strings.Join(tt.contents, "\n")
+			want := strings.Join(tt.want, "\n")
 
 			if res := updatePAMsshdPamless(contents, tt.enable, tt.twofactor); res != want {
 				t.Errorf("want:\n%v\ngot:\n%v\n", want, res)
@@ -668,8 +667,8 @@ func TestUpdateGroupConf(t *testing.T) {
 	}
 
 	for idx, tt := range tests {
-		contents := strings.Join(tt.contents, "\n") + "\n"
-		want := strings.Join(tt.want, "\n") + "\n"
+		contents := strings.Join(tt.contents, "\n")
+		want := strings.Join(tt.want, "\n")
 
 		if res := updateGroupConf(contents, tt.enable); res != want {
 			t.Errorf("test %v\nwant:\n%v\ngot:\n%v\n", idx, want, res)
