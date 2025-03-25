@@ -97,14 +97,15 @@ func (n *wicked) SetupEthernetInterface(ctx context.Context, cfg *cfg.Sections, 
 		return fmt.Errorf("failed to get network interfaces: %v", err)
 	}
 
-	if err = n.writeEthernetConfigs(ifaces); err != nil {
+	changed, err := n.writeEthernetConfigs(ifaces)
+	if err != nil {
 		return fmt.Errorf("error writing wicked configurations: %v", err)
 	}
 
 	// https://manpages.opensuse.org/Tumbleweed/wicked/wicked.8.en.html#ifreload_-_checks_whether_a_configuration_has_changed,_and_applies_accordingly.
 	// Apply any configuration changes on all interface. If unchanged ifreload
 	// does not touch specified interfaces.
-	args := []string{"ifreload", "all"}
+	args := append([]string{"ifreload"}, changed...)
 	if err = run.Quiet(ctx, n.wickedCommand, args...); err != nil {
 		return fmt.Errorf("error enabling interfaces: %v", err)
 	}
@@ -209,8 +210,9 @@ func (n *wicked) cleanupVlanInterfaces(ctx context.Context, keepMe []string) err
 
 // writeEthernetConfigs writes config files for the given ifaces in the given configuration
 // directory.
-func (n *wicked) writeEthernetConfigs(ifaces []string) error {
+func (n *wicked) writeEthernetConfigs(ifaces []string) ([]string, error) {
 	var priority = 10100
+	var changed []string
 
 	// Write the config for all the non-primary network interfaces.
 	for i, iface := range ifaces {
@@ -241,11 +243,12 @@ func (n *wicked) writeEthernetConfigs(ifaces []string) error {
 
 		// Write the file.
 		if err := os.WriteFile(ifcfg, contentBytes, 0644); err != nil {
-			return fmt.Errorf("error writing config file for %s: %v", iface, err)
+			return nil, fmt.Errorf("error writing config file for %s: %v", iface, err)
 		}
 		priority += 100
+		changed = append(changed, iface)
 	}
-	return nil
+	return changed, nil
 }
 
 // ifcfgFilePath gets the file path for the configuration file for the given interface.
