@@ -103,11 +103,13 @@ func (n *wicked) SetupEthernetInterface(ctx context.Context, cfg *cfg.Sections, 
 	}
 
 	// https://manpages.opensuse.org/Tumbleweed/wicked/wicked.8.en.html#ifreload_-_checks_whether_a_configuration_has_changed,_and_applies_accordingly.
-	// Apply any configuration changes on all interface. If unchanged ifreload
-	// does not touch specified interfaces.
-	args := append([]string{"ifreload"}, changed...)
-	if err = run.Quiet(ctx, n.wickedCommand, args...); err != nil {
-		return fmt.Errorf("error enabling interfaces: %v", err)
+	// Only apply configuration changes for interfaces for which configurations
+	// were written or changed.
+	if len(changed) > 0 {
+		args := append([]string{"ifreload"}, changed...)
+		if err = run.Quiet(ctx, n.wickedCommand, args...); err != nil {
+			return fmt.Errorf("error enabling interfaces: %v", err)
+		}
 	}
 	return nil
 }
