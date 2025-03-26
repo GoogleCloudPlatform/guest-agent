@@ -452,7 +452,10 @@ func main() {
 	if err == nil {
 		opts.ProjectName = projectID
 	}
-	createdBy, _ := getMetadataKey(ctx, "/instance/attributes/created-by")
+	createdBy, err := getMetadataKey(ctx, "/instance/attributes/created-by")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error getting metadata attribute created-by: %v", err)
+	}
 	opts.MIG = createdBy
 
 	if err := logger.Init(ctx, opts); err != nil {
