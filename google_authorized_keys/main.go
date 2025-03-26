@@ -143,9 +143,11 @@ func main() {
 	ctx := context.Background()
 	username := os.Args[1]
 
+	createdBy, _ := client.GetKey(ctx, "/instance/attributes/created-by", nil)
 	opts := logger.LogOpts{
 		LoggerName:     programName,
 		FormatFunction: logFormat,
+		MIG:            createdBy,
 	}
 
 	if runtime.GOOS == "windows" {
