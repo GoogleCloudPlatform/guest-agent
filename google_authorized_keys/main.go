@@ -147,7 +147,7 @@ func main() {
 	opts := logger.LogOpts{
 		LoggerName:     programName,
 		FormatFunction: logFormat,
-		MIG:		createdBy,
+		MIG:            createdBy,
 	}
 
 	if runtime.GOOS == "windows" {
