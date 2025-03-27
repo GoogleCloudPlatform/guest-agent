@@ -15,8 +15,8 @@ cloud.google.com/go/longrunning v0.5.1/go.mod h1:spvimkwdz6SPWKEt/XBij79E9fiTkHS
 cloud.google.com/go/storage v1.31.0 h1:+S3LjjEN2zZ+L5hOwj4+1OkGCsLVe0NzpXKQ1pSdTCI=
 cloud.google.com/go/storage v1.31.0/go.mod h1:81ams1PrhW16L4kF7qg+4mTq7SRs5HsbDTM0bWvrwJ0=
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
-github.com/GoogleCloudPlatform/guest-logging-go v0.0.0-20250326162504-0c9c519ba04e h1:9yeIJ28EhyISx2uSF8SxWxG/zv3Ob7KPijMuHjW0AYY=
-github.com/GoogleCloudPlatform/guest-logging-go v0.0.0-20250326162504-0c9c519ba04e/go.mod h1:6ZqSUIZRAPR5dNMWJ+FwIarFFQ9t5qalaKQs20o6h+I=
+github.com/GoogleCloudPlatform/guest-logging-go v0.0.0-20250327013322-4be06cdc8bd8 h1:XHFUi3AVH/bsqoNIniftXTVgHYZuMalB/s/5LiLkf9c=
+github.com/GoogleCloudPlatform/guest-logging-go v0.0.0-20250327013322-4be06cdc8bd8/go.mod h1:6ZqSUIZRAPR5dNMWJ+FwIarFFQ9t5qalaKQs20o6h+I=
 github.com/Microsoft/go-winio v0.6.1 h1:9/kr64B9VUZrLm5YYwbGtUJnMgqWVOdUAXu6Migciow=
 github.com/Microsoft/go-winio v0.6.1/go.mod h1:LRdKpFKfdobln8UmuiYcKPot9D2v6svN5+sAH+4kjUM=
 github.com/antihax/optional v1.0.0/go.mod h1:uupD/76wgC+ih3iEmQUL+0Ugr19nfwCT1kdvxnR2qWY=
