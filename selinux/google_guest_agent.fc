@@ -1,0 +1,19 @@
+/usr/bin/google_guest_agent_manager		--	gen_context(system_u:object_r:google_guest_agent_exec_t,s0)
+
+/usr/bin/google_guest_agent		--	gen_context(system_u:object_r:google_guest_agent_exec_t,s0)
+
+/usr/bin/google_metadata_script_runner		--	gen_context(system_u:object_r:google_guest_agent_exec_t,s0)
+
+/usr/lib/systemd/system-preset/90-google-guest-agent.preset		--	gen_context(system_u:object_r:google_guest_agent_unit_file_t,s0)
+
+/usr/lib/systemd/system/gce-workload-cert-refresh.service		--	gen_context(system_u:object_r:google_guest_agent_unit_file_t,s0)
+
+/usr/lib/systemd/system/gce-workload-cert-refresh.timer		--	gen_context(system_u:object_r:google_guest_agent_unit_file_t,s0)
+
+/usr/lib/systemd/system/google-guest-agent-manager.service		--	gen_context(system_u:object_r:google_guest_agent_unit_file_t,s0)
+
+/usr/lib/systemd/system/google-guest-agent.service		--	gen_context(system_u:object_r:google_guest_agent_unit_file_t,s0)
+
+/usr/lib/systemd/system/google-shutdown-scripts.service		--	gen_context(system_u:object_r:google_guest_agent_unit_file_t,s0)
+
+/usr/lib/systemd/system/google-startup-scripts.service		--	gen_context(system_u:object_r:google_guest_agent_unit_file_t,s0)
