@@ -20,9 +20,7 @@
 
 version=$1
 
-GOOS=windows /tmp/go/bin/go build -ldflags "-X main.version=$version" -mod=readonly -o GCEWindowsAgent.exe ./google_guest_agent
 GOOS=windows /tmp/go/bin/go build -ldflags "-X main.version=$version" -mod=readonly -o GCEAuthorizedKeysCommand.exe ./google_authorized_keys
-
 
 # Script expects guest-agent and google-guest-agent codebase are placed
 # side-by-side within same directory and this script is executed from root of 
