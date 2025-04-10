@@ -54,12 +54,7 @@ Contains the Google guest agent binary.
 %endif
 
 %build
-for bin in google_guest_agent google_metadata_script_runner gce_workload_cert_refresh; do
-  pushd "$bin"
-  GOPATH=%{_gopath} CGO_ENABLED=0 %{_go} build -ldflags="-s -w -X main.version=%{_version}" -mod=readonly
-  popd
-done
-# Build side-by-side both new agent (plugin manager) and legacy agent.
+# Build all %{_go} binaries from new agent.
 %if 0%{?build_plugin_manager}
 pushd %{name}-extra-%{version}/
   VERSION=%{version} make cmd/google_guest_agent/google_guest_agent
@@ -76,9 +71,6 @@ install -d "%{buildroot}/%{_docdir}/%{name}"
 cp -r THIRD_PARTY_LICENSES "%buildroot/%_docdir/%name/THIRD_PARTY_LICENSES"
 
 install -d %{buildroot}%{_bindir}
-install -p -m 0755 google_guest_agent/google_guest_agent %{buildroot}%{_bindir}/google_guest_agent
-install -p -m 0755 google_metadata_script_runner/google_metadata_script_runner %{buildroot}%{_bindir}/google_metadata_script_runner
-install -p -m 0755 gce_workload_cert_refresh/gce_workload_cert_refresh %{buildroot}%{_bindir}/gce_workload_cert_refresh
 install -d %{buildroot}/usr/share/google-guest-agent
 install -p -m 0644 instance_configs.cfg %{buildroot}/usr/share/google-guest-agent/instance_configs.cfg
 
@@ -119,7 +111,6 @@ install -p -m 0644 90-%{name}.preset %{buildroot}%{_presetdir}/90-%{name}.preset
 %{_docdir}/%{name}
 %defattr(-,root,root,-)
 /usr/share/google-guest-agent/instance_configs.cfg
-%{_bindir}/google_guest_agent
 
 %if 0%{?build_plugin_manager}
 %{_bindir}/gce_metadata_script_runner
@@ -130,8 +121,6 @@ install -p -m 0644 90-%{name}.preset %{buildroot}%{_presetdir}/90-%{name}.preset
 %{_exec_prefix}/lib/google/guest_agent/core_plugin
 %endif
 
-%{_bindir}/google_metadata_script_runner
-%{_bindir}/gce_workload_cert_refresh
 %if 0%{?el6}
 /etc/init/%{name}.conf
 /etc/init/google-startup-scripts.conf
@@ -163,10 +152,8 @@ if [ $1 -eq 1 ]; then
 
   # Use enable instead of preset because preset is not supported in
   # chroots.
-  systemctl enable google-guest-agent.service >/dev/null 2>&1 || :
   systemctl enable google-startup-scripts.service >/dev/null 2>&1 || :
   systemctl enable google-shutdown-scripts.service >/dev/null 2>&1 || :
-  systemctl enable gce-workload-cert-refresh.timer >/dev/null 2>&1 || :
 
   %if 0%{?build_plugin_manager}
     systemctl enable google-guest-compat-manager.service >/dev/null 2>&1 || :
@@ -175,8 +162,6 @@ if [ $1 -eq 1 ]; then
 
   if [ -d /run/systemd/system ]; then
     systemctl daemon-reload >/dev/null 2>&1 || :
-    systemctl start google-guest-agent.service >/dev/null 2>&1 || :
-    systemctl start gce-workload-cert-refresh.timer >/dev/null 2>&1 || :
     %if 0%{?build_plugin_manager}
       systemctl start google-guest-compat-manager.service >/dev/null 2>&1 || :
       systemctl start google-guest-agent-manager.service >/dev/null 2>&1 || :
@@ -188,7 +173,6 @@ else
   # Package upgrade
   if [ -d /run/systemd/system ]; then
     systemctl daemon-reload >/dev/null 2>&1 || :
-    systemctl try-restart google-guest-agent.service >/dev/null 2>&1 || :
     %if 0%{?build_plugin_manager}
       systemctl enable google-guest-compat-manager.service >/dev/null 2>&1 || :
       systemctl restart google-guest-compat-manager.service >/dev/null 2>&1 || :
