@@ -38,6 +38,8 @@ if [[ ! -f "$GUEST_AGENT_REPO/Makefile" ]]; then
     echo "This is a placeholder file so guest agent package build without error. Package will have actual Guest Agent Manager executable instead if both repos are cloned side-by-side." > CorePlugin.exe
     echo "This is a placeholder file so guest agent package build without error. Package will have actual Guest Agent Manager executable instead if both repos are cloned side-by-side." > GCEMetadataScriptRunner.exe
     echo "This is a placeholder file so guest agent package build without error. Package will have actual Guest Agent Manager executable instead if both repos are cloned side-by-side." > GCECompatMetadataScripts.exe
+    echo "This is a placeholder file so guest agent package build without error. Package will have actual Guest Agent Manager executable instead if both repos are cloned side-by-side." > GCEAuthorizedKeys.exe
+    echo "This is a placeholder file so guest agent package build without error. Package will have actual Guest Agent Manager executable instead if both repos are cloned side-by-side." > GCEAuthorizedKeysNew.exe
     exit 0
 fi
 
@@ -49,6 +51,8 @@ GOOS=windows VERSION=$version make cmd/google_guest_compat_manager/google_guest_
 GOOS=windows VERSION=$version make cmd/core_plugin/core_plugin
 GOOS=windows VERSION=$version make cmd/gce_metadata_script_runner/gce_metadata_script_runner
 GOOS=windows VERSION=$version make cmd/metadata_script_runner_compat/gce_compat_metadata_script_runner
+GOOS=windows VERSION=$version make cmd/google_authorized_keys_compat/google_authorized_keys_compat
+GOOS=windows VERSION=$version make cmd/google_authorized_keys/google_authorized_keys
 
 cp cmd/google_guest_agent/google_guest_agent $BUILD_DIR/GCEWindowsAgentManager.exe
 cp cmd/ggactl/ggactl_plugin_cleanup $BUILD_DIR/ggactl_plugin_cleanup.exe
@@ -56,4 +60,10 @@ cp cmd/google_guest_compat_manager/google_guest_compat_manager $BUILD_DIR/GCEWin
 cp cmd/core_plugin/core_plugin $BUILD_DIR/CorePlugin.exe
 cp cmd/gce_metadata_script_runner/gce_metadata_script_runner $BUILD_DIR/GCEMetadataScriptRunner.exe
 cp cmd/metadata_script_runner_compat/gce_compat_metadata_script_runner $BUILD_DIR/GCECompatMetadataScripts.exe
+
+if [[ -f cmd/google_authorized_keys_compat/google_authorized_keys_compat ]]; then
+  cp $BUILD_DIR/GCEAuthorizedKeysCommand.exe $BUILD_DIR/GCEAuthorizedKeys.exe
+  cp cmd/google_authorized_keys_compat/google_authorized_keys_compat $BUILD_DIR/GCEAuthorizedKeysCommand.exe
+  cp cmd/google_authorized_keys/google_authorized_keys $BUILD_DIR/GCEAuthorizedKeysNew.exe
+fi
 popd
