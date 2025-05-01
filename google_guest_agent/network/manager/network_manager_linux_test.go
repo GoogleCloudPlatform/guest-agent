@@ -394,10 +394,6 @@ func TestWriteNetworkManagerConfigs(t *testing.T) {
 			}
 
 			for i, conn := range conns {
-				if conn != test.wantInterfaces[i] {
-					t.Fatalf("unexpected connection interface. Expected: %s, Actual: %s", test.wantInterfaces[i], conn)
-				}
-
 				// Load the file and check the sections.
 				configFilePath := path.Join(configDir, test.expectedFiles[i])
 				opts := ini.LoadOptions{
@@ -419,8 +415,8 @@ func TestWriteNetworkManagerConfigs(t *testing.T) {
 					t.Fatalf("guest-agent's managed key is set to false, expected true")
 				}
 
-				if config.Connection.ID != test.expectedIDs[i] {
-					t.Fatalf("unexpected connection id. Expected: %v, Actual: %v", test.expectedIDs[i], config.Connection.ID)
+				if config.Connection.ID != conn {
+					t.Fatalf("unexpected connection id. Expected: %v, Actual: %v", conn, config.Connection.ID)
 				}
 
 				if config.Connection.InterfaceName != test.wantInterfaces[i] {

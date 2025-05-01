@@ -183,15 +183,13 @@ func (n *networkManager) SetupEthernetInterface(ctx context.Context, config *cfg
 		return fmt.Errorf("error reloading NetworkManager config cache: %v", err)
 	}
 
-	// We ignore the primary interface below. Attempt to spin up interfaces if we get
-	// atleast more than one in response.
-	if len(interfaces) <= 1 {
-		return nil
-	}
+	logger.Infof("Bringing up %v connection profiles", interfaces)
 
-	// Enable the new connections. Ignore the primary interface as it will already be up.
-	for _, ifname := range interfaces[1:] {
-		if err = run.Quiet(ctx, "nmcli", "conn", "up", "ifname", ifname); err != nil {
+	// Enable the new connections. List will contain only those IDs which are added by
+	// agent and needs to be refreshed.
+	for _, ifname := range interfaces {
+		// https://networkmanager.dev/docs/api/latest/nmcli.html
+		if err = run.Quiet(ctx, "nmcli", "conn", "up", "id", ifname); err != nil {
 			return fmt.Errorf("error enabling connection %s: %v", ifname, err)
 		}
 	}
@@ -340,7 +338,7 @@ func (n *networkManager) writeNetworkManagerConfigs(ifaces []string) ([]string, 
 			}
 		}
 
-		result = append(result, iface)
+		result = append(result, connID)
 	}
 
 	return result, nil
