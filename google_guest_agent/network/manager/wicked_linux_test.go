@@ -251,6 +251,9 @@ func TestWriteEthernetConfigs(t *testing.T) {
 		// a configuration file.
 		testInterfaces []string
 
+		// expectedReloads is the list of interfaces to reload.
+		expectedReloads []string
+
 		// expectedFiles is the list of expected file names.
 		expectedFiles []string
 
@@ -261,12 +264,14 @@ func TestWriteEthernetConfigs(t *testing.T) {
 		{
 			name:             "one-nic",
 			testInterfaces:   []string{"iface"},
+			expectedReloads:  []string{},
 			expectedFiles:    []string{"ifcfg-iface"},
 			expectedPriority: []string{"10100"},
 		},
 		{
 			name:             "multinic",
 			testInterfaces:   []string{"iface0", "iface1", "iface2"},
+			expectedReloads:  []string{"iface1", "iface2"},
 			expectedFiles:    []string{"ifcfg-iface0", "ifcfg-iface1", "ifcfg-iface2"},
 			expectedPriority: []string{"10100", "10200", "10300", "10400"},
 		},
@@ -276,9 +281,14 @@ func TestWriteEthernetConfigs(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			wickedTestSetup(t, wickedTestOpts{})
 
-			err := mockWicked.writeEthernetConfigs(test.testInterfaces)
+			written, err := mockWicked.writeEthernetConfigs(test.testInterfaces)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
+			}
+
+			// Since everything is written, everything should also be reloaded.
+			if !slices.Equal(written, test.expectedReloads) {
+				t.Fatalf("writeEthernetConfigs(%v) returned %v, expected %v", test.testInterfaces, written, test.expectedReloads)
 			}
 
 			// Check file contents.
