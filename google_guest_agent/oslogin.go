@@ -188,11 +188,13 @@ func (o *osloginMgr) Set(ctx context.Context) error {
 			logger.Errorf("Error creating OS Login sudoers file: %v.", err)
 		}
 
-		logger.Debugf("starting OS Login nss cache fill")
-		if err := run.Quiet(ctx, "google_oslogin_nss_cache"); err != nil {
-			logger.Errorf("Error updating NSS cache: %v.", err)
-		}
-
+		// Refresh the NSS cache asynchronously; this can take a while and shouldn't block.
+		go func() {
+			logger.Debugf("starting OS Login nss cache fill")
+			if err := run.Quiet(ctx, "google_oslogin_nss_cache"); err != nil {
+				logger.Errorf("Error updating NSS cache: %v.", err)
+			}
+		}()
 	}
 
 	return nil
