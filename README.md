@@ -1,4 +1,4 @@
-## Guest Agent for Google Compute Engine
+## Guest Agent for Google Compute Engine (stable branch)
 
 This repository contains the source code and packaging artifacts for the Google
 guest agent and metadata script runner binaries. These components are installed
