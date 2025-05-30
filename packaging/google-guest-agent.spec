@@ -78,6 +78,7 @@ cp -r THIRD_PARTY_LICENSES "%buildroot/%_docdir/%name/THIRD_PARTY_LICENSES"
 install -d %{buildroot}%{_bindir}
 install -p -m 0755 google_guest_agent/google_guest_agent %{buildroot}%{_bindir}/google_guest_agent
 install -p -m 0755 google_metadata_script_runner/google_metadata_script_runner %{buildroot}%{_bindir}/google_metadata_script_runner
+install -p -m 0755 google_metadata_script_runner_adapt %{buildroot}%{_bindir}/google_metadata_script_runner_adapt
 install -p -m 0755 gce_workload_cert_refresh/gce_workload_cert_refresh %{buildroot}%{_bindir}/gce_workload_cert_refresh
 install -d %{buildroot}/usr/share/google-guest-agent
 install -p -m 0644 instance_configs.cfg %{buildroot}/usr/share/google-guest-agent/instance_configs.cfg
@@ -131,6 +132,7 @@ install -p -m 0644 90-%{name}.preset %{buildroot}%{_presetdir}/90-%{name}.preset
 %endif
 
 %{_bindir}/google_metadata_script_runner
+%{_bindir}/google_metadata_script_runner_adapt
 %{_bindir}/gce_workload_cert_refresh
 %if 0%{?el6}
 /etc/init/%{name}.conf
