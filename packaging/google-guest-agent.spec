@@ -91,6 +91,12 @@ install -p -m 0755 %{name}-extra-%{version}/cmd/ggactl/ggactl_plugin_cleanup %{b
 install -p -m 0755 %{name}-extra-%{version}/cmd/google_guest_compat_manager/google_guest_compat_manager %{buildroot}%{_bindir}/google_guest_compat_manager
 install -p -m 0755 %{name}-extra-%{version}/cmd/core_plugin/core_plugin %{buildroot}%{_exec_prefix}/lib/google/guest_agent/core_plugin
 install -p -m 0755 %{name}-extra-%{version}/cmd/metadata_script_runner_compat/gce_compat_metadata_script_runner %{buildroot}%{_bindir}/gce_compat_metadata_script_runner
+
+sed -i "s/ggactl/ggactl_plugin_cleanup/g" -i %{name}-extra-%{version}/build/configs/google_guest_agent_routes_setup.sh
+install -p -m 0755 %{name}-extra-%{version}/build/configs/google_guest_agent_routes_setup.sh %{buildroot}/usr/lib/networkd-dispatcher/routable.d/google_guest_agent_routes_setup.sh
+install -p -m 0755 %{name}-extra-%{version}/build/configs/google_guest_agent_routes_setup.sh %{buildroot}/etc/NetworkManager/dispatcher.d/google_guest_agent_routes_setup.sh
+install -p -m 0755 %{name}-extra-%{version}/build/configs/google_guest_agent_routes_setup.sh %{buildroot}/etc/sysconfig/network/scripts/google_guest_agent_routes_setup.sh
+
 %endif
 
 %if 0%{?el6}
