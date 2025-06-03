@@ -1,0 +1,12 @@
+#!/bin/env bash
+#
+# This script wraps compatibility logic of guest agent's startup script
+# runner. If compat manager is present run it, otherwise launch the
+# known service binary.
+#
+
+if [ -e /usr/bin/gce_compat_metadata_script_runner ]; then
+  /usr/bin/gce_compat_metadata_script_runner startup
+else
+  /usr/bin/google_metadata_script_runner startup
+fi
