@@ -29,7 +29,7 @@ override_dh_auto_install:
 		install -p -m 0755 google-guest-agent/cmd/gce_metadata_script_runner/gce_metadata_script_runner debian/google-guest-agent/usr/bin/gce_metadata_script_runner;\
 		install -p -m 0755 google-guest-agent/cmd/google_guest_compat_manager/google_guest_compat_manager debian/google-guest-agent/usr/bin/google_guest_compat_manager;\
 		install -p -m 0755 google-guest-agent/cmd/google_guest_agent/google_guest_agent debian/google-guest-agent/usr/bin/google_guest_agent_manager;\
-		install -p -m 0755 google-guest-agent/cmd/ggactl/ggactl_plugin_cleanup debian/google-guest-agent/usr/bin/ggactl_plugin_cleanup;\
+		install -p -m 0755 google-guest-agent/cmd/ggactl/ggactl_plugin debian/google-guest-agent/usr/bin/ggactl_plugin;\
 		install -p -m 0755 google-guest-agent/cmd/core_plugin/core_plugin debian/google-guest-agent/usr/lib/google/guest_agent/core_plugin;\
 		install -p -m 0755 google-guest-agent/cmd/metadata_script_runner_compat/gce_compat_metadata_script_runner debian/google-guest-agent/usr/bin/gce_compat_metadata_script_runner;\
 	fi
@@ -42,7 +42,7 @@ override_dh_auto_build:
 	if [ -d google-guest-agent ]; then\
 		VERSION=$(VERSION) make -C google-guest-agent cmd/google_guest_compat_manager/google_guest_compat_manager;\
 		VERSION=$(VERSION) make -C google-guest-agent cmd/google_guest_agent/google_guest_agent;\
-		VERSION=$(VERSION) make -C google-guest-agent cmd/ggactl/ggactl_plugin_cleanup;\
+		VERSION=$(VERSION) make -C google-guest-agent cmd/ggactl/ggactl_plugin;\
 		VERSION=$(VERSION) make -C google-guest-agent cmd/core_plugin/core_plugin;\
 		VERSION=$(VERSION) make -C google-guest-agent cmd/gce_metadata_script_runner/gce_metadata_script_runner;\
 		VERSION=$(VERSION) make -C google-guest-agent cmd/metadata_script_runner_compat/gce_compat_metadata_script_runner;\
