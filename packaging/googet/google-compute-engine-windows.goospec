@@ -16,7 +16,7 @@
     "GCEAuthorizedKeysCommand.exe": "<ProgramFiles>/Google/Compute Engine/agent/GCEAuthorizedKeysCommand.exe",
     "GCEAuthorizedKeys.exe": "<ProgramFiles>/Google/Compute Engine/agent/GCEAuthorizedKeys.exe",
     "GCEAuthorizedKeysNew.exe": "<ProgramFiles>/Google/Compute Engine/agent/GCEAuthorizedKeysNew.exe",
-    "ggactl_plugin_cleanup.exe": "<ProgramFiles>/Google/Compute Engine/agent/ggactl_plugin_cleanup.exe",
+    "ggactl_plugin.exe": "<ProgramFiles>/Google/Compute Engine/agent/ggactl_plugin.exe",
     "THIRD_PARTY_LICENSES": "<ProgramFiles>/Google/Compute Engine/THIRD_PARTY_LICENSES/",
     "LICENSE": "<ProgramFiles>/Google/Compute Engine/agent/LICENSE.txt"
   },
@@ -44,7 +44,7 @@
   "sources": [{
       "include": [
         "CorePlugin.exe",
-        "ggactl_plugin_cleanup.exe",
+        "ggactl_plugin.exe",
         "GCEWindowsAgent.exe",
         "GCECompatMetadataScripts.exe",
         "GCEWindowsCompatManager.exe",
