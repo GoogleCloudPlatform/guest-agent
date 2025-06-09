@@ -8,6 +8,7 @@ Type=notify
 ExecStart=/usr/bin/google_guest_agent_manager
 OOMScoreAdjust=-999
 Restart=always
+KillMode=process
 
 [Install]
 WantedBy=multi-user.target
