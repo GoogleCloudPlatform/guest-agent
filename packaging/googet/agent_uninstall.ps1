@@ -17,7 +17,7 @@ Stop-Service GCEAgent -Verbose
 
 $compat_manager = 'GCEWindowsCompatManager'
 $name = 'GCEAgentManager'
-$cleanup_exe = "C:\Program Files\Google\Compute Engine\agent\ggactl_plugin_cleanup.exe"
+$cleanup_exe = "C:\Program Files\Google\Compute Engine\agent\ggactl_plugin.exe"
 
 # Stop and Delete compat manager.
 if (Get-Service $compat_manager -ErrorAction SilentlyContinue) {
@@ -28,7 +28,7 @@ if (Get-Service $compat_manager -ErrorAction SilentlyContinue) {
 # Stop Guest Agent Manager, cleanup all plugins (if present) and delete the service.
 if (Get-Service $name -ErrorAction SilentlyContinue) {
     Stop-Service $name -Verbose
-    & $cleanup_exe all
+    & $cleanup_exe dynamic-cleanup
     & sc.exe delete $name
 }
 
