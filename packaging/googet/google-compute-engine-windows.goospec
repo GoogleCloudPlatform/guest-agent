@@ -13,7 +13,7 @@
     "GCEWindowsCompatManager.exe": "<ProgramFiles>/Google/Compute Engine/agent/GCEWindowsCompatManager.exe",
     "GCECompatMetadataScripts.exe": "<ProgramFiles>/Google/Compute Engine/metadata_scripts/GCECompatMetadataScripts.exe",
     "GCEAuthorizedKeysCommand.exe": "<ProgramFiles>/Google/Compute Engine/agent/GCEAuthorizedKeysCommand.exe",
-    "ggactl_plugin_cleanup.exe": "<ProgramFiles>/Google/Compute Engine/agent/ggactl_plugin_cleanup.exe",
+    "ggactl_plugin.exe": "<ProgramFiles>/Google/Compute Engine/agent/ggactl_plugin.exe",
     "THIRD_PARTY_LICENSES": "<ProgramFiles>/Google/Compute Engine/THIRD_PARTY_LICENSES/",
     "LICENSE": "<ProgramFiles>/Google/Compute Engine/agent/LICENSE.txt"
   },
@@ -41,7 +41,7 @@
   "sources": [{
       "include": [
         "CorePlugin.exe",
-        "ggactl_plugin_cleanup.exe",
+        "ggactl_plugin.exe",
         "GCECompatMetadataScripts.exe",
         "GCEWindowsCompatManager.exe",
         "GCEMetadataScriptRunner.exe",
