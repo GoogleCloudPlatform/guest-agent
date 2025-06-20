@@ -134,7 +134,7 @@ install -p -m 0644 90-%{name}.preset %{buildroot}%{_presetdir}/90-%{name}.preset
 %{_bindir}/ggactl_plugin
 %{_exec_prefix}/lib/google/guest_agent/core_plugin
 
-/etc/NetworkManager/dispatcher.d/google_guest_agent_routes.sh
+/etc/NetworkManager/dispatcher.d/google_guest_agent_routes_setup.sh
 %endif
 
 %{_bindir}/google_metadata_script_runner
