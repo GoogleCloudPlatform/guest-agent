@@ -92,6 +92,10 @@ install -p -m 0755 %{name}-extra-%{version}/cmd/ggactl/ggactl_plugin %{buildroot
 install -p -m 0755 %{name}-extra-%{version}/cmd/google_guest_compat_manager/google_guest_compat_manager %{buildroot}%{_bindir}/google_guest_compat_manager
 install -p -m 0755 %{name}-extra-%{version}/cmd/core_plugin/core_plugin %{buildroot}%{_exec_prefix}/lib/google/guest_agent/core_plugin
 install -p -m 0755 %{name}-extra-%{version}/cmd/metadata_script_runner_compat/gce_compat_metadata_script_runner %{buildroot}%{_bindir}/gce_compat_metadata_script_runner
+
+# Dispatcher hook route setup.
+install -d /etc/NetworkManager/dispatcher.d
+install -p -m 0755 %{name}-extra-%{version}/build/configs/google_guest_agent_routes_setup.sh %{buildroot}/etc/NetworkManager/dispatcher.d/google_guest_agent_routes_setup.sh
 %endif
 
 %if 0%{?el6}
@@ -129,6 +133,8 @@ install -p -m 0644 90-%{name}.preset %{buildroot}%{_presetdir}/90-%{name}.preset
 %{_bindir}/google_guest_agent_manager
 %{_bindir}/ggactl_plugin
 %{_exec_prefix}/lib/google/guest_agent/core_plugin
+
+/etc/NetworkManager/dispatcher.d/google_guest_agent_routes.sh
 %endif
 
 %{_bindir}/google_metadata_script_runner
