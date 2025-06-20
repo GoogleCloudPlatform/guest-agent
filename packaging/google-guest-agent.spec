@@ -94,7 +94,7 @@ install -p -m 0755 %{name}-extra-%{version}/cmd/core_plugin/core_plugin %{buildr
 install -p -m 0755 %{name}-extra-%{version}/cmd/metadata_script_runner_compat/gce_compat_metadata_script_runner %{buildroot}%{_bindir}/gce_compat_metadata_script_runner
 
 # Dispatcher hook route setup.
-install -d /etc/NetworkManager/dispatcher.d
+install -d %{buildroot}/etc/NetworkManager/dispatcher.d
 install -p -m 0755 %{name}-extra-%{version}/build/configs/google_guest_agent_routes_setup.sh %{buildroot}/etc/NetworkManager/dispatcher.d/google_guest_agent_routes_setup.sh
 %endif
 
