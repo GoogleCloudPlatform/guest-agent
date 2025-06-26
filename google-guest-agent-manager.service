@@ -1,5 +1,7 @@
 [Unit]
 Description=Google Compute Engine Guest Agent Plugin Manager
+# Start before sshd in order to regenerate SSH host keys.
+Before=sshd.service
 After=network-online.target syslog.service
 After=network.service networking.service NetworkManager.service systemd-networkd.service
 

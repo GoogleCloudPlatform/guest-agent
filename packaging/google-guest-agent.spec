@@ -171,7 +171,6 @@ if [ $1 -eq 1 ]; then
 
   # Use enable instead of preset because preset is not supported in
   # chroots.
-  systemctl enable google-guest-agent.service >/dev/null 2>&1 || :
   systemctl enable google-startup-scripts.service >/dev/null 2>&1 || :
   systemctl enable google-shutdown-scripts.service >/dev/null 2>&1 || :
   systemctl enable gce-workload-cert-refresh.timer >/dev/null 2>&1 || :
@@ -183,7 +182,6 @@ if [ $1 -eq 1 ]; then
 
   if [ -d /run/systemd/system ]; then
     systemctl daemon-reload >/dev/null 2>&1 || :
-    systemctl start google-guest-agent.service >/dev/null 2>&1 || :
     systemctl start gce-workload-cert-refresh.timer >/dev/null 2>&1 || :
     %if 0%{?build_plugin_manager}
       systemctl start google-guest-compat-manager.service >/dev/null 2>&1 || :
@@ -197,12 +195,13 @@ else
   %if 0%{?build_plugin_manager}
       systemctl enable google-guest-compat-manager.service >/dev/null 2>&1 || :
       systemctl enable google-guest-agent-manager.service >/dev/null 2>&1 || :
+      systemctl disable google-guest-agent.service >/dev/null 2>&1 || :
   %endif
     
   if [ -d /run/systemd/system ]; then
     systemctl daemon-reload >/dev/null 2>&1 || :
-    systemctl try-restart google-guest-agent.service >/dev/null 2>&1 || :
     %if 0%{?build_plugin_manager}
+      systemctl stop google-guest-agent.service >/dev/null 2>&1 || :
       systemctl restart google-guest-compat-manager.service >/dev/null 2>&1 || :
       systemctl restart google-guest-agent-manager.service >/dev/null 2>&1 || :
     %endif

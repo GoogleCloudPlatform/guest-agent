@@ -63,16 +63,19 @@ override_dh_systemd_enable:
 	fi
 	install -d debian/google-guest-agent/lib/systemd/system-preset
 	install -p -m 0644 *.preset debian/google-guest-agent/lib/systemd/system-preset/
-	dh_systemd_enable google-guest-agent.service google-startup-scripts.service google-shutdown-scripts.service gce-workload-cert-refresh.timer
+	dh_systemd_enable google-startup-scripts.service google-shutdown-scripts.service
 	if [ -d google-guest-agent ]; then\
 		dh_systemd_enable google-guest-compat-manager.service;\
 		dh_systemd_enable google-guest-agent-manager.service;\
 	fi
 
+override_dh_installsystemd:
+	if [ -d google-guest-agent ]; then\
+		dh_installsystemd --no-enable --no-start google-guest-agent.service;\
+		dh_installsystemd --no-enable --no-start gce-workload-cert-refresh.timer;\
+	fi
+
 override_dh_systemd_start:
-	# Only perform start/stop actions for the guest agent and cert refresh timer.
-	dh_systemd_start google-guest-agent.service
-	dh_systemd_start gce-workload-cert-refresh.timer
 	if [ -d google-guest-agent ]; then\
 		dh_systemd_start google-guest-compat-manager.service;\
 		dh_systemd_start google-guest-agent-manager.service;\
