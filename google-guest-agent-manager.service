@@ -13,4 +13,6 @@ Restart=always
 KillMode=process
 
 [Install]
+WantedBy=sshd.service
 WantedBy=multi-user.target
+WantedBy=network.service networking.service NetworkManager.service systemd-networkd.service
