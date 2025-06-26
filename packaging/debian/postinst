@@ -13,6 +13,10 @@ if [ "$1" = "configure" ] ; then
       systemctl enable 'gce-workload-cert-refresh.timer' > /dev/null || true
     fi
   fi
+
+  # Disable and stop this service in favor of core plugin to be run on default.
+  systemctl disable 'google-guest-agent.service' > /dev/null || true
+  systemctl stop 'google-guest-agent.service' > /dev/null || true
 fi
 
 #DEBHELPER#

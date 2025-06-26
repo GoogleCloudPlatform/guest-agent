@@ -71,6 +71,8 @@ override_dh_systemd_enable:
 
 override_dh_installsystemd:
 	if [ -d google-guest-agent ]; then\
+		dh_installsystemd google-guest-compat-manager.service;\
+		dh_installsystemd google-guest-agent-manager.service;\
 		dh_installsystemd --no-enable --no-start google-guest-agent.service;\
 		dh_installsystemd --no-enable --no-start gce-workload-cert-refresh.timer;\
 	fi
