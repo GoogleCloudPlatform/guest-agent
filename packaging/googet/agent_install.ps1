@@ -101,11 +101,13 @@ try {
     $initial_config | Set-Content -Path $config -Encoding ASCII
   }
 
-  Restart-Service $name -Verbose
-
   if ($install_manager) {
+    & sc.exe config $name start=disabled
+    Stop-Service $name
     Restart-Service $compat_manager -Verbose
     Restart-Service $manager_name -Verbose
+  } else {
+     Restart-Service $name -Verbose
   }
 }
 catch {
