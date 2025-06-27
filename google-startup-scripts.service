@@ -1,7 +1,7 @@
 [Unit]
 Description=Google Compute Engine Startup Scripts
 Wants=network-online.target rsyslog.service
-After=network-online.target rsyslog.service google-guest-agent.service
+After=network-online.target rsyslog.service google-guest-agent-manager.service
 Before=apt-daily.service
 
 [Service]
