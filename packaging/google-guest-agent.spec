@@ -233,6 +233,7 @@ if [ $1 -eq 0 ]; then
     %if 0%{?build_plugin_manager}
       systemctl stop google-guest-compat-manager.service >/dev/null 2>&1 || :
       systemctl stop google-guest-agent-manager.service >/dev/null 2>&1 || :
+      ggactl_plugin coreplugin stop >/dev/null 2>&1 || :
       ggactl_plugin dynamic-cleanup >/dev/null 2>&1 || :
     %endif
   fi
