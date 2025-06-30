@@ -13,6 +13,17 @@ if [ "$1" = "configure" ] ; then
       systemctl enable 'gce-workload-cert-refresh.timer' > /dev/null || true
     fi
   fi
+
+  # Disable and stop this service in favor of original guest-agent instead of core plugin.
+  systemctl disable 'google-guest-compat-manager.service' > /dev/null || true
+  systemctl stop 'google-guest-compat-manager.service' > /dev/null || true
+
+  # Stop core plugin.
+  ggactl_plugin coreplugin stop >/dev/null 2>&1 || :
+
+  # Enable the legacy agent again.
+  systemctl enable 'google-guest-agent.service' > /dev/null || true
+  systemctl start 'google-guest-agent.service' > /dev/null || true
 fi
 
 #DEBHELPER#
