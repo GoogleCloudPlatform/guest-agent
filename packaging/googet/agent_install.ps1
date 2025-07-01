@@ -27,6 +27,8 @@ $compat_path = '"C:\Program Files\Google\Compute Engine\agent\GCEWindowsCompatMa
 $compat_display_name = 'Google Compute Engine Compat Manager'
 $compat_description = 'Google Compute Engine Compat Manager'
 
+$ggactl_exe = "C:\Program Files\Google\Compute Engine\agent\ggactl_plugin.exe"
+
 $initial_config = @'
 # GCE Instance Configuration
 
@@ -101,11 +103,16 @@ try {
     $initial_config | Set-Content -Path $config -Encoding ASCII
   }
 
+  & sc.exe config $name start=auto
   Restart-Service $name -Verbose
 
   if ($install_manager) {
-    Restart-Service $compat_manager -Verbose
-    Restart-Service $manager_name -Verbose
+    & sc.exe config $compat_manager start=disabled
+    Stop-Service $compat_manager -Verbose
+
+    Stop-Service $manager_name -Verbose
+    & $ggactl_exe coreplugin stop
+    Start-Service $manager_name -Verbose
   }
 }
 catch {
