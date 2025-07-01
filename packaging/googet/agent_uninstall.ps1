@@ -12,8 +12,10 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-Stop-Service GCEAgent -Verbose
-& sc.exe delete GCEAgent
+if (Get-Service GCEAgent -ErrorAction SilentlyContinue) {
+    Stop-Service GCEAgent -Verbose
+    & sc.exe delete GCEAgent
+}
 
 $compat_manager = 'GCEWindowsCompatManager'
 $name = 'GCEAgentManager'
