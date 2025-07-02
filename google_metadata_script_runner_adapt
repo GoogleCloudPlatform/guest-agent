@@ -6,7 +6,7 @@
 #
 
 if [ -e /usr/bin/gce_compat_metadata_script_runner ]; then
-  /usr/bin/gce_compat_metadata_script_runner startup
+  /usr/bin/gce_compat_metadata_script_runner $1
 else
-  /usr/bin/google_metadata_script_runner startup
+  /usr/bin/google_metadata_script_runner $1
 fi
