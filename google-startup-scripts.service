@@ -6,7 +6,7 @@ Before=apt-daily.service
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/google_metadata_script_runner_adapt
+ExecStart=/usr/bin/google_metadata_script_runner_adapt startup
 #TimeoutStartSec is ignored for Type=oneshot service units.
 KillMode=process
 StandardOutput=journal+console
