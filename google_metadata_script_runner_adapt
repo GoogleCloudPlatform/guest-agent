@@ -7,4 +7,4 @@
 # binary.
 #
 
-/usr/bin/google_metadata_script_runner startup
+/usr/bin/google_metadata_script_runner $1
