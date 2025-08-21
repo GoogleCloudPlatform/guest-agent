@@ -32,8 +32,6 @@ override_dh_auto_install:
 		install -p -m 0755 google-guest-agent/cmd/ggactl/ggactl_plugin debian/google-guest-agent/usr/bin/ggactl_plugin;\
 		install -p -m 0755 google-guest-agent/cmd/core_plugin/core_plugin debian/google-guest-agent/usr/lib/google/guest_agent/core_plugin;\
 		install -p -m 0755 google-guest-agent/cmd/metadata_script_runner_compat/gce_compat_metadata_script_runner debian/google-guest-agent/usr/bin/gce_compat_metadata_script_runner;\
-		install -d debian/google-guest-agent/usr/lib/networkd-dispatcher/routable.d;\
-		install -p -m 0755 google-guest-agent/build/configs/google_guest_agent_routes_setup.sh debian/google-guest-agent/usr/lib/networkd-dispatcher/routable.d/;\
 	fi
 
 override_dh_golang:
