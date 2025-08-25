@@ -1,0 +1,103 @@
+
+## <summary>policy for google_guest_agent</summary>
+
+########################################
+## <summary>
+##	Execute google_guest_agent_exec_t in the google_guest_agent domain.
+## </summary>
+## <param name="domain">
+## <summary>
+##	Domain allowed to transition.
+## </summary>
+## </param>
+#
+interface(`google_guest_agent_domtrans',`
+	gen_require(`
+		type google_guest_agent_t, google_guest_agent_exec_t;
+	')
+
+	corecmd_search_bin($1)
+	domtrans_pattern($1, google_guest_agent_exec_t, google_guest_agent_t)
+')
+
+######################################
+## <summary>
+##	Execute google_guest_agent in the caller domain.
+## </summary>
+## <param name="domain">
+##	<summary>
+##	Domain allowed access.
+##	</summary>
+## </param>
+#
+interface(`google_guest_agent_exec',`
+	gen_require(`
+		type google_guest_agent_exec_t;
+	')
+
+	corecmd_search_bin($1)
+	can_exec($1, google_guest_agent_exec_t)
+')
+########################################
+## <summary>
+##	Execute google_guest_agent server in the google_guest_agent domain.
+## </summary>
+## <param name="domain">
+##	<summary>
+##	Domain allowed to transition.
+##	</summary>
+## </param>
+#
+interface(`google_guest_agent_systemctl',`
+	gen_require(`
+		type google_guest_agent_t;
+		type google_guest_agent_unit_file_t;
+	')
+
+	systemd_exec_systemctl($1)
+        systemd_read_fifo_file_passwd_run($1)
+	allow $1 google_guest_agent_unit_file_t:file read_file_perms;
+	allow $1 google_guest_agent_unit_file_t:service manage_service_perms;
+
+	ps_process_pattern($1, google_guest_agent_t)
+')
+
+
+########################################
+## <summary>
+##	All of the rules required to administrate
+##	an google_guest_agent environment
+## </summary>
+## <param name="domain">
+##	<summary>
+##	Domain allowed access.
+##	</summary>
+## </param>
+## <param name="role">
+##	<summary>
+##	Role allowed access.
+##	</summary>
+## </param>
+## <rolecap/>
+#
+interface(`google_guest_agent_admin',`
+	gen_require(`
+		type google_guest_agent_t;
+	type google_guest_agent_unit_file_t;
+	')
+
+	allow $1 google_guest_agent_t:process { signal_perms };
+	ps_process_pattern($1, google_guest_agent_t)
+
+    tunable_policy(`deny_ptrace',`',`
+        allow $1 google_guest_agent_t:process ptrace;
+    ')
+
+	google_guest_agent_systemctl($1)
+	admin_pattern($1, google_guest_agent_unit_file_t)
+	allow $1 google_guest_agent_unit_file_t:service all_service_perms;
+	optional_policy(`
+		systemd_passwd_agent_exec($1)
+		systemd_read_fifo_file_passwd_run($1)
+	')
+')
