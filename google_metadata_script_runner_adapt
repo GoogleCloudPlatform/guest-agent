@@ -1,4 +1,4 @@
-#!/bin/env bash
+#!/usr/bin/env bash
 #
 # This script wraps compatibility logic of guest agent's startup script
 # runner. If compat manager is present run it, otherwise launch the
