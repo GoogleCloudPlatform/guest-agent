@@ -136,10 +136,11 @@ func (o *osloginMgr) Set(ctx context.Context) error {
 		newMetadata.Instance.Attributes.SSHKeys = nil
 		newMetadata.Project.Attributes.SSHKeys = nil
 		(&accountsMgr{}).Set(ctx)
-	}
-
-	if !enable && oldEnable {
+	} else if !enable && oldEnable {
 		logger.Infof("Disabling OS Login")
+	} else {
+		// TODO is this ever an expected state?
+		logger.Warningf("Not enabling or disabling OS Login; enablement state is already as desired: %v", enable)
 	}
 
 	if err := writeSSHConfig(enable, twofactor, skey, reqCerts); err != nil {
@@ -380,13 +381,21 @@ func updateNSSwitchConfig(nsswitch string, enable bool) string {
 }
 
 func writeNSSwitchConfig(enable bool) error {
+	logger.Debug("Reading NSSwitch config file...")
 	nsswitch, err := os.ReadFile("/etc/nsswitch.conf")
 	if err != nil {
+		logger.Warningf("Error reading NSSwitch config file: %v", err)
 		return err
 	}
 	proposed := updateNSSwitchConfig(string(nsswitch), enable)
 	if proposed == string(nsswitch) {
+		logger.Debug("NSSwitch config file is as expected. No changes needed.")
 		return nil
+	}
+	if enable {
+		logger.Debug("Editing NSSwitch config file to enable OS Login.")
+	} else {
+		logger.Debug("Editing NSSwitch config file to disable OS Login.")
 	}
 	return writeConfigFile("/etc/nsswitch.conf", proposed)
 }
