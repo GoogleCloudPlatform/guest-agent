@@ -143,22 +143,22 @@ func (o *osloginMgr) Set(ctx context.Context) error {
 		// Idea: could we simply return early here, if there's really nothing to do?
 	}
 
-	logger.Debug("Updating SSH config...")
+	logger.Debugf("Updating SSH config...")
 	if err := writeSSHConfig(enable, twofactor, skey, reqCerts); err != nil {
 		logger.Errorf("Error updating SSH config: %v.", err)
 	}
 
-	logger.Debug("Updating NSS config...")
+	logger.Debugf("Updating NSS config...")
 	if err := writeNSSwitchConfig(enable); err != nil {
 		logger.Errorf("Error updating NSS config: %v.", err)
 	}
 
-	logger.Debug("Updating PAM config...")
+	logger.Debugf("Updating PAM config...")
 	if err := writePAMConfig(enable, twofactor); err != nil {
 		logger.Errorf("Error updating PAM config: %v.", err)
 	}
 
-	logger.Debug("Updating group.conf...")
+	logger.Debugf("Updating group.conf...")
 	if err := writeGroupConf(enable); err != nil {
 		logger.Errorf("Error updating group.conf: %v.", err)
 	}
@@ -385,7 +385,7 @@ func updateNSSwitchConfig(nsswitch string, enable bool) string {
 }
 
 func writeNSSwitchConfig(enable bool) error {
-	logger.Debug("Reading NSSwitch config file...")
+	logger.Debugf("Reading NSSwitch config file...")
 	nsswitch, err := os.ReadFile("/etc/nsswitch.conf")
 	if err != nil {
 		logger.Warningf("Error reading NSSwitch config file: %v", err)
@@ -393,13 +393,13 @@ func writeNSSwitchConfig(enable bool) error {
 	}
 	proposed := updateNSSwitchConfig(string(nsswitch), enable)
 	if proposed == string(nsswitch) {
-		logger.Debug("NSSwitch config file is as expected. No changes needed.")
+		logger.Debugf("NSSwitch config file is as expected. No changes needed.")
 		return nil
 	}
 	if enable {
-		logger.Debug("Editing NSSwitch config file to enable OS Login.")
+		logger.Debugf("Editing NSSwitch config file to enable OS Login.")
 	} else {
-		logger.Debug("Editing NSSwitch config file to disable OS Login.")
+		logger.Debugf("Editing NSSwitch config file to disable OS Login.")
 	}
 	return writeConfigFile("/etc/nsswitch.conf", proposed)
 }
