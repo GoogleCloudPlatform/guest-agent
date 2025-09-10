@@ -139,22 +139,26 @@ func (o *osloginMgr) Set(ctx context.Context) error {
 	} else if !enable && oldEnable {
 		logger.Infof("Disabling OS Login")
 	} else {
-		// TODO is this ever an expected state?
-		logger.Warningf("Not enabling or disabling OS Login; enablement state is already as desired: %v", enable)
+		logger.Infof("Not enabling or disabling OS Login; enablement state is already as desired: %v", enable)
+		// Idea: could we simply return early here, if there's really nothing to do?
 	}
 
+	logger.Debug("Updating SSH config...")
 	if err := writeSSHConfig(enable, twofactor, skey, reqCerts); err != nil {
 		logger.Errorf("Error updating SSH config: %v.", err)
 	}
 
+	logger.Debug("Updating NSS config...")
 	if err := writeNSSwitchConfig(enable); err != nil {
 		logger.Errorf("Error updating NSS config: %v.", err)
 	}
 
+	logger.Debug("Updating PAM config...")
 	if err := writePAMConfig(enable, twofactor); err != nil {
 		logger.Errorf("Error updating PAM config: %v.", err)
 	}
 
+	logger.Debug("Updating group.conf...")
 	if err := writeGroupConf(enable); err != nil {
 		logger.Errorf("Error updating group.conf: %v.", err)
 	}
@@ -179,19 +183,19 @@ func (o *osloginMgr) Set(ctx context.Context) error {
 	mdsClient.WriteGuestAttributes(ctx, "guest-agent/sshable", now)
 
 	if enable {
-		logger.Debugf("Create OS Login dirs, if needed")
+		logger.Debugf("Creating OS Login dirs, if needed...")
 		if err := createOSLoginDirs(ctx); err != nil {
 			logger.Errorf("Error creating OS Login directory: %v.", err)
 		}
 
-		logger.Debugf("create OS Login sudoers config, if needed")
+		logger.Debugf("Creating OS Login sudoers config, if needed...")
 		if err := createOSLoginSudoersFile(); err != nil {
 			logger.Errorf("Error creating OS Login sudoers file: %v.", err)
 		}
 
 		// Refresh the NSS cache asynchronously; this can take a while and shouldn't block.
 		go func() {
-			logger.Debugf("starting OS Login nss cache fill")
+			logger.Debugf("Starting OS Login NSS cache fill asynchronously...")
 			if err := run.Quiet(ctx, "google_oslogin_nss_cache"); err != nil {
 				logger.Errorf("Error updating NSS cache: %v.", err)
 			}
