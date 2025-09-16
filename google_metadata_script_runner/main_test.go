@@ -317,7 +317,7 @@ func TestDownloadURL(t *testing.T) {
 			w.WriteHeader(400)
 		}
 
-		fmt.Fprintf(w, r.URL.Path)
+		fmt.Fprintf(w, "%s", r.URL.Path)
 		ctr[r.URL.Path] = ctr[r.URL.Path] + 1
 	}))
 	defer server.Close()
@@ -386,7 +386,7 @@ func TestDownloadGSURL(t *testing.T) {
 		if strings.Contains(r.URL.Path, "invalid") {
 			w.WriteHeader(404)
 		}
-		fmt.Fprintf(w, r.URL.Path)
+		fmt.Fprintf(w, "%s", r.URL.Path)
 		ctr[r.URL.Path] = ctr[r.URL.Path] + 1
 	}))
 	defer server.Close()

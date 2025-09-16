@@ -344,7 +344,7 @@ func (a *winAccountsMgr) Set(ctx context.Context) error {
 		if sshEnable != oldSSHEnable {
 			err := verifyWinSSHVersion(ctx)
 			if err != nil {
-				logger.Warningf(err.Error())
+				logger.Warningf("%s", err.Error())
 			}
 
 			if !checkWindowsServiceRunning(ctx, "sshd") {

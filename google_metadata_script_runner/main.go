@@ -469,7 +469,7 @@ func main() {
 
 	scripts, err := getExistingKeys(ctx, wantedKeys)
 	if err != nil {
-		logger.Fatalf(err.Error())
+		logger.Fatalf("%s", err.Error())
 	}
 
 	if len(scripts) == 0 {

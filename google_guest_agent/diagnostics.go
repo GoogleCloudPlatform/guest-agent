@@ -126,7 +126,7 @@ func (d *diagnosticsMgr) Set(ctx context.Context) error {
 	go func() {
 		logger.Infof("Diagnostics: collecting logs from the system.")
 		res := run.WithCombinedOutput(ctx, diagnosticsCmd, args...)
-		logger.Infof(res.Combined)
+		logger.Infof("%s", res.Combined)
 		if res.ExitCode != 0 {
 			logger.Warningf("Error collecting logs: %v", res.Error())
 		}
