@@ -46,7 +46,7 @@ func createNamedPipe(ctx context.Context, pipePath string) error {
 				return fmt.Errorf("failed to create named pipe: %+v", err)
 			}
 		} else {
-			return fmt.Errorf("failed to stat file: " + pipePath)
+			return fmt.Errorf("failed to stat file: %s", pipePath)
 		}
 	}
 
