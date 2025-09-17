@@ -368,7 +368,7 @@ func (a *addressMgr) Set(ctx context.Context) error {
 				}
 				msg += fmt.Sprintf(" removing %q", toRm)
 			}
-			logger.Infof(msg)
+			logger.Infof("%v", msg)
 		}
 
 		var registryEntries []string

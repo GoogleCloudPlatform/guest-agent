@@ -23,10 +23,10 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-// MakeRandRSAPubKey generates base64 encoded 256 bit RSA public key for use in tests.
+// MakeRandRSAPubKey generates base64 encoded 1024 bit RSA public key for use in tests.
 func MakeRandRSAPubKey(t *testing.T) string {
 	t.Helper()
-	prv, err := rsa.GenerateKey(rand.Reader, 256)
+	prv, err := rsa.GenerateKey(rand.Reader, 1024)
 	if err != nil {
 		t.Fatalf("error generating RSA key: %v", err)
 	}
