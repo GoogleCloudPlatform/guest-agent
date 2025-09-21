@@ -35,12 +35,12 @@ type (
 func init() {
 	key, _, err := registry.CreateKey(registry.LOCAL_MACHINE, regKeyBase, registry.WRITE)
 	if err != nil {
-		logger.Fatalf(err.Error())
+		logger.Fatalf("%v", err.Error())
 	}
 	key.Close()
 	key, _, err = registry.CreateKey(registry.LOCAL_MACHINE, addressKey, registry.WRITE)
 	if err != nil {
-		logger.Fatalf(err.Error())
+		logger.Fatalf("%v", err.Error())
 	}
 	key.Close()
 }
@@ -125,7 +125,7 @@ func getWindowsExeVersion(ctx context.Context, path string) (versionInfo, error)
 	psCmd := "(Get-Item '" + path + "').VersionInfo.FileVersion"
 	res := run.WithOutput(ctx, "powershell", "-c", psCmd)
 	if res.ExitCode != 0 {
-		return versionInfo{0, 0}, fmt.Errorf(res.Error())
+		return versionInfo{0, 0}, fmt.Errorf("%v", res.Error())
 	}
 	return parseVersionInfo([]byte(res.StdOut))
 }
