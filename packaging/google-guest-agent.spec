@@ -195,7 +195,12 @@ else
   if [ -d /run/systemd/system ]; then
     systemctl daemon-reload >/dev/null 2>&1 || :
     %if 0%{?build_plugin_manager}
-      systemctl stop google-guest-agent.service >/dev/null 2>&1 || :
+      if grep -q "false" "/etc/google-guest-agent/core-plugin-enabled"; then
+        systemctl enable google-guest-agent.service >/dev/null 2>&1 || :
+        systemctl start google-guest-agent.service >/dev/null 2>&1 || :
+      else
+        systemctl stop google-guest-agent.service >/dev/null 2>&1 || :
+      fi
       systemctl restart google-guest-compat-manager.service >/dev/null 2>&1 || :
       systemctl restart google-guest-agent-manager.service >/dev/null 2>&1 || :
     %endif

@@ -14,9 +14,15 @@ if [ "$1" = "configure" ] ; then
     fi
   fi
 
-  # Disable and stop this service in favor of core plugin to be run on default.
-  systemctl disable 'google-guest-agent.service' > /dev/null || true
-  systemctl stop 'google-guest-agent.service' > /dev/null || true
+  if grep -q "false" "/etc/google-guest-agent/core-plugin-enabled"; then
+    # If the core plugin was disabled, honor that setting.
+    systemctl enable google-guest-agent.service >/dev/null 2>&1 || :
+    systemctl start google-guest-agent.service >/dev/null 2>&1 || :
+  else
+    # Disable and stop this service in favor of core plugin to be run on default.
+    systemctl disable 'google-guest-agent.service' > /dev/null || true
+    systemctl stop 'google-guest-agent.service' > /dev/null || true
+  fi
 fi
 
 #DEBHELPER#
