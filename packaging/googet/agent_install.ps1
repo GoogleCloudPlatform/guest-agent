@@ -27,6 +27,8 @@ $compat_path = '"C:\Program Files\Google\Compute Engine\agent\GCEWindowsCompatMa
 $compat_display_name = 'Google Compute Engine Compat Manager'
 $compat_description = 'Google Compute Engine Compat Manager'
 
+$core_enabled = "C:\ProgramData\Google\Compute Engine\google-guest-agent\core-plugin-enabled"
+
 $initial_config = @'
 # GCE Instance Configuration
 
@@ -102,8 +104,15 @@ try {
   }
 
   if ($install_manager) {
-    & sc.exe config $name start=disabled
-    Stop-Service $name
+    # If core plugin is disabled, honor the setting and restart non-plugin based agent.
+    if (Get-Content -Path $core_enabled -ErrorAction SilentlyContinue | Select-String -Pattern "false" -Quiet) {
+      Restart-Service $name -Verbose
+    }
+    else {
+      & sc.exe config $name start=disabled
+      Stop-Service $name
+    }
+    
     Restart-Service $compat_manager -Verbose
     Restart-Service $manager_name -Verbose
   } else {
