@@ -103,7 +103,6 @@ try {
     $initial_config | Set-Content -Path $config -Encoding ASCII
   }
 
-  & sc.exe config $name start=auto
   Restart-Service $name -Verbose
 
   if ($install_manager) {
