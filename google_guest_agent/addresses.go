@@ -19,7 +19,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"reflect"
 	"runtime"
 	"slices"
 	"strings"
@@ -31,9 +30,7 @@ import (
 )
 
 var (
-	addressKey       = regKeyBase + `\ForwardedIps`
-	oldWSFCAddresses string
-	oldWSFCEnable    bool
+	addressKey = regKeyBase + `\ForwardedIps`
 )
 
 type addressMgr struct{}
@@ -230,23 +227,11 @@ func (a *addressMgr) applyWSFCFilter(config *cfg.Sections) {
 	}
 }
 
+// Regardless of the state changes in MDS go through the address consolidation
+// and apply address changes if required. Always running the manager guarantees
+// routes will be re added in case they were removed by any external factor.
 func (a *addressMgr) Diff(ctx context.Context) (bool, error) {
-	// Return true if this is the first call (when the first mds descriptor is available).
-	if oldMetadata == nil {
-		return true, nil
-	}
-
-	config := cfg.Get()
-	wsfcAddresses := a.parseWSFCAddresses(config)
-	wsfcEnable := a.parseWSFCEnable(config)
-
-	diff := !reflect.DeepEqual(newMetadata.Instance.NetworkInterfaces, oldMetadata.Instance.NetworkInterfaces) ||
-		!reflect.DeepEqual(newMetadata.Instance.VlanNetworkInterfaces, oldMetadata.Instance.VlanNetworkInterfaces) ||
-		wsfcEnable != oldWSFCEnable || wsfcAddresses != oldWSFCAddresses
-
-	oldWSFCAddresses = wsfcAddresses
-	oldWSFCEnable = wsfcEnable
-	return diff, nil
+	return true, nil
 }
 
 func (a *addressMgr) Timeout(ctx context.Context) (bool, error) {
