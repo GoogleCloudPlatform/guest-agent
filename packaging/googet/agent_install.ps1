@@ -66,6 +66,12 @@ function Set-New-Service($service_name, $service_display_name, $service_desc, $s
 }
 
 try {
+  # Remove the core plugin enabling configuration file and let compat manager
+  # reconsile the desired system state based on the metadata configuration key.
+  If (Test-Path $core_enabled) {
+    Remove-Item $core_enabled
+  }
+
   # This is to safeguard from installing agent manager using placeholder file
   $install_manager = $false
   if (Test-Path ($manager_path -replace '"', "")) {
