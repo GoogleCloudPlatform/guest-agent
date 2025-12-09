@@ -477,8 +477,22 @@ func createOSLoginDirs(ctx context.Context) error {
 
 	for _, dir := range []string{"/var/google-sudoers.d", "/var/google-users.d"} {
 		err := os.Mkdir(dir, 0750)
-		if err != nil && !os.IsExist(err) {
-			return err
+		if err != nil {
+			if os.IsExist(err) {
+				// Double-check permissions.
+				s, err := os.Stat(dir)
+				if err != nil {
+					return err
+				}
+				// Set permissions to rwxr-x---.
+				if s.FileMode != 0750 {
+					if err := os.Chmod(dir, 0750); err != nil {
+						return err
+					}
+				}
+			} else {
+				return err
+			}
 		}
 		if restoreconerr == nil {
 			run.Quiet(ctx, restorecon, dir)
