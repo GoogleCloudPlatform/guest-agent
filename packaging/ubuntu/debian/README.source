@@ -1,0 +1,12 @@
+This package is vendoring all the Go dependencies for reasons explained in LP: #1896246
+
+To update the debian/extra/vendor/ dir run:
+
+rm -r debian/extra/vendor
+go mod download
+go mod vendor
+mv vendor debian/extra/
+
+Update debian/copyright, for example using decopy.
+
+ -- Balint Reczey <rbalint@ubuntu.com>, Fri, 18 Sep 2020 17:19:27 +0200
