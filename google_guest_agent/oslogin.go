@@ -308,6 +308,7 @@ func updateSSHConfig(sshConfig string, enable, twofactor, skey, reqCerts bool) s
 		}
 	}
 	authorizedKeysUser := "AuthorizedKeysCommandUser root"
+	sourcePerUserConfigs := "Include /var/google-users.d/*"
 
 	// Certificate based authentication.
 	authorizedPrincipalsCommand := "AuthorizedPrincipalsCommand /usr/bin/google_authorized_principals %u %k"
@@ -339,7 +340,7 @@ func updateSSHConfig(sshConfig string, enable, twofactor, skey, reqCerts bool) s
 		if twofactor {
 			osLoginBlock = append(osLoginBlock, twoFactorAuthMethods, challengeResponseEnable)
 		}
-		osLoginBlock = append(osLoginBlock, googleBlockEnd)
+		osLoginBlock = append(osLoginBlock, sourcePerUserConfigs, googleBlockEnd)
 		filtered = append(osLoginBlock, filtered...)
 		if twofactor {
 			filtered = append(filtered, googleBlockStart, matchblock1, matchblock2, googleBlockEnd)
