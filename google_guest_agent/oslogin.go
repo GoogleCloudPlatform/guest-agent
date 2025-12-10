@@ -486,7 +486,7 @@ func createOSLoginDirs(ctx context.Context) error {
 					return err
 				}
 				// Set permissions to rwxr-x---.
-				if s.FileMode != 0750 {
+				if s.Mode() != 0750 {
 					if err := os.Chmod(dir, 0750); err != nil {
 						return err
 					}
