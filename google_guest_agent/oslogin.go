@@ -17,13 +17,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"os"
-	"os/exec"
-	"runtime"
-	"slices"
-	"strings"
-	"time"
-
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events/sshtrustedca"
@@ -31,6 +24,12 @@ import (
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/sshca"
 	"github.com/GoogleCloudPlatform/guest-agent/metadata"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
+	"os"
+	"os/exec"
+	"runtime"
+	"slices"
+	"strings"
+	"time"
 )
 
 var (
@@ -328,10 +327,10 @@ func updateSSHConfig(sshConfig string, enable, twofactor, skey, reqCerts bool) s
 		osLoginBlock := []string{googleBlockStart}
 
 		// Metadata overrides the config file.
-		if reqCerts {
+		if reqCerts && !skey {
 			osLoginBlock = append(osLoginBlock, trustedUserCAKeys, authorizedPrincipalsCommand, authorizedPrincipalsUser)
 		} else {
-			if cfg.Get().OSLogin.CertAuthentication {
+			if cfg.Get().OSLogin.CertAuthentication && !skey {
 				osLoginBlock = append(osLoginBlock, trustedUserCAKeys, authorizedPrincipalsCommand, authorizedPrincipalsUser)
 			}
 			osLoginBlock = append(osLoginBlock, authorizedKeysCommand, authorizedKeysUser)

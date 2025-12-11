@@ -17,12 +17,11 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
-	"testing"
-
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events/sshtrustedca"
 	"github.com/GoogleCloudPlatform/guest-agent/metadata"
+	"strings"
+	"testing"
 )
 
 func TestFilterGoogleLines(t *testing.T) {
@@ -422,9 +421,6 @@ func TestUpdateSSHConfig(t *testing.T) {
 			},
 			want: []string{
 				googleBlockStart,
-				trustedUserCAKeys,
-				authorizedPrincipalsCommand,
-				authorizedPrincipalsUser,
 				authorizedKeysCommandSk,
 				authorizedKeysUser,
 				googleBlockEnd,
@@ -435,6 +431,29 @@ func TestUpdateSSHConfig(t *testing.T) {
 			twofactor: false,
 			skey:      true,
 			reqCerts:  false,
+			cfgCert:   false,
+		},
+		{
+			// Skey enablement disables certificates.
+			contents: []string{
+				"line1",
+				"line2",
+				googleBlockStart,
+				"line3",
+				googleBlockEnd,
+			},
+			want: []string{
+				googleBlockStart,
+				authorizedKeysCommandSk,
+				authorizedKeysUser,
+				googleBlockEnd,
+				"line1",
+				"line2",
+			},
+			enable:    true,
+			twofactor: false,
+			skey:      true,
+			reqCerts:  true,
 			cfgCert:   true,
 		},
 		{
