@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events/sshtrustedca"
 	"github.com/GoogleCloudPlatform/guest-agent/metadata"
