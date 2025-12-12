@@ -17,11 +17,12 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
+	"testing"
+	
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events/sshtrustedca"
 	"github.com/GoogleCloudPlatform/guest-agent/metadata"
-	"strings"
-	"testing"
 )
 
 func TestFilterGoogleLines(t *testing.T) {

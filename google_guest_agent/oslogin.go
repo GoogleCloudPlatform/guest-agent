@@ -17,6 +17,13 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"	
+	"os/exec"	
+	"runtime"	
+	"slices"	
+	"strings"	
+	"time"
+	
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events/sshtrustedca"
@@ -24,12 +31,6 @@ import (
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/sshca"
 	"github.com/GoogleCloudPlatform/guest-agent/metadata"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
-	"os"
-	"os/exec"
-	"runtime"
-	"slices"
-	"strings"
-	"time"
 )
 
 var (
