@@ -17,13 +17,12 @@ package main
 import (
 	"context"
 	"fmt"
-	"os"	
-	"os/exec"	
-	"runtime"	
-	"slices"	
-	"strings"	
+	"os"
+	"os/exec"
+	"runtime"
+	"slices"
+	"strings"
 	"time"
-	
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events/sshtrustedca"
