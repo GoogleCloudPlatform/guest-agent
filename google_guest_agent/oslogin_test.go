@@ -422,9 +422,6 @@ func TestUpdateSSHConfig(t *testing.T) {
 			},
 			want: []string{
 				googleBlockStart,
-				trustedUserCAKeys,
-				authorizedPrincipalsCommand,
-				authorizedPrincipalsUser,
 				authorizedKeysCommandSk,
 				authorizedKeysUser,
 				googleBlockEnd,
@@ -435,6 +432,29 @@ func TestUpdateSSHConfig(t *testing.T) {
 			twofactor: false,
 			skey:      true,
 			reqCerts:  false,
+			cfgCert:   false,
+		},
+		{
+			// Skey enablement disables certificates.
+			contents: []string{
+				"line1",
+				"line2",
+				googleBlockStart,
+				"line3",
+				googleBlockEnd,
+			},
+			want: []string{
+				googleBlockStart,
+				authorizedKeysCommandSk,
+				authorizedKeysUser,
+				googleBlockEnd,
+				"line1",
+				"line2",
+			},
+			enable:    true,
+			twofactor: false,
+			skey:      true,
+			reqCerts:  true,
 			cfgCert:   true,
 		},
 		{
