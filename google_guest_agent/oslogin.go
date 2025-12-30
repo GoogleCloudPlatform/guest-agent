@@ -308,6 +308,8 @@ func updateSSHConfig(sshConfig string, enable, twofactor, skey, reqCerts bool) s
 		}
 	}
 	authorizedKeysUser := "AuthorizedKeysCommandUser root"
+	sourcePerUserConfigs := "Include /var/google-users.d/*"
+	matchAllAgain := "Match all"
 
 	// Certificate based authentication.
 	authorizedPrincipalsCommand := "AuthorizedPrincipalsCommand /usr/bin/google_authorized_principals %u %k"
@@ -339,7 +341,7 @@ func updateSSHConfig(sshConfig string, enable, twofactor, skey, reqCerts bool) s
 		if twofactor {
 			osLoginBlock = append(osLoginBlock, twoFactorAuthMethods, challengeResponseEnable)
 		}
-		osLoginBlock = append(osLoginBlock, googleBlockEnd)
+		osLoginBlock = append(osLoginBlock, sourcePerUserConfigs, matchAllAgain, googleBlockEnd)
 		filtered = append(osLoginBlock, filtered...)
 		if twofactor {
 			filtered = append(filtered, googleBlockStart, matchblock1, matchblock2, googleBlockEnd)
@@ -476,8 +478,22 @@ func createOSLoginDirs(ctx context.Context) error {
 
 	for _, dir := range []string{"/var/google-sudoers.d", "/var/google-users.d"} {
 		err := os.Mkdir(dir, 0750)
-		if err != nil && !os.IsExist(err) {
-			return err
+		if err != nil {
+			if os.IsExist(err) {
+				// Double-check permissions.
+				s, err := os.Stat(dir)
+				if err != nil {
+					return err
+				}
+				// Set permissions to rwxr-x---.
+				if s.Mode() != 0750 {
+					if err := os.Chmod(dir, 0750); err != nil {
+						return err
+					}
+				}
+			} else {
+				return err
+			}
 		}
 		if restoreconerr == nil {
 			run.Quiet(ctx, restorecon, dir)
