@@ -207,6 +207,8 @@ func TestUpdateSSHConfig(t *testing.T) {
 	authorizedPrincipalsUser := "AuthorizedPrincipalsCommandUser root"
 	trustedUserCAKeys := "TrustedUserCAKeys " + sshtrustedca.DefaultPipePath
 	twoFactorAuthMethods := "AuthenticationMethods publickey,keyboard-interactive"
+	includePerUserConfigs := "Include /var/google-users.d/*"
+	matchAllAgain := "Match all"
 	matchblock1 := `Match User sa_*`
 	matchblock2 := `       AuthenticationMethods publickey`
 
@@ -231,6 +233,8 @@ func TestUpdateSSHConfig(t *testing.T) {
 				authorizedKeysUser,
 				twoFactorAuthMethods,
 				challengeResponseEnable,
+				includePerUserConfigs,
+				matchAllAgain,
 				googleBlockEnd,
 				"line1",
 				googleBlockStart,
@@ -258,6 +262,8 @@ func TestUpdateSSHConfig(t *testing.T) {
 				authorizedKeysUser,
 				twoFactorAuthMethods,
 				challengeResponseEnable,
+				includePerUserConfigs,
+				matchAllAgain,
 				googleBlockEnd,
 				"line1",
 				googleBlockStart,
@@ -288,6 +294,8 @@ func TestUpdateSSHConfig(t *testing.T) {
 				authorizedKeysUser,
 				twoFactorAuthMethods,
 				challengeResponseEnable,
+				includePerUserConfigs,
+				matchAllAgain,
 				googleBlockEnd,
 				"line1",
 				"line3",
@@ -316,6 +324,8 @@ func TestUpdateSSHConfig(t *testing.T) {
 				authorizedKeysUser,
 				twoFactorAuthMethods,
 				challengeResponseEnable,
+				includePerUserConfigs,
+				matchAllAgain,
 				googleBlockEnd,
 				"line1",
 				"line3",
@@ -343,6 +353,8 @@ func TestUpdateSSHConfig(t *testing.T) {
 				authorizedPrincipalsUser,
 				authorizedKeysCommand,
 				authorizedKeysUser,
+				includePerUserConfigs,
+				matchAllAgain,
 				googleBlockEnd,
 				"line1",
 				"line2",
@@ -363,6 +375,8 @@ func TestUpdateSSHConfig(t *testing.T) {
 				googleBlockStart,
 				authorizedKeysCommand,
 				authorizedKeysUser,
+				includePerUserConfigs,
+				matchAllAgain,
 				googleBlockEnd,
 				"line1",
 				"line2",
@@ -427,6 +441,8 @@ func TestUpdateSSHConfig(t *testing.T) {
 				authorizedPrincipalsUser,
 				authorizedKeysCommandSk,
 				authorizedKeysUser,
+				includePerUserConfigs,
+				matchAllAgain,
 				googleBlockEnd,
 				"line1",
 				"line2",
@@ -450,6 +466,8 @@ func TestUpdateSSHConfig(t *testing.T) {
 				googleBlockStart,
 				authorizedKeysCommandSk,
 				authorizedKeysUser,
+				includePerUserConfigs,
+				matchAllAgain,
 				googleBlockEnd,
 				"line1",
 				"line2",
@@ -474,6 +492,8 @@ func TestUpdateSSHConfig(t *testing.T) {
 				trustedUserCAKeys,
 				authorizedPrincipalsCommand,
 				authorizedPrincipalsUser,
+				includePerUserConfigs,
+				matchAllAgain,
 				googleBlockEnd,
 				"line1",
 				"line2",
@@ -498,6 +518,8 @@ func TestUpdateSSHConfig(t *testing.T) {
 				trustedUserCAKeys,
 				authorizedPrincipalsCommand,
 				authorizedPrincipalsUser,
+				includePerUserConfigs,
+				matchAllAgain,
 				googleBlockEnd,
 				"line1",
 				"line2",
