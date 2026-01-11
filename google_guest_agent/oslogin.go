@@ -309,7 +309,6 @@ func updateSSHConfig(sshConfig string, enable, twofactor, skey, reqCerts bool) s
 	}
 	authorizedKeysUser := "AuthorizedKeysCommandUser root"
 	sourcePerUserConfigs := "Include /var/google-users.d/*"
-	matchAllAgain := "Match all"
 
 	// Certificate based authentication.
 	authorizedPrincipalsCommand := "AuthorizedPrincipalsCommand /usr/bin/google_authorized_principals %u %k"
@@ -327,25 +326,32 @@ func updateSSHConfig(sshConfig string, enable, twofactor, skey, reqCerts bool) s
 	filtered := filterGoogleLines(string(sshConfig))
 
 	if enable {
-		osLoginBlock := []string{googleBlockStart}
-
+		headerBlock := []string{googleBlockStart}
 		// Metadata overrides the config file.
 		if reqCerts {
-			osLoginBlock = append(osLoginBlock, trustedUserCAKeys, authorizedPrincipalsCommand, authorizedPrincipalsUser)
+			headerBlock = append(headerBlock, trustedUserCAKeys, authorizedPrincipalsCommand, authorizedPrincipalsUser)
 		} else {
 			if cfg.Get().OSLogin.CertAuthentication {
-				osLoginBlock = append(osLoginBlock, trustedUserCAKeys, authorizedPrincipalsCommand, authorizedPrincipalsUser)
+				headerBlock = append(headerBlock, trustedUserCAKeys, authorizedPrincipalsCommand, authorizedPrincipalsUser)
 			}
-			osLoginBlock = append(osLoginBlock, authorizedKeysCommand, authorizedKeysUser)
+			headerBlock = append(headerBlock, authorizedKeysCommand, authorizedKeysUser)
 		}
 		if twofactor {
-			osLoginBlock = append(osLoginBlock, twoFactorAuthMethods, challengeResponseEnable)
+			headerBlock = append(headerBlock, twoFactorAuthMethods, challengeResponseEnable)
 		}
-		osLoginBlock = append(osLoginBlock, sourcePerUserConfigs, matchAllAgain, googleBlockEnd)
-		filtered = append(osLoginBlock, filtered...)
+		headerBlock = append(headerBlock, googleBlockEnd)
+
+		// Put the header block ahead of the user's existing config.
+		filtered = append(headerBlock, filtered...)
+
+		// Start a footer block for Match blocks, including per-user configs from
+		// /var/google-users.d and the exception for service accounts when 2FA is enabled.
+		filtered = append(filtered, googleBlockStart, sourcePerUserConfigs)
 		if twofactor {
-			filtered = append(filtered, googleBlockStart, matchblock1, matchblock2, googleBlockEnd)
+			filtered = append(filtered, matchblock1, matchblock2)
 		}
+		// End the footer, marking the end of the sshd_config file.
+		filtered = append(filtered, googleBlockEnd)
 	}
 
 	return strings.Join(filtered, "\n") + "\n"
