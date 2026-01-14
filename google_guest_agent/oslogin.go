@@ -328,10 +328,10 @@ func updateSSHConfig(sshConfig string, enable, twofactor, skey, reqCerts bool) s
 	if enable {
 		headerBlock := []string{googleBlockStart}
 		// Metadata overrides the config file.
-		if reqCerts {
+		if reqCerts && !skey {
 			headerBlock = append(headerBlock, trustedUserCAKeys, authorizedPrincipalsCommand, authorizedPrincipalsUser)
 		} else {
-			if cfg.Get().OSLogin.CertAuthentication {
+			if cfg.Get().OSLogin.CertAuthentication && !skey {
 				headerBlock = append(headerBlock, trustedUserCAKeys, authorizedPrincipalsCommand, authorizedPrincipalsUser)
 			}
 			headerBlock = append(headerBlock, authorizedKeysCommand, authorizedKeysUser)
