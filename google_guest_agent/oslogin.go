@@ -308,6 +308,7 @@ func updateSSHConfig(sshConfig string, enable, twofactor, skey, reqCerts bool) s
 		}
 	}
 	authorizedKeysUser := "AuthorizedKeysCommandUser root"
+	sourcePerUserConfigs := "Include /var/google-users.d/*"
 
 	// Certificate based authentication.
 	authorizedPrincipalsCommand := "AuthorizedPrincipalsCommand /usr/bin/google_authorized_principals %u %k"
@@ -325,25 +326,32 @@ func updateSSHConfig(sshConfig string, enable, twofactor, skey, reqCerts bool) s
 	filtered := filterGoogleLines(string(sshConfig))
 
 	if enable {
-		osLoginBlock := []string{googleBlockStart}
-
+		headerBlock := []string{googleBlockStart}
 		// Metadata overrides the config file.
-		if reqCerts && !skey {
-			osLoginBlock = append(osLoginBlock, trustedUserCAKeys, authorizedPrincipalsCommand, authorizedPrincipalsUser)
+		if reqCerts {
+			headerBlock = append(headerBlock, trustedUserCAKeys, authorizedPrincipalsCommand, authorizedPrincipalsUser)
 		} else {
-			if cfg.Get().OSLogin.CertAuthentication && !skey {
-				osLoginBlock = append(osLoginBlock, trustedUserCAKeys, authorizedPrincipalsCommand, authorizedPrincipalsUser)
+			if cfg.Get().OSLogin.CertAuthentication {
+				headerBlock = append(headerBlock, trustedUserCAKeys, authorizedPrincipalsCommand, authorizedPrincipalsUser)
 			}
-			osLoginBlock = append(osLoginBlock, authorizedKeysCommand, authorizedKeysUser)
+			headerBlock = append(headerBlock, authorizedKeysCommand, authorizedKeysUser)
 		}
 		if twofactor {
-			osLoginBlock = append(osLoginBlock, twoFactorAuthMethods, challengeResponseEnable)
+			headerBlock = append(headerBlock, twoFactorAuthMethods, challengeResponseEnable)
 		}
-		osLoginBlock = append(osLoginBlock, googleBlockEnd)
-		filtered = append(osLoginBlock, filtered...)
+		headerBlock = append(headerBlock, googleBlockEnd)
+
+		// Put the header block ahead of the user's existing config.
+		filtered = append(headerBlock, filtered...)
+
+		// Start a footer block for Match blocks, including per-user configs from
+		// /var/google-users.d and the exception for service accounts when 2FA is enabled.
+		filtered = append(filtered, googleBlockStart, sourcePerUserConfigs)
 		if twofactor {
-			filtered = append(filtered, googleBlockStart, matchblock1, matchblock2, googleBlockEnd)
+			filtered = append(filtered, matchblock1, matchblock2)
 		}
+		// End the footer, marking the end of the sshd_config file.
+		filtered = append(filtered, googleBlockEnd)
 	}
 
 	return strings.Join(filtered, "\n") + "\n"
@@ -476,8 +484,22 @@ func createOSLoginDirs(ctx context.Context) error {
 
 	for _, dir := range []string{"/var/google-sudoers.d", "/var/google-users.d"} {
 		err := os.Mkdir(dir, 0750)
-		if err != nil && !os.IsExist(err) {
-			return err
+		if err != nil {
+			if os.IsExist(err) {
+				// Double-check permissions.
+				s, err := os.Stat(dir)
+				if err != nil {
+					return err
+				}
+				// Set permissions to rwxr-x---.
+				if s.Mode() != 0750 {
+					if err := os.Chmod(dir, 0750); err != nil {
+						return err
+					}
+				}
+			} else {
+				return err
+			}
 		}
 		if restoreconerr == nil {
 			run.Quiet(ctx, restorecon, dir)
