@@ -16,7 +16,7 @@ $compat_manager = 'GCEWindowsCompatManager'
 $name = 'GCEAgentManager'
 $cleanup_exe = "C:\Program Files\Google\Compute Engine\agent\ggactl_plugin.exe"
 
-function Run-With-Timeout {
+function Invoke-CommandWithTimeout {
     param(
         [string]$FilePath,
         [string[]]$ArgumentList,
@@ -35,7 +35,7 @@ function Run-With-Timeout {
     }
 }
 
-function Remove-Service-Safely {
+function Remove-ServiceSafely {
     param (
         [string]$ServiceName
     )
@@ -60,19 +60,19 @@ function Remove-Service-Safely {
 }
 
 # Stop and delete GCEAgent.
-Remove-Service-Safely -ServiceName 'GCEAgent'
+Remove-ServiceSafely -ServiceName 'GCEAgent'
 
 # Stop and Delete compat manager.
-Remove-Service-Safely -ServiceName $compat_manager
+Remove-ServiceSafely -ServiceName $compat_manager
 
 # Stop Guest Agent Manager, cleanup all plugins (if present) and delete the service.
 # We attempt cleanup even if the service is missing, just in case.
 if (Test-Path $cleanup_exe) {
-    Run-With-Timeout -FilePath $cleanup_exe -ArgumentList "coreplugin","stop"
-    Run-With-Timeout -FilePath $cleanup_exe -ArgumentList "dynamic-cleanup"
+    Invoke-CommandWithTimeout -FilePath $cleanup_exe -ArgumentList "coreplugin","stop"
+    Invoke-CommandWithTimeout -FilePath $cleanup_exe -ArgumentList "dynamic-cleanup"
 }
 
-Remove-Service-Safely -ServiceName $name
+Remove-ServiceSafely -ServiceName $name
 
 # Fallback cleanup for runtime data directory
 $runtimeDataDir = "C:\ProgramData\Google\Compute Engine\google-guest-agent"
