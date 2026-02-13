@@ -412,7 +412,7 @@ func createSudoersGroup(ctx context.Context, config *cfg.Sections) error {
 // updateAuthorizedKeysFile adds provided keys to the user's SSH
 // AuthorizedKeys file. The file and containing directory are created if it
 // does not exist. Uses a temporary file to avoid partial updates in case of
-// errors. If no keys are provided, the authorized keys file is removed.
+// errors.
 func updateAuthorizedKeysFile(ctx context.Context, user string, keys []string) error {
 	gcomment := "# Added by Google"
 
@@ -442,12 +442,6 @@ func updateAuthorizedKeysFile(ctx context.Context, user string, keys []string) e
 		}
 	}
 	akpath := path.Join(sshpath, "authorized_keys")
-	// Remove empty file.
-	if len(keys) == 0 {
-		os.Remove(akpath)
-		return nil
-	}
-
 	tempPath := akpath + ".google"
 	akcontents, err := os.ReadFile(akpath)
 	if err != nil && !os.IsNotExist(err) {

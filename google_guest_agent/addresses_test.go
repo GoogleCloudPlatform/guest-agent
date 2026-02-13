@@ -101,46 +101,6 @@ func TestAddressDisabled(t *testing.T) {
 	}
 }
 
-func TestAddressDiff(t *testing.T) {
-	var tests = []struct {
-		name string
-		data []byte
-		md   *metadata.Descriptor
-		want bool
-	}{
-		{"not set", []byte(""), &metadata.Descriptor{}, false},
-		{"enabled in cfg only", []byte("[wsfc]\nenable=true"), &metadata.Descriptor{}, true},
-		{"disabled in cfg only", []byte("[wsfc]\nenable=false"), &metadata.Descriptor{}, false},
-		{"disabled in cfg, enabled in instance metadata", []byte("[wsfc]\nenable=false"), &metadata.Descriptor{Instance: metadata.Instance{Attributes: metadata.Attributes{EnableWSFC: mkptr(true)}}}, false},
-		{"enabled in cfg, disabled in instance metadata", []byte("[wsfc]\nenable=true"), &metadata.Descriptor{Instance: metadata.Instance{Attributes: metadata.Attributes{EnableWSFC: mkptr(false)}}}, true},
-		{"enabled in instance metadata only", []byte(""), &metadata.Descriptor{Instance: metadata.Instance{Attributes: metadata.Attributes{EnableWSFC: mkptr(true)}}}, true},
-		{"enabled in project metadata only", []byte(""), &metadata.Descriptor{Project: metadata.Project{Attributes: metadata.Attributes{EnableWSFC: mkptr(true)}}}, true},
-		{"disabled in instance metadata only", []byte(""), &metadata.Descriptor{Instance: metadata.Instance{Attributes: metadata.Attributes{EnableWSFC: mkptr(false)}}}, false},
-		{"enabled in instance metadata, disabled in project metadata", []byte(""), &metadata.Descriptor{Instance: metadata.Instance{Attributes: metadata.Attributes{EnableWSFC: mkptr(true)}}, Project: metadata.Project{Attributes: metadata.Attributes{EnableWSFC: mkptr(false)}}}, true},
-		{"disabled in project metadata only", []byte(""), &metadata.Descriptor{Project: metadata.Project{Attributes: metadata.Attributes{EnableWSFC: mkptr(false)}}}, false},
-	}
-
-	ctx := context.Background()
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			reloadConfig(t, tt.data)
-
-			oldWSFCEnable = false
-			oldMetadata = &metadata.Descriptor{}
-			newMetadata = tt.md
-
-			got, err := (&addressMgr{}).Diff(ctx)
-			if err != nil {
-				t.Errorf("Failed to run addressMgr's Diff() call, got error: %+v", err)
-			}
-
-			if got != tt.want {
-				t.Errorf("addresses.diff() got: %t, want: %t", got, tt.want)
-			}
-		})
-	}
-}
-
 func TestWsfcFilter(t *testing.T) {
 	var tests = []struct {
 		metaDataJSON []byte
@@ -200,7 +160,6 @@ func TestWsfcFlagTriggerAddressDiff(t *testing.T) {
 		t.Run(fmt.Sprintf("test-%d", i), func(t *testing.T) {
 			reloadConfig(t, nil)
 
-			oldWSFCAddresses = tt.oldMetadata.Instance.Attributes.WSFCAddresses
 			newMetadata = tt.newMetadata
 			oldMetadata = tt.oldMetadata
 			testAddress := addressMgr{}

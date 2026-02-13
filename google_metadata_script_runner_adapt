@@ -2,9 +2,11 @@
 #
 # This script wraps compatibility logic of guest agent's startup script
 # runner. If compat manager is present run it, otherwise launch the
-# known service binary. In case the package is to revert back to previous
-# version of guest-agent without core plugin it directly launches known service 
-# binary.
+# known service binary.
 #
 
-/usr/bin/google_metadata_script_runner $1
+if [ -e /usr/bin/gce_compat_metadata_script_runner ]; then
+  /usr/bin/gce_compat_metadata_script_runner $1
+else
+  /usr/bin/google_metadata_script_runner $1
+fi

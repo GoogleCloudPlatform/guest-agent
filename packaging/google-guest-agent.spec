@@ -92,8 +92,6 @@ install -p -m 0755 %{name}-extra-%{version}/cmd/ggactl/ggactl_plugin %{buildroot
 install -p -m 0755 %{name}-extra-%{version}/cmd/google_guest_compat_manager/google_guest_compat_manager %{buildroot}%{_bindir}/google_guest_compat_manager
 install -p -m 0755 %{name}-extra-%{version}/cmd/core_plugin/core_plugin %{buildroot}%{_exec_prefix}/lib/google/guest_agent/core_plugin
 install -p -m 0755 %{name}-extra-%{version}/cmd/metadata_script_runner_compat/gce_compat_metadata_script_runner %{buildroot}%{_bindir}/gce_compat_metadata_script_runner
-install -d %{buildroot}/etc/google-guest-agent
-install -p -m 0755 core-plugin-enabled %{buildroot}/etc/google-guest-agent/core-plugin-enabled
 %endif
 
 %if 0%{?el6}
@@ -131,7 +129,6 @@ install -p -m 0644 90-%{name}.preset %{buildroot}%{_presetdir}/90-%{name}.preset
 %{_bindir}/google_guest_agent_manager
 %{_bindir}/ggactl_plugin
 %{_exec_prefix}/lib/google/guest_agent/core_plugin
-/etc/google-guest-agent/core-plugin-enabled
 %endif
 
 %{_bindir}/google_metadata_script_runner
@@ -168,22 +165,20 @@ if [ $1 -eq 1 ]; then
 
   # Use enable instead of preset because preset is not supported in
   # chroots.
-  systemctl enable google-guest-agent.service >/dev/null 2>&1 || :
   systemctl enable google-startup-scripts.service >/dev/null 2>&1 || :
   systemctl enable google-shutdown-scripts.service >/dev/null 2>&1 || :
   systemctl enable gce-workload-cert-refresh.timer >/dev/null 2>&1 || :
 
   %if 0%{?build_plugin_manager}
-    systemctl disable google-guest-compat-manager.service >/dev/null 2>&1 || :
+    systemctl enable google-guest-compat-manager.service >/dev/null 2>&1 || :
     systemctl enable google-guest-agent-manager.service >/dev/null 2>&1 || :
   %endif
 
   if [ -d /run/systemd/system ]; then
     systemctl daemon-reload >/dev/null 2>&1 || :
-    systemctl start google-guest-agent.service >/dev/null 2>&1 || :
     systemctl start gce-workload-cert-refresh.timer >/dev/null 2>&1 || :
     %if 0%{?build_plugin_manager}
-      systemctl stop google-guest-compat-manager.service >/dev/null 2>&1 || :
+      systemctl start google-guest-compat-manager.service >/dev/null 2>&1 || :
       systemctl start google-guest-agent-manager.service >/dev/null 2>&1 || :
     %endif
   fi
@@ -192,20 +187,23 @@ if [ $1 -eq 1 ]; then
 else
   # Package upgrade
   %if 0%{?build_plugin_manager}
-      systemctl disable google-guest-compat-manager.service >/dev/null 2>&1 || :
+      systemctl enable google-guest-compat-manager.service >/dev/null 2>&1 || :
       systemctl enable google-guest-agent-manager.service >/dev/null 2>&1 || :
-      systemctl enable google-guest-agent.service >/dev/null 2>&1 || :
+      systemctl disable google-guest-agent.service >/dev/null 2>&1 || :
   %endif
     
   if [ -d /run/systemd/system ]; then
     systemctl daemon-reload >/dev/null 2>&1 || :
     %if 0%{?build_plugin_manager}
-      systemctl stop google-guest-compat-manager.service >/dev/null 2>&1 || :
-      systemctl stop google-guest-agent-manager.service >/dev/null 2>&1 || :
-      ggactl_plugin coreplugin stop >/dev/null 2>&1 || :
-      systemctl start google-guest-agent-manager.service >/dev/null 2>&1 || :
+      if grep -q "false" "/etc/google-guest-agent/core-plugin-enabled"; then
+        systemctl enable google-guest-agent.service >/dev/null 2>&1 || :
+        systemctl start google-guest-agent.service >/dev/null 2>&1 || :
+      else
+        systemctl stop google-guest-agent.service >/dev/null 2>&1 || :
+      fi
+      systemctl restart google-guest-compat-manager.service >/dev/null 2>&1 || :
+      systemctl restart google-guest-agent-manager.service >/dev/null 2>&1 || :
     %endif
-    systemctl restart google-guest-agent.service >/dev/null 2>&1 || :
   fi
 
   # Re-enable the guest agent service if core plugin was enabled, since the
@@ -234,6 +232,7 @@ if [ $1 -eq 0 ]; then
     %if 0%{?build_plugin_manager}
       systemctl stop google-guest-compat-manager.service >/dev/null 2>&1 || :
       systemctl stop google-guest-agent-manager.service >/dev/null 2>&1 || :
+      ggactl_plugin coreplugin stop >/dev/null 2>&1 || :
       ggactl_plugin dynamic-cleanup >/dev/null 2>&1 || :
     %endif
   fi

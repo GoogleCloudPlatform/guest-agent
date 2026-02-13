@@ -30,6 +30,7 @@ if (Get-Service $compat_manager -ErrorAction SilentlyContinue) {
 # Stop Guest Agent Manager, cleanup all plugins (if present) and delete the service.
 if (Get-Service $name -ErrorAction SilentlyContinue) {
     Stop-Service $name -Verbose
+    & $cleanup_exe coreplugin stop
     & $cleanup_exe dynamic-cleanup
     & sc.exe delete $name
 }
