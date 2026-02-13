@@ -9,7 +9,6 @@
   "files": {
     "CorePlugin.exe": "<ProgramFiles>/Google/Compute Engine/agent/CorePlugin.exe",
     "google_metadata_script_runner_adapt.ps1": "<ProgramFiles>/Google/Compute Engine/agent/google_metadata_script_runner_adapt.ps1",
-    "core-plugin-enabled": "<ProgramData>/Google/Compute Engine/google-guest-agent/core-plugin-enabled",
     "GCEMetadataScriptRunner.exe": "<ProgramFiles>/Google/Compute Engine/agent/GCEMetadataScriptRunner.exe",
     "GCEWindowsAgentManager.exe": "<ProgramFiles>/Google/Compute Engine/agent/GCEWindowsAgentManager.exe",
     "GCEWindowsCompatManager.exe": "<ProgramFiles>/Google/Compute Engine/agent/GCEWindowsCompatManager.exe",
@@ -46,7 +45,6 @@
   "sources": [{
       "include": [
         "CorePlugin.exe",
-        "core-plugin-enabled",
         "ggactl_plugin.exe",
         "GCEWindowsAgent.exe",
         "GCECompatMetadataScripts.exe",

@@ -27,7 +27,7 @@ $compat_path = '"C:\Program Files\Google\Compute Engine\agent\GCEWindowsCompatMa
 $compat_display_name = 'Google Compute Engine Compat Manager'
 $compat_description = 'Google Compute Engine Compat Manager'
 
-$ggactl_exe = "C:\Program Files\Google\Compute Engine\agent\ggactl_plugin.exe"
+$core_enabled = "C:\ProgramData\Google\Compute Engine\google-guest-agent\core-plugin-enabled"
 
 $initial_config = @'
 # GCE Instance Configuration
@@ -66,6 +66,12 @@ function Set-New-Service($service_name, $service_display_name, $service_desc, $s
 }
 
 try {
+  # Remove the core plugin enabling configuration file and let compat manager
+  # reconsile the desired system state based on the metadata configuration key.
+  If (Test-Path $core_enabled) {
+    Remove-Item $core_enabled
+  }
+
   # This is to safeguard from installing agent manager using placeholder file
   $install_manager = $false
   if (Test-Path ($manager_path -replace '"', "")) {
@@ -103,15 +109,20 @@ try {
     $initial_config | Set-Content -Path $config -Encoding ASCII
   }
 
-  Restart-Service $name -Verbose
-
   if ($install_manager) {
-    & sc.exe config $compat_manager start=disabled
-    Stop-Service $compat_manager -Verbose
-
-    Stop-Service $manager_name -Verbose
-    & $ggactl_exe coreplugin stop
-    Start-Service $manager_name -Verbose
+    # If core plugin is disabled, honor the setting and restart non-plugin based agent.
+    if (Get-Content -Path $core_enabled -ErrorAction SilentlyContinue | Select-String -Pattern "false" -Quiet) {
+      Restart-Service $name -Verbose
+    }
+    else {
+      & sc.exe config $name start=disabled
+      Stop-Service $name
+    }
+    
+    Restart-Service $compat_manager -Verbose
+    Restart-Service $manager_name -Verbose
+  } else {
+     Restart-Service $name -Verbose
   }
 }
 catch {

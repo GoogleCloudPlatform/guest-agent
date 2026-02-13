@@ -15,10 +15,12 @@
 <#
   .SYNOPSIS
     Metadata Script Runner Adapt.
+
   .DESCRIPTION
     This script wraps compatibility logic of guest agent's startup script
     runner. If compat manager is present run it, otherwise launch the
     known service binary.
+
    .EXAMPLE
     .\google_metadata_script_runner_adapt.ps1 <startup|shutdown|specialize>
 #>
@@ -33,6 +35,17 @@ param (
 $script:gce_install_dir = 'C:\Program Files\Google\Compute Engine'
 $script:orig_runner = "$script:gce_install_dir\metadata_scripts\GCEMetadataScripts.exe"
 $script:metadata_script_loc = $script:orig_runner
+$script:compatRunner = "$script:gce_install_dir\metadata_scripts\GCECompatMetadataScripts.exe"
+$script:runnerV2 = "$script:gce_install_dir\agent\GCEMetadataScriptRunner.exe"
+
+if (Test-Path $script:runnerV2) {
+    $script:metadata_script_loc = $script:runnerV2
+}
+
+if (Test-Path $script:compatRunner) {
+    $script:metadata_script_loc = $script:compatRunner
+}
 
 Write-Host "Launching metadata scripts from $script:metadata_script_loc for $phase"
+# Call startup script during sysprep specialize phase.
 & $script:metadata_script_loc $phase

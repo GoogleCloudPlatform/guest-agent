@@ -136,24 +136,29 @@ func (o *osloginMgr) Set(ctx context.Context) error {
 		newMetadata.Instance.Attributes.SSHKeys = nil
 		newMetadata.Project.Attributes.SSHKeys = nil
 		(&accountsMgr{}).Set(ctx)
-	}
-
-	if !enable && oldEnable {
+	} else if !enable && oldEnable {
 		logger.Infof("Disabling OS Login")
+	} else {
+		logger.Infof("Not enabling or disabling OS Login; enablement state is already as desired: %v", enable)
+		// Idea: could we simply return early here, if there's really nothing to do?
 	}
 
+	logger.Debugf("Updating SSH config...")
 	if err := writeSSHConfig(enable, twofactor, skey, reqCerts); err != nil {
 		logger.Errorf("Error updating SSH config: %v.", err)
 	}
 
+	logger.Debugf("Updating NSS config...")
 	if err := writeNSSwitchConfig(enable); err != nil {
 		logger.Errorf("Error updating NSS config: %v.", err)
 	}
 
+	logger.Debugf("Updating PAM config...")
 	if err := writePAMConfig(enable, twofactor); err != nil {
 		logger.Errorf("Error updating PAM config: %v.", err)
 	}
 
+	logger.Debugf("Updating group.conf...")
 	if err := writeGroupConf(enable); err != nil {
 		logger.Errorf("Error updating group.conf: %v.", err)
 	}
@@ -178,19 +183,19 @@ func (o *osloginMgr) Set(ctx context.Context) error {
 	mdsClient.WriteGuestAttributes(ctx, "guest-agent/sshable", now)
 
 	if enable {
-		logger.Debugf("Create OS Login dirs, if needed")
+		logger.Debugf("Creating OS Login dirs, if needed...")
 		if err := createOSLoginDirs(ctx); err != nil {
 			logger.Errorf("Error creating OS Login directory: %v.", err)
 		}
 
-		logger.Debugf("create OS Login sudoers config, if needed")
+		logger.Debugf("Creating OS Login sudoers config, if needed...")
 		if err := createOSLoginSudoersFile(); err != nil {
 			logger.Errorf("Error creating OS Login sudoers file: %v.", err)
 		}
 
 		// Refresh the NSS cache asynchronously; this can take a while and shouldn't block.
 		go func() {
-			logger.Debugf("starting OS Login nss cache fill")
+			logger.Debugf("Starting OS Login NSS cache fill asynchronously...")
 			if err := run.Quiet(ctx, "google_oslogin_nss_cache"); err != nil {
 				logger.Errorf("Error updating NSS cache: %v.", err)
 			}
@@ -303,6 +308,7 @@ func updateSSHConfig(sshConfig string, enable, twofactor, skey, reqCerts bool) s
 		}
 	}
 	authorizedKeysUser := "AuthorizedKeysCommandUser root"
+	sourcePerUserConfigs := "Include /var/google-users.d/*"
 
 	// Certificate based authentication.
 	authorizedPrincipalsCommand := "AuthorizedPrincipalsCommand /usr/bin/google_authorized_principals %u %k"
@@ -320,25 +326,32 @@ func updateSSHConfig(sshConfig string, enable, twofactor, skey, reqCerts bool) s
 	filtered := filterGoogleLines(string(sshConfig))
 
 	if enable {
-		osLoginBlock := []string{googleBlockStart}
-
+		headerBlock := []string{googleBlockStart}
 		// Metadata overrides the config file.
-		if reqCerts {
-			osLoginBlock = append(osLoginBlock, trustedUserCAKeys, authorizedPrincipalsCommand, authorizedPrincipalsUser)
+		if reqCerts && !skey {
+			headerBlock = append(headerBlock, trustedUserCAKeys, authorizedPrincipalsCommand, authorizedPrincipalsUser)
 		} else {
-			if cfg.Get().OSLogin.CertAuthentication {
-				osLoginBlock = append(osLoginBlock, trustedUserCAKeys, authorizedPrincipalsCommand, authorizedPrincipalsUser)
+			if cfg.Get().OSLogin.CertAuthentication && !skey {
+				headerBlock = append(headerBlock, trustedUserCAKeys, authorizedPrincipalsCommand, authorizedPrincipalsUser)
 			}
-			osLoginBlock = append(osLoginBlock, authorizedKeysCommand, authorizedKeysUser)
+			headerBlock = append(headerBlock, authorizedKeysCommand, authorizedKeysUser)
 		}
 		if twofactor {
-			osLoginBlock = append(osLoginBlock, twoFactorAuthMethods, challengeResponseEnable)
+			headerBlock = append(headerBlock, twoFactorAuthMethods, challengeResponseEnable)
 		}
-		osLoginBlock = append(osLoginBlock, googleBlockEnd)
-		filtered = append(osLoginBlock, filtered...)
+		headerBlock = append(headerBlock, googleBlockEnd)
+
+		// Put the header block ahead of the user's existing config.
+		filtered = append(headerBlock, filtered...)
+
+		// Start a footer block for Match blocks, including per-user configs from
+		// /var/google-users.d and the exception for service accounts when 2FA is enabled.
+		filtered = append(filtered, googleBlockStart, sourcePerUserConfigs)
 		if twofactor {
-			filtered = append(filtered, googleBlockStart, matchblock1, matchblock2, googleBlockEnd)
+			filtered = append(filtered, matchblock1, matchblock2)
 		}
+		// End the footer, marking the end of the sshd_config file.
+		filtered = append(filtered, googleBlockEnd)
 	}
 
 	return strings.Join(filtered, "\n") + "\n"
@@ -380,13 +393,21 @@ func updateNSSwitchConfig(nsswitch string, enable bool) string {
 }
 
 func writeNSSwitchConfig(enable bool) error {
+	logger.Debugf("Reading NSSwitch config file...")
 	nsswitch, err := os.ReadFile("/etc/nsswitch.conf")
 	if err != nil {
+		logger.Warningf("Error reading NSSwitch config file: %v", err)
 		return err
 	}
 	proposed := updateNSSwitchConfig(string(nsswitch), enable)
 	if proposed == string(nsswitch) {
+		logger.Debugf("NSSwitch config file is as expected. No changes needed.")
 		return nil
+	}
+	if enable {
+		logger.Debugf("Editing NSSwitch config file to enable OS Login.")
+	} else {
+		logger.Debugf("Editing NSSwitch config file to disable OS Login.")
 	}
 	return writeConfigFile("/etc/nsswitch.conf", proposed)
 }
@@ -463,8 +484,22 @@ func createOSLoginDirs(ctx context.Context) error {
 
 	for _, dir := range []string{"/var/google-sudoers.d", "/var/google-users.d"} {
 		err := os.Mkdir(dir, 0750)
-		if err != nil && !os.IsExist(err) {
-			return err
+		if err != nil {
+			if os.IsExist(err) {
+				// Double-check permissions.
+				s, err := os.Stat(dir)
+				if err != nil {
+					return err
+				}
+				// Set permissions to rwxr-x---.
+				if s.Mode() != 0750 {
+					if err := os.Chmod(dir, 0750); err != nil {
+						return err
+					}
+				}
+			} else {
+				return err
+			}
 		}
 		if restoreconerr == nil {
 			run.Quiet(ctx, restorecon, dir)
