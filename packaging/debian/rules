@@ -25,12 +25,13 @@ override_dh_auto_install:
 	install -p -m 0644 gce-workload-cert-refresh.timer debian/google-guest-agent/lib/systemd/system/
 	install -p -m 0755 google_metadata_script_runner_adapt debian/google-guest-agent/usr/bin/
 	if [ -d google-guest-agent ]; then\
-		install -d debian/google-guest-agent/usr/lib/google/guest_agent;\
+		install -d debian/google-guest-agent/usr/lib/google/guest_agent/GuestAgentCorePlugin;\
+		install -p -m 0644 google-guest-agent/build/configs/usr/lib/google/guest_agent/GuestAgentCorePlugin/manifest.binpb debian/google-guest-agent/usr/lib/google/guest_agent/GuestAgentCorePlugin/manifest.binpb;\
 		install -p -m 0755 google-guest-agent/cmd/gce_metadata_script_runner/gce_metadata_script_runner debian/google-guest-agent/usr/bin/gce_metadata_script_runner;\
 		install -p -m 0755 google-guest-agent/cmd/google_guest_compat_manager/google_guest_compat_manager debian/google-guest-agent/usr/bin/google_guest_compat_manager;\
 		install -p -m 0755 google-guest-agent/cmd/google_guest_agent/google_guest_agent debian/google-guest-agent/usr/bin/google_guest_agent_manager;\
 		install -p -m 0755 google-guest-agent/cmd/ggactl/ggactl_plugin debian/google-guest-agent/usr/bin/ggactl_plugin;\
-		install -p -m 0755 google-guest-agent/cmd/core_plugin/core_plugin debian/google-guest-agent/usr/lib/google/guest_agent/core_plugin;\
+		install -p -m 0755 google-guest-agent/cmd/core_plugin/core_plugin debian/google-guest-agent/usr/lib/google/guest_agent/GuestAgentCorePlugin/core_plugin;\
 		install -p -m 0755 google-guest-agent/cmd/metadata_script_runner_compat/gce_compat_metadata_script_runner debian/google-guest-agent/usr/bin/gce_compat_metadata_script_runner;\
 	fi
 
