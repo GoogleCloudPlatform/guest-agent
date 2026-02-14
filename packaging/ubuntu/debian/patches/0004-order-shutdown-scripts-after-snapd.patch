@@ -1,0 +1,20 @@
+From: Daniel Watkins <oddbloke@ubuntu.com>
+Date: Fri, 12 Apr 2019 13:23:42 +0200
+Subject: Order shutdown scripts after snapd.service
+
+This ensures that snaps will be available when the scripts run on shutdown
+Last-Update: 2018-05-17 <YYYY-MM-DD, last update of the meta-information, optional>
+---
+ .../google-shutdown-scripts.service               | 1 +
+ 1 file changed, 1 insertion(+)
+
+--- a/google-shutdown-scripts.service
++++ b/google-shutdown-scripts.service
+@@ -2,6 +2,7 @@
+ Description=Google Compute Engine Shutdown Scripts
+ Wants=network-online.target rsyslog.service
+ After=network-online.target rsyslog.service
++After=snapd.service
+ 
+ [Service]
+ Type=oneshot
