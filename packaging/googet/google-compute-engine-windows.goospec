@@ -7,7 +7,8 @@
   "description": "Google Compute Engine Windows agent",
   "source": "https://github.com/GoogleCloudPlatform/guest-agent/",
   "files": {
-    "CorePlugin.exe": "<ProgramFiles>/Google/Compute Engine/agent/CorePlugin.exe",
+    "CorePlugin.exe": "<ProgramFiles>/Google/Compute Engine/agent/GuestAgentCorePlugin/CorePlugin.exe",
+    "core_plugin.manifest.binpb": "<ProgramFiles>/Google/Compute Engine/agent/GuestAgentCorePlugin/manifest.binpb",
     "google_metadata_script_runner_adapt.ps1": "<ProgramFiles>/Google/Compute Engine/agent/google_metadata_script_runner_adapt.ps1",
     "GCEMetadataScriptRunner.exe": "<ProgramFiles>/Google/Compute Engine/agent/GCEMetadataScriptRunner.exe",
     "GCEWindowsAgentManager.exe": "<ProgramFiles>/Google/Compute Engine/agent/GCEWindowsAgentManager.exe",
@@ -45,6 +46,7 @@
   "sources": [{
       "include": [
         "CorePlugin.exe",
+        "core_plugin.manifest.binpb",
         "ggactl_plugin.exe",
         "GCEWindowsAgent.exe",
         "GCECompatMetadataScripts.exe",

@@ -85,12 +85,13 @@ install -p -m 0644 instance_configs.cfg %{buildroot}/usr/share/google-guest-agen
 
 # Compat agent, it will become google_guest_agent after the full package transition.
 %if 0%{?build_plugin_manager}
-install -d %{buildroot}%{_exec_prefix}/lib/google/guest_agent
+install -d %{buildroot}%{_exec_prefix}/lib/google/guest_agent/GuestAgentCorePlugin
 install -p -m 0755 %{name}-extra-%{version}/cmd/gce_metadata_script_runner/gce_metadata_script_runner %{buildroot}%{_bindir}/gce_metadata_script_runner
 install -p -m 0755 %{name}-extra-%{version}/cmd/google_guest_agent/google_guest_agent %{buildroot}%{_bindir}/google_guest_agent_manager
 install -p -m 0755 %{name}-extra-%{version}/cmd/ggactl/ggactl_plugin %{buildroot}%{_bindir}/ggactl_plugin
 install -p -m 0755 %{name}-extra-%{version}/cmd/google_guest_compat_manager/google_guest_compat_manager %{buildroot}%{_bindir}/google_guest_compat_manager
-install -p -m 0755 %{name}-extra-%{version}/cmd/core_plugin/core_plugin %{buildroot}%{_exec_prefix}/lib/google/guest_agent/core_plugin
+install -p -m 0755 %{name}-extra-%{version}/cmd/core_plugin/core_plugin %{buildroot}%{_exec_prefix}/lib/google/guest_agent/GuestAgentCorePlugin/core_plugin
+install -p -m 0644 %{name}-extra-%{version}/build/configs/usr/lib/google/guest_agent/GuestAgentCorePlugin/manifest.binpb %{buildroot}%{_exec_prefix}/lib/google/guest_agent/GuestAgentCorePlugin/manifest.binpb
 install -p -m 0755 %{name}-extra-%{version}/cmd/metadata_script_runner_compat/gce_compat_metadata_script_runner %{buildroot}%{_bindir}/gce_compat_metadata_script_runner
 %endif
 
@@ -128,7 +129,8 @@ install -p -m 0644 90-%{name}.preset %{buildroot}%{_presetdir}/90-%{name}.preset
 %{_bindir}/gce_compat_metadata_script_runner
 %{_bindir}/google_guest_agent_manager
 %{_bindir}/ggactl_plugin
-%{_exec_prefix}/lib/google/guest_agent/core_plugin
+%{_exec_prefix}/lib/google/guest_agent/GuestAgentCorePlugin/core_plugin
+%{_exec_prefix}/lib/google/guest_agent/GuestAgentCorePlugin/manifest.binpb
 %endif
 
 %{_bindir}/google_metadata_script_runner
