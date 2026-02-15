@@ -61,6 +61,8 @@ network_daemon = true
 
 [IpForwarding]
 ethernet_proto_id = 66
+forwarded_ips = true
+forwarded_ipv6s = true
 ip_aliases = true
 target_instance_ips = true
 
@@ -226,6 +228,8 @@ type Diagnostics struct {
 // IPForwarding contains the configurations of IPForwarding section.
 type IPForwarding struct {
 	EthernetProtoID   string `ini:"ethernet_proto_id,omitempty"`
+	ForwardedIPs      bool   `ini:"forwarded_ips,omitempty"`
+	ForwardedIpv6s    bool   `ini:"forwarded_ipv6s,omitempty"`
 	IPAliases         bool   `ini:"ip_aliases,omitempty"`
 	TargetInstanceIPs bool   `ini:"target_instance_ips,omitempty"`
 }
