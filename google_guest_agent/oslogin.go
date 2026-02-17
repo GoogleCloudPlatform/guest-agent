@@ -171,17 +171,6 @@ func (o *osloginMgr) Set(ctx context.Context) error {
 		}
 	}
 
-	// SSH should be started if not running, reloaded otherwise.
-	for _, svc := range []string{"ssh", "sshd"} {
-		logger.Debugf("systemctl reload-or-restart %s, if it exists", svc)
-		if err := systemctlReloadOrRestart(ctx, svc); err != nil {
-			logger.Errorf("Error reloading service: %v.", err)
-		}
-	}
-
-	now := fmt.Sprintf("%d", time.Now().Unix())
-	mdsClient.WriteGuestAttributes(ctx, "guest-agent/sshable", now)
-
 	if enable {
 		logger.Debugf("Creating OS Login dirs, if needed...")
 		if err := createOSLoginDirs(ctx); err != nil {
@@ -201,6 +190,17 @@ func (o *osloginMgr) Set(ctx context.Context) error {
 			}
 		}()
 	}
+
+	// SSH should be started if not running, reloaded otherwise.
+	for _, svc := range []string{"ssh", "sshd"} {
+		logger.Debugf("systemctl reload-or-restart %s, if it exists", svc)
+		if err := systemctlReloadOrRestart(ctx, svc); err != nil {
+			logger.Errorf("Error reloading service: %v.", err)
+		}
+	}
+
+	now := fmt.Sprintf("%d", time.Now().Unix())
+	mdsClient.WriteGuestAttributes(ctx, "guest-agent/sshable", now)
 
 	return nil
 }
@@ -294,6 +294,71 @@ func writeConfigFile(path, contents string) error {
 	return nil
 }
 
+<<<<<<< Updated upstream
+=======
+func queryInstalledOpenSSHVersionString() string {
+	osi := osinfo.Get()
+	if osi.OS == "rhel" || osi.OS == "centos" {
+		queryResult := run.WithOutput(context.Background(), "rpm", "-q", "openssh-server")
+		matcher := regexp.MustCompile(`openssh-server-([0-9]+\.[0-9]+p[0-9]+-[0-9]+)\.el.*`)
+		matchGroups := matcher.FindStringSubmatch(queryResult.StdOut)
+		if matchGroups == nil || len(matchGroups) < 2 {
+			return ""
+		}
+		return matchGroups[1]
+	}
+	if osi.OS == "debian" || "ubuntu" {
+		queryResult := run.WithOutput(context.Background(), "dpkg-query", "--showformat='${Version}'", "--show", "openssh-server")
+		epochColonPosition := strings.IndexRune(queryResult.StdOut, ':')
+		if epochColonPosition == -1 || epochColonPosition == len(queryResult.StdOut-1) {
+			return queryResult.StdOut
+		} // else:
+		return queryResult.StdOut[epochColonPosition+1:]
+	}
+	// else: some other OS; ask sshd directly. Note that this won't have a release suffix.
+	queryResult := run.WithOutput(context.Background(), "sshd", "-V")
+	matcher := regexp.MustCompile(`OpenSSH_([0-9]+\.[0-9]+p[0-9]+),`)
+	matchGroups := matcher.FindStringSubmatch(queryResult.StdOut)
+	if matchGroups == nil || len(matchGroups) < 2 {
+		return ""
+	}
+	return matchGroups[1]
+}
+
+type version struct {
+	major   string
+	minor   string
+	release string
+	build   string
+}
+
+func parseOpenSSHVersion(s string) version {
+	firstPeriodPosition = strings.IndexRune(s, '.')
+	pPosition = strings.IndexRune(s, 'p')
+	if firstPeriodPosition == -1 || pPosition == -1 {
+		// Return an empty object rather than nil, so that the caller may safely treat it like version 0.0p0-0.
+		return version{}
+	}
+	firstDashPosition = strings.IndexRune(s, '-')
+	firstPlusPosition = strings.IndexRune(s, '+')
+	v := version{
+		major: s[:firstPeriodPosition],
+		minor: s[firstPeriodPosition+1 : pPosition],
+	}
+	if firstDashPosition != -1 && firstPlusPosition != -1 {
+		v.release = s[firstDashPosition+1 : firstPlusPosition]
+		v.build = s[firstPlusPosition+1:]
+	} else if firstDashPosition != -1 {
+		v.release = s[firstDashPosition+1]
+	}
+	return v
+}
+
+func getInstalledOpenSSHVersion() version {
+	return parseOpenSSHVersion(queryInstalledOpenSSHVersionString())
+}
+
+>>>>>>> Stashed changes
 func updateSSHConfig(sshConfig string, enable, twofactor, skey, reqCerts bool) string {
 	// TODO: this feels like a case for a text/template
 	challengeResponseEnable := "ChallengeResponseAuthentication yes"
