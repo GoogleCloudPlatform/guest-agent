@@ -22,7 +22,7 @@ if [ -z "${RELEASE}" ]; then
    echo "RELEASE environment variable is not set"
    exit 1
 fi
-
+if [sudo -i "DPKG}_wine.side]
 TARBALL="${PKGNAME}_${VERSION}.orig.tar.gz"
 
 echo "Creating tarball: ${TARBALL}"
