@@ -68,6 +68,7 @@ pushd %{name}-extra-%{version}/
   VERSION=%{version} make cmd/core_plugin/core_plugin
   VERSION=%{version} make cmd/gce_metadata_script_runner/gce_metadata_script_runner
   VERSION=%{version} make cmd/metadata_script_runner_compat/gce_compat_metadata_script_runner
+  make cmd/guest_telemetry_extension/guesttelemetryextension;\
 popd
 %endif
 
@@ -93,6 +94,8 @@ install -p -m 0755 %{name}-extra-%{version}/cmd/google_guest_compat_manager/goog
 install -p -m 0755 %{name}-extra-%{version}/cmd/core_plugin/core_plugin %{buildroot}%{_exec_prefix}/lib/google/guest_agent/GuestAgentCorePlugin/core_plugin
 install -p -m 0644 %{name}-extra-%{version}/build/configs/usr/lib/google/guest_agent/GuestAgentCorePlugin/manifest.binpb %{buildroot}%{_exec_prefix}/lib/google/guest_agent/GuestAgentCorePlugin/manifest.binpb
 install -p -m 0755 %{name}-extra-%{version}/cmd/metadata_script_runner_compat/gce_compat_metadata_script_runner %{buildroot}%{_bindir}/gce_compat_metadata_script_runner
+install -p -m 0644 %{name}-extra-%{version}/build/configs/usr/lib/google/guest_agent/GuestTelemetryExtension/manifest.binpb %{buildroot}%{_exec_prefix}/lib/google/guest_agent/GuestTelemetryExtension/manifest.binpb
+install -p -m 0755 %{name}-extra-%{version}/cmd/guest_telemetry_extension/guest_telemetry %{buildroot}%{_exec_prefix}/lib/google/guest_agent/GuestTelemetryExtension/guest_telemetry
 %endif
 
 %if 0%{?el6}
@@ -131,6 +134,8 @@ install -p -m 0644 90-%{name}.preset %{buildroot}%{_presetdir}/90-%{name}.preset
 %{_bindir}/ggactl_plugin
 %{_exec_prefix}/lib/google/guest_agent/GuestAgentCorePlugin/core_plugin
 %{_exec_prefix}/lib/google/guest_agent/GuestAgentCorePlugin/manifest.binpb
+%{_exec_prefix}/lib/google/guest_agent/GuestTelemetryExtension/guesttelemetryextension
+%{_exec_prefix}/lib/google/guest_agent/GuestTelemetryExtension/manifest.binpb
 %endif
 
 %{_bindir}/google_metadata_script_runner

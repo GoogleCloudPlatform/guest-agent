@@ -54,6 +54,7 @@ GOOS=windows VERSION=$version make cmd/gce_metadata_script_runner/gce_metadata_s
 GOOS=windows VERSION=$version make cmd/metadata_script_runner_compat/gce_compat_metadata_script_runner
 GOOS=windows VERSION=$version make cmd/google_authorized_keys_compat/google_authorized_keys_compat
 GOOS=windows VERSION=$version make cmd/google_authorized_keys/google_authorized_keys
+GOOS=windows make cmd/guest_telemetry_extension/guest_telemetry
 
 cp cmd/google_guest_agent/google_guest_agent $BUILD_DIR/GCEWindowsAgentManager.exe
 cp cmd/ggactl/ggactl_plugin $BUILD_DIR/ggactl_plugin.exe
@@ -62,6 +63,8 @@ cp cmd/core_plugin/core_plugin $BUILD_DIR/CorePlugin.exe
 cp cmd/gce_metadata_script_runner/gce_metadata_script_runner $BUILD_DIR/GCEMetadataScriptRunner.exe
 cp cmd/metadata_script_runner_compat/gce_compat_metadata_script_runner $BUILD_DIR/GCECompatMetadataScripts.exe
 cp build/configs/usr/lib/google/guest_agent/GuestAgentCorePlugin/manifest.windows.binpb $BUILD_DIR/core_plugin.manifest.binpb
+cp build/configs/usr/lib/google/guest_agent/GuestTelemetryExtension/manifest.windows.binpb $BUILD_DIR/guesttelemetryextension.manifest.binpb
+cp cmd/guest_telemetry_extension/guest_telemetry $BUILD_DIR/GuestTelemetry.exe
 
 if [[ -f cmd/google_authorized_keys_compat/google_authorized_keys_compat ]]; then
   cp $BUILD_DIR/GCEAuthorizedKeysCommand.exe $BUILD_DIR/GCEAuthorizedKeys.exe
