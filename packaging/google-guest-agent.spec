@@ -94,6 +94,7 @@ install -p -m 0755 %{name}-extra-%{version}/cmd/google_guest_compat_manager/goog
 install -p -m 0755 %{name}-extra-%{version}/cmd/core_plugin/core_plugin %{buildroot}%{_exec_prefix}/lib/google/guest_agent/GuestAgentCorePlugin/core_plugin
 install -p -m 0644 %{name}-extra-%{version}/build/configs/usr/lib/google/guest_agent/GuestAgentCorePlugin/manifest.binpb %{buildroot}%{_exec_prefix}/lib/google/guest_agent/GuestAgentCorePlugin/manifest.binpb
 install -p -m 0755 %{name}-extra-%{version}/cmd/metadata_script_runner_compat/gce_compat_metadata_script_runner %{buildroot}%{_bindir}/gce_compat_metadata_script_runner
+install -d %{buildroot}{_exec_prefix}/lib/google/guest_agent/GuestTelemetryExtension
 install -p -m 0644 %{name}-extra-%{version}/build/configs/usr/lib/google/guest_agent/GuestTelemetryExtension/manifest.binpb %{buildroot}%{_exec_prefix}/lib/google/guest_agent/GuestTelemetryExtension/manifest.binpb
 install -p -m 0755 %{name}-extra-%{version}/cmd/guest_telemetry_extension/guest_telemetry %{buildroot}%{_exec_prefix}/lib/google/guest_agent/GuestTelemetryExtension/guest_telemetry
 %endif
