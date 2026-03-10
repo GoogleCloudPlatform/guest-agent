@@ -22,11 +22,15 @@ import (
 
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
 	"github.com/GoogleCloudPlatform/guest-agent/metadata"
+	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 )
 
 const (
 	// monitorID is the ID of the routes monitor scheduled job.
 	monitorID = "routes_monitor"
+	// routesMonitorFallbackMonitor is the fallback routes monitor interval to use
+	// if the user-specified interval is invalid.
+	fallbackInterval = 10 * time.Second
 )
 
 // routesMonitor is the routes monitor scheduled job implementation.
@@ -48,7 +52,12 @@ func (*routesMonitor) ID() string {
 // a bool determining if job should be scheduled starting now.
 // If false, first run will be at time now+interval.
 func (*routesMonitor) Interval() (time.Duration, bool) {
-	return cfg.Get().Routes.MonitorInterval, false
+	interval, err := time.ParseDuration(cfg.Get().Routes.MonitorInterval)
+	if err != nil {
+		logger.Infof("Invalid routes monitor interval (err %v), using fallback of %v", err, fallbackInterval)
+		interval = fallbackInterval
+	}
+	return interval, false
 }
 
 // ShouldEnable specifies if the job should be enabled for scheduling.

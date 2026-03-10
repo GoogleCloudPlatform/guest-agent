@@ -18,7 +18,6 @@ package cfg
 import (
 	"fmt"
 	"runtime"
-	"time"
 
 	"github.com/go-ini/ini"
 )
@@ -301,8 +300,8 @@ type NetworkInterfaces struct {
 
 // Routes contains the configurations of the Routes section.
 type Routes struct {
-	EnableMonitor   bool          `ini:"enable_monitor,omitempty"`
-	MonitorInterval time.Duration `ini:"monitor_interval,omitempty"`
+	EnableMonitor   bool   `ini:"enable_monitor,omitempty"`
+	MonitorInterval string `ini:"monitor_interval,omitempty"`
 }
 
 // Snapshots contains the configurations of Snapshots section.
