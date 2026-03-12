@@ -436,6 +436,8 @@ func setupRoutes(ctx context.Context, metadata *metadata.Descriptor, config *cfg
 	// Only log the routes addition/removal if we actually added/removed a route.
 	if routesChanged {
 		logger.Infof("Completed adding/removing routes for aliases, forwarded IP and target-instance IPs")
+	} else {
+		logger.Debugf("No routes changed")
 	}
 }
 
