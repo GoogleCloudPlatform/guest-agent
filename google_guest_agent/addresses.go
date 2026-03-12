@@ -295,6 +295,7 @@ func (a *addressMgr) Set(ctx context.Context) error {
 func setupRoutes(ctx context.Context, metadata *metadata.Descriptor, config *cfg.Sections) {
 	logger.Debugf("Add routes for aliases, forwarded IP and target-instance IPs")
 	// Add routes for IP aliases, forwarded and target-instance IPs.
+	var routesChanged bool
 	for _, ni := range newMetadata.Instance.NetworkInterfaces {
 		iface, err := network.GetInterfaceByMAC(ni.Mac)
 		if err != nil {
@@ -369,6 +370,7 @@ func setupRoutes(ctx context.Context, metadata *metadata.Descriptor, config *cfg
 				msg += fmt.Sprintf(" removing %q", toRm)
 			}
 			logger.Infof("%v", msg)
+			routesChanged = true
 		}
 
 		var registryEntries []string
@@ -431,7 +433,10 @@ func setupRoutes(ctx context.Context, metadata *metadata.Descriptor, config *cfg
 			}
 		}
 	}
-	logger.Infof("Completed adding/removing routes for aliases, forwarded IP and target-instance IPs")
+	// Only log the routes addition/removal if we actually added/removed a route.
+	if routesChanged {
+		logger.Infof("Completed adding/removing routes for aliases, forwarded IP and target-instance IPs")
+	}
 }
 
 // isIPv6 returns true if the IP address is an IPv6 address.
