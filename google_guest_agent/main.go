@@ -54,6 +54,7 @@ var (
 	osInfo                   osinfo.OSInfo
 	mdsClient                *metadata.Client
 	addressManager           = &addressMgr{}
+	routesMonitorJob         = &routesMonitor{}
 )
 
 const (
@@ -142,6 +143,8 @@ func runManager(ctx context.Context, mgr manager) {
 
 func runUpdate(ctx context.Context) {
 	var wg sync.WaitGroup
+
+	// Run all registered managers.
 	for _, mgr := range availableManagers() {
 		wg.Add(1)
 		go func(mgr manager) {
@@ -149,6 +152,11 @@ func runUpdate(ctx context.Context) {
 			runManager(ctx, mgr)
 		}(mgr)
 	}
+
+	// Update the MDS used by the routes monitor.
+	routesMonitorJob.mdsMu.Lock()
+	routesMonitorJob.mds = newMetadata
+	routesMonitorJob.mdsMu.Unlock()
 	wg.Wait()
 }
 
@@ -215,6 +223,10 @@ func runAgent(ctx context.Context) {
 
 	// knownJobs is list of default jobs that run on a pre-defined schedule.
 	knownJobs := []scheduler.Job{telemetry.New(mdsClient, programName, version)}
+	if cfg.Get().Routes.EnableMonitor {
+		// Only add this to the known jobs if the job is enabled.
+		knownJobs = append(knownJobs, routesMonitorJob)
+	}
 	scheduler.ScheduleJobs(ctx, knownJobs, false)
 
 	eventManager := events.Get()

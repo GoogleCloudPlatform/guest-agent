@@ -26,6 +26,7 @@ import (
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
 	network "github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/network/manager"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/run"
+	"github.com/GoogleCloudPlatform/guest-agent/metadata"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
 )
 
@@ -261,6 +262,12 @@ func (a *addressMgr) Disabled(ctx context.Context) (bool, error) {
 func (a *addressMgr) Set(ctx context.Context) error {
 	config := cfg.Get()
 
+	// Make sure the monitor job is skipped until the address manager is finished.
+	routesMonitorJob.ShouldSkip.Store(true)
+	defer func() {
+		routesMonitorJob.ShouldSkip.Store(false)
+	}()
+
 	if runtime.GOOS == "windows" {
 		a.applyWSFCFilter(config)
 	}
@@ -278,8 +285,17 @@ func (a *addressMgr) Set(ctx context.Context) error {
 		return nil
 	}
 
+	// Run the route setup.
+	setupRoutes(ctx, newMetadata, config)
+
+	return nil
+}
+
+// setupRoutes runs the route setup.
+func setupRoutes(ctx context.Context, metadata *metadata.Descriptor, config *cfg.Sections) {
 	logger.Debugf("Add routes for aliases, forwarded IP and target-instance IPs")
 	// Add routes for IP aliases, forwarded and target-instance IPs.
+	var routesChanged bool
 	for _, ni := range newMetadata.Instance.NetworkInterfaces {
 		iface, err := network.GetInterfaceByMAC(ni.Mac)
 		if err != nil {
@@ -354,6 +370,7 @@ func (a *addressMgr) Set(ctx context.Context) error {
 				msg += fmt.Sprintf(" removing %q", toRm)
 			}
 			logger.Infof("%v", msg)
+			routesChanged = true
 		}
 
 		var registryEntries []string
@@ -416,9 +433,12 @@ func (a *addressMgr) Set(ctx context.Context) error {
 			}
 		}
 	}
-	logger.Infof("Completed adding/removing routes for aliases, forwarded IP and target-instance IPs")
-
-	return nil
+	// Only log the routes addition/removal if we actually added/removed a route.
+	if routesChanged {
+		logger.Infof("Completed adding/removing routes for aliases, forwarded IP and target-instance IPs")
+	} else {
+		logger.Debugf("No routes changed")
+	}
 }
 
 // isIPv6 returns true if the IP address is an IPv6 address.

@@ -101,6 +101,10 @@ cert_authentication = true
 disable-https-mds-setup = true
 enable-https-mds-native-cert-store = false
 
+[Routes]
+enable_monitor = false
+monitor_interval = 10s
+
 [Snapshots]
 enabled = false
 snapshot_service_ip = 169.254.169.254
@@ -174,6 +178,9 @@ type Sections struct {
 
 	// MDS defines the MDS configuration options.
 	MDS *MDS `ini:"MDS,omitempty"`
+
+	// Routes defines configuration options specific to the routes monitor.
+	Routes *Routes `ini:"Routes,omitempty"`
 
 	// Snpashots defines the snapshot listener configuration and behavior i.e. the server address and port.
 	Snapshots *Snapshots `ini:"Snapshots,omitempty"`
@@ -289,6 +296,12 @@ type NetworkInterfaces struct {
 	ManagePrimaryNIC             bool   `ini:"manage_primary_nic,omitempty"`
 	RestoreDebian12NetplanConfig bool   `ini:"restore_debian12_netplan_config,omitempty"`
 	VlanSetupEnabled             bool   `ini:"vlan_setup_enabled,omitempty"`
+}
+
+// Routes contains the configurations of the Routes section.
+type Routes struct {
+	EnableMonitor   bool   `ini:"enable_monitor,omitempty"`
+	MonitorInterval string `ini:"monitor_interval,omitempty"`
 }
 
 // Snapshots contains the configurations of Snapshots section.
