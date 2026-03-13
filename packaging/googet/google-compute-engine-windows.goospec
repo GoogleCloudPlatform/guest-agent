@@ -9,6 +9,8 @@
   "files": {
     "CorePlugin.exe": "<ProgramFiles>/Google/Compute Engine/agent/GuestAgentCorePlugin/CorePlugin.exe",
     "core_plugin.manifest.binpb": "<ProgramFiles>/Google/Compute Engine/agent/GuestAgentCorePlugin/manifest.binpb",
+    "GuestTelemetry.exe": "<ProgramFiles>/Google/Compute Engine/agent/GuestTelemetryExtension/GuestTelemetry.exe",
+    "guesttelemetryextension.manifest.binpb": "<ProgramFiles>/Google/Compute Engine/agent/GuestTelemetryExtension/manifest.binpb",
     "google_metadata_script_runner_adapt.ps1": "<ProgramFiles>/Google/Compute Engine/agent/google_metadata_script_runner_adapt.ps1",
     "GCEMetadataScriptRunner.exe": "<ProgramFiles>/Google/Compute Engine/agent/GCEMetadataScriptRunner.exe",
     "GCEWindowsAgentManager.exe": "<ProgramFiles>/Google/Compute Engine/agent/GCEWindowsAgentManager.exe",
@@ -47,6 +49,8 @@
       "include": [
         "CorePlugin.exe",
         "core_plugin.manifest.binpb",
+        "guesttelemetryextension.manifest.binpb",
+        "GuestTelemetry.exe",
         "ggactl_plugin.exe",
         "GCEWindowsAgent.exe",
         "GCECompatMetadataScripts.exe",
