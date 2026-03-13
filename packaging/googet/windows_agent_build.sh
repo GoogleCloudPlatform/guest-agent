@@ -41,6 +41,8 @@ if [[ ! -f "$GUEST_AGENT_REPO/Makefile" ]]; then
     echo "This is a placeholder file so guest agent package build without error. Package will have actual Guest Agent Manager executable instead if both repos are cloned side-by-side." > GCEAuthorizedKeys.exe
     echo "This is a placeholder file so guest agent package build without error. Package will have actual Guest Agent Manager executable instead if both repos are cloned side-by-side." > GCEAuthorizedKeysNew.exe
     echo "This is a placeholder file so guest agent package build without error. Package will have actual Guest Agent Manager executable instead if both repos are cloned side-by-side." > core_plugin.manifest.binpb
+    echo "This is a placeholder file so guest agent package build without error. Package will have actual Guest Agent Manager executable instead if both repos are cloned side-by-side." > GuestTelemetry.exe
+    echo "This is a placeholder file so guest agent package build without error. Package will have actual Guest Agent Manager executable instead if both repos are cloned side-by-side." > guesttelemetryextension.manifest.binpb
     exit 0
 fi
 
