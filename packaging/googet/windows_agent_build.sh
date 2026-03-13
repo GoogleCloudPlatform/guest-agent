@@ -56,6 +56,8 @@ GOOS=windows VERSION=$version make cmd/gce_metadata_script_runner/gce_metadata_s
 GOOS=windows VERSION=$version make cmd/metadata_script_runner_compat/gce_compat_metadata_script_runner
 GOOS=windows VERSION=$version make cmd/google_authorized_keys_compat/google_authorized_keys_compat
 GOOS=windows VERSION=$version make cmd/google_authorized_keys/google_authorized_keys
+# No version for the telemetry extension since it'll be updated on a different schedule than
+# all the other guest agent components. So the version should be defined as part of its manifest file.
 GOOS=windows make cmd/guest_telemetry_extension/guest_telemetry
 
 cp cmd/google_guest_agent/google_guest_agent $BUILD_DIR/GCEWindowsAgentManager.exe
