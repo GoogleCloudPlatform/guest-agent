@@ -68,7 +68,7 @@ pushd %{name}-extra-%{version}/
   VERSION=%{version} make cmd/core_plugin/core_plugin
   VERSION=%{version} make cmd/gce_metadata_script_runner/gce_metadata_script_runner
   VERSION=%{version} make cmd/metadata_script_runner_compat/gce_compat_metadata_script_runner
-  make cmd/guest_telemetry_extension/guesttelemetryextension;\
+  make cmd/guest_telemetry_extension/guest_telemetry;\
 popd
 %endif
 
