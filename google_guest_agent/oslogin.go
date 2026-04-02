@@ -30,7 +30,15 @@ import (
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/run"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/sshca"
 	"github.com/GoogleCloudPlatform/guest-agent/metadata"
+	"github.com/GoogleCloudPlatform/guest-agent/utils"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
+)
+
+const (
+	defaultSSHDConfigPath     = "/etc/ssh/sshd_config"
+	defaultNSSwitchConfigPath = "/etc/nsswitch.conf"
+	defaultPAMConfigPath      = "/etc/pam.d/sshd"
+	defaultGroupConfigPath    = "/etc/security/group.conf"
 )
 
 var (
@@ -44,6 +52,14 @@ var (
 	// given configuration file.
 	deprecatedConfigDirectives = map[string][]string{
 		"/etc/pam.d/su": {"account    [success=bad ignore=ignore] pam_oslogin_login.so"},
+	}
+
+	// sles16Map contains mapping of files to be copied from /usr to /etc for SLES 16.
+	sles16Map = map[string]string{
+		"/usr/etc/ssh/sshd_config":     defaultSSHDConfigPath,
+		"/usr/etc/nsswitch.conf":       defaultNSSwitchConfigPath,
+		"/usr/lib/pam.d/sshd":          defaultPAMConfigPath,
+		"/usr/etc/security/group.conf": defaultGroupConfigPath,
 	}
 )
 
@@ -123,6 +139,28 @@ func (o *osloginMgr) Disabled(ctx context.Context) (bool, error) {
 	return runtime.GOOS == "windows", nil
 }
 
+func setupSles16OSLoginDirs() error {
+	isSles16 := strings.Contains(osInfo.OS, "sles") || strings.Contains(osInfo.OS, "opensuse")
+	if !isSles16 || osInfo.Version.Major != 16 {
+		logger.Infof("Skipping OSLogin SLES 16 specific setup on %q %d", osInfo.OS, osInfo.Version.Major)
+		return nil
+	}
+
+	for k, v := range sles16Map {
+		if utils.FileExists(v, utils.TypeFile) {
+			logger.Infof("File %q already exists, skipping copy from %q", v, k)
+			continue
+		}
+
+		logger.Infof("Copying file %q -> %q", k, v)
+		if err := utils.CopyFile(k, v, 0644); err != nil {
+			return fmt.Errorf("failed to copy %q -> %q: %w", k, v, err)
+		}
+	}
+
+	return nil
+}
+
 func (o *osloginMgr) Set(ctx context.Context) error {
 	// We need to know if it was previously enabled for the clearing of
 	// metadata-based SSH keys.
@@ -135,6 +173,7 @@ func (o *osloginMgr) Set(ctx context.Context) error {
 		logger.Infof("Enabling OS Login")
 		newMetadata.Instance.Attributes.SSHKeys = nil
 		newMetadata.Project.Attributes.SSHKeys = nil
+		setupSles16OSLoginDirs()
 		(&accountsMgr{}).Set(ctx)
 	} else if !enable && oldEnable {
 		logger.Infof("Disabling OS Login")
