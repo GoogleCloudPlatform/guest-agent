@@ -17,12 +17,17 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/events/sshtrustedca"
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/osinfo"
 	"github.com/GoogleCloudPlatform/guest-agent/metadata"
+	"github.com/GoogleCloudPlatform/guest-agent/utils"
+	"github.com/google/go-cmp/cmp"
 )
 
 func TestFilterGoogleLines(t *testing.T) {
@@ -801,5 +806,138 @@ func TestGetOSLoginEnabled(t *testing.T) {
 		if enable != tt.enable || twofactor != tt.twofactor || skey != tt.skey || reqCerts != tt.reqCerts {
 			t.Errorf("Test %v failed. Expected: %v/%v/%v/%v Got: %v/%v/%v/%v", idx, tt.enable, tt.twofactor, tt.skey, tt.reqCerts, enable, twofactor, skey, reqCerts)
 		}
+	}
+}
+
+func TestSetupUsrEtcOSLoginDirs(t *testing.T) {
+	oldSles16Map := sles16Map
+	oldOsinfoRead := osInfo
+	t.Cleanup(func() {
+		sles16Map = oldSles16Map
+		osInfo = oldOsinfoRead
+	})
+
+	wantMap := map[string]string{
+		"/usr/etc/ssh/sshd_config":     "/etc/ssh/sshd_config",
+		"/usr/etc/nsswitch.conf":       "/etc/nsswitch.conf",
+		"/usr/lib/pam.d/sshd":          "/etc/pam.d/sshd",
+		"/usr/etc/security/group.conf": "/etc/security/group.conf",
+	}
+	if diff := cmp.Diff(wantMap, sles16Map); diff != "" {
+		t.Fatalf("sles16Map unexpected diff (-want +got):\n%s", diff)
+	}
+
+	tests := []struct {
+		name           string
+		info           osinfo.OSInfo
+		createSrc      bool
+		createDst      bool
+		dstContent     string
+		dstShouldExist bool
+		prevSetup      bool
+	}{
+		{
+			name:           "debian12-no-copy",
+			info:           osinfo.OSInfo{OS: "debian", Version: osinfo.Ver{Major: 12}},
+			createSrc:      true,
+			createDst:      false,
+			dstShouldExist: false,
+		},
+		{
+			name:           "sles15-no-copy",
+			info:           osinfo.OSInfo{OS: "sles", Version: osinfo.Ver{Major: 15}},
+			createSrc:      true,
+			createDst:      false,
+			dstShouldExist: false,
+		},
+		{
+			name:           "opensuse15-no-copy",
+			info:           osinfo.OSInfo{OS: "opensuse", Version: osinfo.Ver{Major: 15}},
+			createSrc:      true,
+			createDst:      false,
+			dstShouldExist: false,
+		},
+		{
+			name:           "sles16-copy",
+			info:           osinfo.OSInfo{OS: "sles", Version: osinfo.Ver{Major: 16}},
+			createSrc:      true,
+			createDst:      false,
+			dstShouldExist: true,
+			dstContent:     "test",
+		},
+		{
+			name:           "opensuse16-copy",
+			info:           osinfo.OSInfo{OS: "opensuse", Version: osinfo.Ver{Major: 16}},
+			createSrc:      true,
+			createDst:      false,
+			dstShouldExist: true,
+			dstContent:     "test",
+		},
+		{
+			name:           "sles16-no-copy-if-exists",
+			info:           osinfo.OSInfo{OS: "sles", Version: osinfo.Ver{Major: 16}},
+			createSrc:      false,
+			createDst:      true,
+			dstContent:     "exists",
+			dstShouldExist: true,
+		},
+		{
+			name:           "sles16-no-copy-if-already-setup",
+			info:           osinfo.OSInfo{OS: "sles", Version: osinfo.Ver{Major: 16}},
+			createSrc:      false,
+			createDst:      true,
+			dstContent:     "exists",
+			dstShouldExist: true,
+			prevSetup:      true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			usrDir := t.TempDir()
+			etcDir := t.TempDir()
+			src := filepath.Join(usrDir, "nsswitch.conf")
+			dst := filepath.Join(etcDir, "nsswitch.conf")
+			sles16Map = map[string]string{
+				src: dst,
+			}
+
+			if err := os.MkdirAll(filepath.Dir(src), 0755); err != nil {
+				t.Fatalf("Failed to create dir for %s: %v", src, err)
+			}
+			if tt.createSrc {
+				if err := os.WriteFile(src, []byte("test"), 0644); err != nil {
+					t.Fatalf("Failed to write to %s: %v", src, err)
+				}
+			}
+
+			if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
+				t.Fatalf("Failed to create dir for %s: %v", dst, err)
+			}
+			if tt.createDst {
+				if err := os.WriteFile(dst, []byte(tt.dstContent), 0644); err != nil {
+					t.Fatalf("Failed to write to %s: %v", dst, err)
+				}
+			}
+
+			osInfo = tt.info
+
+			if err := setupSles16OSLoginDirs(); err != nil {
+				t.Fatalf("setupSles16OSLoginDirs() returned err: %v, want nil", err)
+			}
+
+			if got := utils.FileExists(dst, utils.TypeFile); got != tt.dstShouldExist {
+				t.Errorf("Destination file %s exists: %t, want: %t", dst, got, tt.dstShouldExist)
+			}
+			if tt.dstShouldExist {
+				got, err := os.ReadFile(dst)
+				if err != nil {
+					t.Fatalf("Failed to read destination file %s: %v", dst, err)
+				}
+				if string(got) != tt.dstContent {
+					t.Errorf("Destination file %s content changed to %s, want %s", dst, string(got), tt.dstContent)
+				}
+			}
+		})
 	}
 }
