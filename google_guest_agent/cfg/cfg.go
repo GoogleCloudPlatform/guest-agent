@@ -19,7 +19,7 @@ import (
 	"fmt"
 	"runtime"
 
-	"github.com/go-ini/ini"
+	"gopkg.in/ini.v1"
 )
 
 var (

@@ -31,8 +31,8 @@ import (
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/run"
 	"github.com/GoogleCloudPlatform/guest-agent/metadata"
-	"github.com/go-ini/ini"
 	"github.com/google/go-cmp/cmp"
+	"gopkg.in/ini.v1"
 )
 
 var (
