@@ -31,7 +31,7 @@ import (
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/run"
 	"github.com/GoogleCloudPlatform/guest-agent/retry"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
-	"github.com/go-ini/ini"
+	"gopkg.in/ini.v1"
 )
 
 func getDefaultAdapter(fes []ipForwardEntry) (*ipForwardEntry, error) {

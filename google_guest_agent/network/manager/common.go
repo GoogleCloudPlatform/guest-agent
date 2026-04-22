@@ -29,8 +29,7 @@ import (
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/run"
 	"github.com/GoogleCloudPlatform/guest-agent/metadata"
 	"github.com/GoogleCloudPlatform/guest-logging-go/logger"
-	"github.com/go-ini/ini"
-
+	"gopkg.in/ini.v1"
 	"gopkg.in/yaml.v3"
 )
 
