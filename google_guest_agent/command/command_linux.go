@@ -119,7 +119,7 @@ func listen(ctx context.Context, pipe string, filemode int, grp string) (net.Lis
 	// Mutating the umask of the process for this is not ideal, but tightening permissions with chown after creation is not really secure.
 	// Lock OS thread while mutating umask so we don't lose a thread with a mutated mask.
 	runtime.LockOSThread()
-	oldmask := syscall.Umask(777 - filemode)
+	oldmask := syscall.Umask(0777 - filemode)
 	var lc net.ListenConfig
 	l, err := lc.Listen(ctx, "unix", pipe)
 	syscall.Umask(oldmask)
