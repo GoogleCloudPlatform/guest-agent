@@ -22,6 +22,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -292,7 +293,12 @@ func runScript(filePath string, metadataKey string) error {
 		if runtime.GOOS == "windows" {
 			cmd = exec.Command(filePath)
 		} else {
-			cmd = exec.Command(cfg.Get().MetadataScripts.DefaultShell, "-c", filePath)
+			_, err := os.Stat(cfg.Get().MetadataScripts.DefaultShell)
+			if errors.Is(err, os.ErrNotExist) {
+				cmd = exec.Command(filePath)
+			} else {
+				cmd = exec.Command(cfg.Get().MetadataScripts.DefaultShell, "-c", filePath)
+			}
 		}
 	}
 	return runCmd(cmd, metadataKey)
