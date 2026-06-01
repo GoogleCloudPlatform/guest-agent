@@ -1,4 +1,4 @@
-// Copyright 2023 Google Inc. All Rights Reserved.
+// Copyright 2026 Google Inc. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,5 +14,5 @@
 
 package command
 
-// DefaultPipePath is the default unix socket path for linux.
-const DefaultPipePath = "/run/google-guest-agent/commands.sock"
+// DefaultPipePath is the default unix socket path for FreeBSD.
+const DefaultPipePath = "/var/run/google-guest-agent/commands.sock"
