@@ -1,9 +1,11 @@
 [Unit]
 Description=Google Compute Engine Guest Agent Plugin Manager
-# Start before sshd in order to regenerate SSH host keys.
-Before=sshd.service
+# Force a hard structural requirement; sshd cannot boot without this service
+Requires=sshd-keygen.target
+Before=sshd.service sshd-keygen.target
+# Group all networking under the official, unified systemd online target
 After=network-online.target syslog.service
-After=network.service networking.service NetworkManager.service systemd-networkd.service
+Wants=network-online.target
 
 [Service]
 Type=notify
@@ -13,6 +15,4 @@ Restart=always
 KillMode=process
 
 [Install]
-WantedBy=sshd.service
 WantedBy=multi-user.target
-WantedBy=network.service networking.service NetworkManager.service systemd-networkd.service
