@@ -1,9 +1,8 @@
 [Unit]
 Description=Google Compute Engine Guest Agent Plugin Manager
-# Force a hard structural requirement; sshd cannot boot without this service
-Requires=sshd-keygen.target
-Before=sshd.service sshd-keygen.target
-# Group all networking under the official, unified systemd online target
+# Ensure we start before any SSH service or keygen process begins
+Before=sshd.service ssh.service sshd-keygen.target
+# Wait for network and group under syslog
 After=network-online.target syslog.service
 Wants=network-online.target
 
