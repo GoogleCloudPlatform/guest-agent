@@ -118,6 +118,85 @@ command_pipe_group =
 command_request_timeout = 10s
 systemd_config_dir = /usr/lib/systemd/network
 `
+
+	defaultConfigFreeBSD = `
+[Core]
+cloud_logging_enabled = true
+
+[Accounts]
+deprovision_remove = false
+gpasswd_add_cmd = pw groupmod {group} -m {user}
+gpasswd_remove_cmd = pw groupmod {group} -d {user}
+groupadd_cmd = pw groupadd {group}
+groups = adm,dip,docker,lxd,plugdev,video
+reuse_homedir = false
+useradd_cmd = pw useradd {user} -m -s /bin/sh -h -
+userdel_cmd = pw userdel {user} -r
+
+[Daemons]
+accounts_daemon = true
+clock_skew_daemon = true
+network_daemon = true
+
+[IpForwarding]
+ethernet_proto_id = 66
+ip_aliases = true
+target_instance_ips = true
+
+[Instance]
+instance_id =
+instance_id_dir = /etc/google_instance_id
+
+[InstanceSetup]
+host_key_dir = /etc/ssh
+host_key_types = ecdsa,ed25519,rsa
+network_enabled = true
+optimize_local_ssd = true
+set_boto_config = true
+set_host_keys = true
+set_multiqueue = true
+
+[MetadataScripts]
+default_shell = /bin/bash
+run_dir =
+shutdown = true
+shutdown-windows = true
+startup = true
+startup-windows = true
+sysprep-specialize = true
+
+[NetworkInterfaces]
+dhcp_command =
+ip_forwarding = true
+setup = true
+manage_primary_nic =
+restore_debian12_netplan_config = true
+vlan_setup_enabled = false
+
+[OSLogin]
+cert_authentication = true
+
+[MDS]
+disable-https-mds-setup = true
+enable-https-mds-native-cert-store = false
+
+[Routes]
+enable_monitor = false
+monitor_interval = 10s
+
+[Snapshots]
+enabled = false
+snapshot_service_ip = 169.254.169.254
+snapshot_service_port = 8081
+timeout_in_seconds = 60
+
+[Unstable]
+command_monitor_enabled = false
+command_pipe_mode = 0770
+command_pipe_group =
+command_request_timeout = 10s
+systemd_config_dir = /usr/lib/systemd/network
+`
 )
 
 // Core contains the core configuration entries of guest agent, all
@@ -339,7 +418,16 @@ func defaultConfigFile(osName string) string {
 }
 
 func defaultDataSources(extraDefaults []byte) []interface{} {
-	var res = []interface{}{[]byte(defaultConfig)}
+	var defaultConf string
+
+	switch os := runtime.GOOS; os {
+	case "freebsd":
+		defaultConf = defaultConfigFreeBSD
+	default:
+		defaultConf = defaultConfig
+	}
+
+	var res = []interface{}{[]byte(defaultConf)}
 	config := configFile(runtime.GOOS)
 
 	if len(extraDefaults) > 0 {

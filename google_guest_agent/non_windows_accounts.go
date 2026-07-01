@@ -22,6 +22,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"path/filepath"
 	"runtime"
 	"slices"
 	"sort"
@@ -38,7 +39,7 @@ var (
 	// sshKeys is a cache of what we have added to each managed users' authorized
 	// keys file. Avoids necessity of re-reading all files on every change.
 	sshKeys         map[string][]string
-	googleUsersFile = "/var/lib/google/google_users"
+	googleUsersFile = "/google/google_users"
 )
 
 // compareStringSlice returns true if two string slices are equal, false
@@ -299,14 +300,16 @@ func getPasswd(user string) (*passwdEntry, error) {
 }
 
 func writeGoogleUsersFile() error {
-	dir := path.Dir(googleUsersFile)
+	googleUsersFilePath := filepath.Join(cfg.DataPathPrefix, googleUsersFile)
+
+	dir := path.Dir(googleUsersFilePath)
 	if _, err := os.Stat(dir); err != nil {
 		if err = os.Mkdir(dir, 0755); err != nil {
 			return err
 		}
 	}
 
-	gfile, err := os.OpenFile(googleUsersFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+	gfile, err := os.OpenFile(googleUsersFilePath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	if err == nil {
 		defer gfile.Close()
 		for user := range sshKeys {
@@ -317,8 +320,9 @@ func writeGoogleUsersFile() error {
 }
 
 func readGoogleUsersFile() (map[string]string, error) {
+	googleUsersFilePath := filepath.Join(cfg.DataPathPrefix, googleUsersFile)
 	res := make(map[string]string)
-	gUsers, err := os.ReadFile(googleUsersFile)
+	gUsers, err := os.ReadFile(googleUsersFilePath)
 	if err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
@@ -381,7 +385,13 @@ func removeGoogleUser(ctx context.Context, config *cfg.Sections, user string) er
 // not exist and specifies the group 'google-sudoers' should have all
 // permissions.
 func createSudoersFile() error {
-	sudoFile, err := os.OpenFile("/etc/sudoers.d/google_sudoers", os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0440)
+	sudoersFilePath := filepath.Join(cfg.InstallPathPrefix, "/etc/sudoers.d/google_sudoers")
+
+	if err := os.MkdirAll(filepath.Dir(sudoersFilePath), 0755); err != nil {
+		return err
+	}
+
+	sudoFile, err := os.OpenFile(sudoersFilePath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0440)
 	if err != nil {
 		if os.IsExist(err) {
 			return nil
@@ -398,14 +408,18 @@ func createSudoersGroup(ctx context.Context, config *cfg.Sections) error {
 	groupadd := config.Accounts.GroupAddCmd
 	name, args := createUserGroupCmd(groupadd, "", "google-sudoers")
 	ret := run.WithOutput(ctx, name, args...)
-	if ret.ExitCode == 9 {
-		// 9 means group already exists.
+	if runtime.GOOS == "linux" && ret.ExitCode == 9 {
+		// 9 means group already exists in Linux.
+		return nil
+	}
+	if runtime.GOOS == "freebsd" && ret.ExitCode == 65 {
+		// 65 means group already exists in FreeBSD.
 		return nil
 	}
 	if ret.ExitCode != 0 {
 		return error(ret)
 	}
-	logger.Infof("Created google sudoers file")
+	logger.Infof("Created google sudoers group")
 	return nil
 }
 
