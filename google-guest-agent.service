@@ -1,7 +1,7 @@
 [Unit]
 Description=Google Compute Engine Guest Agent
 # Start before sshd in order to regenerate SSH host keys.
-Before=sshd.service
+Before=sshd.service ssh.service
 # Start after network is online and restart when network service is restarted.
 #   Debian/Ubuntu 16.04: networking.service
 #   SLES/EL7: network.service (SLES via wicked.service)
