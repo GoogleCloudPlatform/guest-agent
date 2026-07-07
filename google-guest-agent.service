@@ -19,6 +19,6 @@ OOMScoreAdjust=-999
 Restart=always
 
 [Install]
-WantedBy=sshd.service
+WantedBy=sshd.service ssh.service
 WantedBy=multi-user.target
 WantedBy=network.service networking.service NetworkManager.service systemd-networkd.service
