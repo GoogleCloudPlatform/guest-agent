@@ -13,20 +13,14 @@ USE_RC_SUBR = google_guest_agent
 
 USES = go:modules
 
-GO_ENV = \
-  GOPATH=${WRKDIR}/gopath \
-  GOCACHE=${WRKDIR}/.cache \
-  GOTMPDIR=${WRKDIR}
 GO_TARGET = \
-  ./google_guest_agent \
-  ./google_metadata_script_runner
+  ./google_guest_agent:${PREFIX}/sbin/google_guest_agent \
+  ./google_metadata_script_runner:${PREFIX}/sbin/google_metadata_script_runner
 
 USE_GITHUB = yes
 GH_ACCOUNT = GoogleCloudPlatform
 GH_PROJECT = guest-agent
 GH_TAGNAME = cf7bee6862f978b202756080920403cb96ad633c
-
-MAKE_ENV += GOPATH=${WRKDIR}/gopath
 
 GH_TUPLE =      \
                 GoogleCloudPlatform:confidential-space:d522e41e9e74:googlecloudplatform_confidential_space_server/vendor/github.com/GoogleCloudPlatform/confidential-space \
@@ -58,7 +52,7 @@ GH_TUPLE =      \
                 google:go-configfs-tsm:v0.3.3:google_go_configfs_tsm/vendor/github.com/google/go-configfs-tsm \
                 google:go-eventlog:883cc5652c69:google_go_eventlog/vendor/github.com/google/go-eventlog \
                 google:go-genproto:925bb5da69e7:google_go_genproto/vendor/google.golang.org/genproto \
-                google:go-sev-guest:v0.15.0:google_go_sev_guest/vendor/github.com/google/go-sev-guest \
+                google:go-sev-guest:c930ed67bebf:google_go_sev_guest/vendor/github.com/google/go-sev-guest \
                 google:go-tdx-guest:fff6cc779034:google_go_tdx_guest/vendor/github.com/google/go-tdx-guest \
                 google:go-tpm-tools:v0.4.9:google_go_tpm_tools/vendor/github.com/google/go-tpm-tools \
                 google:go-tpm:v0.9.8:google_go_tpm/vendor/github.com/google/go-tpm \
@@ -94,7 +88,7 @@ GH_TUPLE =      \
                 spiffe:go-spiffe:v2.8.1:spiffe_go_spiffe_v2/vendor/github.com/spiffe/go-spiffe/v2 \
                 tarm:serial:98f6abe2eb07:tarm_serial/vendor/github.com/tarm/serial \
                 uber-go:multierr:v1.11.0:uber_go_multierr/vendor/go.uber.org/multierr \
-                SSLMate:go-pkcs12:v0.7.3:group_name/vendor/software.sslmate.com/src/go-pkcs12
+                SSLMate:go-pkcs12:v0.7.3:group_name/vendor/software.sslmate.com/src/go-pkcs12 \
 
 post-extract:
 	@${RM} -r ${WRKSRC}/vendor/cloud.google.com/go/auth
@@ -127,5 +121,8 @@ post-extract:
 	@${RLN} ${WRKSRC_open_telemetry_opentelemetry_go_sdk}/sdk ${WRKSRC}/vendor/go.opentelemetry.io/otel/sdk
 	@${RM} -r ${WRKSRC}/vendor/go.opentelemetry.io/otel/sdk/metric
 	@${RLN} ${WRKSRC_open_telemetry_opentelemetry_go_metric_1}/sdk/metric ${WRKSRC}/vendor/go.opentelemetry.io/otel/sdk/metric
+
+post-patch:
+	mv ${WRKSRC}/modules.txt ${WRKSRC}/vendor/modules.txt
 
 .include <bsd.port.mk>
