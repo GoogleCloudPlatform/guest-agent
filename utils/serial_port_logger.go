@@ -16,7 +16,7 @@
 
 package utils
 
-import "github.com/tarm/serial"
+import "go.bug.st/serial"
 
 // SerialPort is a type for writing to a named serial port.
 type SerialPort struct {
@@ -24,8 +24,7 @@ type SerialPort struct {
 }
 
 func (s *SerialPort) Write(b []byte) (int, error) {
-	c := &serial.Config{Name: s.Port, Baud: 115200}
-	p, err := serial.OpenPort(c)
+	p, err := serial.Open(s.Port, &serial.Mode{BaudRate: 115200})
 	if err != nil {
 		return 0, err
 	}
