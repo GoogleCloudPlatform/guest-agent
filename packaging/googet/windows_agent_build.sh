@@ -43,6 +43,8 @@ if [[ ! -f "$GUEST_AGENT_REPO/Makefile" ]]; then
     echo "This is a placeholder file so guest agent package build without error. Package will have actual Guest Agent Manager executable instead if both repos are cloned side-by-side." > core_plugin.manifest.binpb
     echo "This is a placeholder file so guest agent package build without error. Package will have actual Guest Agent Manager executable instead if both repos are cloned side-by-side." > GuestTelemetry.exe
     echo "This is a placeholder file so guest agent package build without error. Package will have actual Guest Agent Manager executable instead if both repos are cloned side-by-side." > guesttelemetryextension.manifest.binpb
+    echo "This is a placeholder file so guest agent package build without error. Package will have actual Guest Agent Manager executable instead if both repos are cloned side-by-side." > MwlId.exe
+    echo "This is a placeholder file so guest agent package build without error. Package will have actual Guest Agent Manager executable instead if both repos are cloned side-by-side." > mwlidextension.manifest.binpb
     exit 0
 fi
 
@@ -56,6 +58,9 @@ GOOS=windows VERSION=$version make cmd/gce_metadata_script_runner/gce_metadata_s
 GOOS=windows VERSION=$version make cmd/metadata_script_runner_compat/gce_compat_metadata_script_runner
 GOOS=windows VERSION=$version make cmd/google_authorized_keys_compat/google_authorized_keys_compat
 GOOS=windows VERSION=$version make cmd/google_authorized_keys/google_authorized_keys
+# No version for the mwlid extension since it'll be updated on a different schedule than
+# all the other guest agent components. So the version should be defined as part of its manifest file.
+GOOS=windows make cmd/mwlid_extension/mwlid_extension
 # No version for the telemetry extension since it'll be updated on a different schedule than
 # all the other guest agent components. So the version should be defined as part of its manifest file.
 GOOS=windows make cmd/guest_telemetry_extension/guest_telemetry
@@ -67,6 +72,8 @@ cp cmd/core_plugin/core_plugin $BUILD_DIR/CorePlugin.exe
 cp cmd/gce_metadata_script_runner/gce_metadata_script_runner $BUILD_DIR/GCEMetadataScriptRunner.exe
 cp cmd/metadata_script_runner_compat/gce_compat_metadata_script_runner $BUILD_DIR/GCECompatMetadataScripts.exe
 cp build/configs/usr/lib/google/guest_agent/GuestAgentCorePlugin/manifest.windows.binpb $BUILD_DIR/core_plugin.manifest.binpb
+cp build/configs/usr/lib/google/guest_agent/ManagedWorkloadIdentityExtension/manifest.windows.binpb $BUILD_DIR/mwlidextension.manifest.binpb
+cp cmd/mwlid_extension/mwlid_extension $BUILD_DIR/MwlId.exe
 cp build/configs/usr/lib/google/guest_agent/GuestTelemetryExtension/manifest.windows.binpb $BUILD_DIR/guesttelemetryextension.manifest.binpb
 cp cmd/guest_telemetry_extension/guest_telemetry $BUILD_DIR/GuestTelemetry.exe
 

@@ -9,6 +9,8 @@
   "files": {
     "CorePlugin.exe": "<ProgramFiles>/Google/Compute Engine/agent/GuestAgentCorePlugin/CorePlugin.exe",
     "core_plugin.manifest.binpb": "<ProgramFiles>/Google/Compute Engine/agent/GuestAgentCorePlugin/manifest.binpb",
+    "MwlId.exe": "<ProgramFiles>/Google/Compute Engine/agent/ManagedWorkloadIdentityExtension/MwlId.exe",
+    "mwlidextension.manifest.binpb": "<ProgramFiles>/Google/Compute Engine/agent/ManagedWorkloadIdentityExtension/manifest.binpb",
     "GuestTelemetry.exe": "<ProgramFiles>/Google/Compute Engine/agent/GuestTelemetryExtension/GuestTelemetry.exe",
     "guesttelemetryextension.manifest.binpb": "<ProgramFiles>/Google/Compute Engine/agent/GuestTelemetryExtension/manifest.binpb",
     "google_metadata_script_runner_adapt.ps1": "<ProgramFiles>/Google/Compute Engine/agent/google_metadata_script_runner_adapt.ps1",
@@ -49,6 +51,8 @@
       "include": [
         "CorePlugin.exe",
         "core_plugin.manifest.binpb",
+        "mwlidextension.manifest.binpb",
+        "MwlId.exe",
         "guesttelemetryextension.manifest.binpb",
         "GuestTelemetry.exe",
         "ggactl_plugin.exe",
