@@ -15,7 +15,7 @@ require (
 	github.com/google/tink/go v1.7.0
 	github.com/kardianos/service v1.2.4
 	github.com/robfig/cron/v3 v3.0.1
-	github.com/tarm/serial v0.0.0-20180830185346-98f6abe2eb07
+	go.bug.st/serial v1.8.0
 	golang.org/x/crypto v0.53.0
 	golang.org/x/sys v0.46.0
 	google.golang.org/api v0.286.0
