@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -208,6 +209,10 @@ func TestOutputTimeoutFail(t *testing.T) {
 }
 
 func TestCommandSpecSuccess(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("Skipping test: requires Linux")
+	}
+
 	type commandData struct {
 		Data string
 	}
