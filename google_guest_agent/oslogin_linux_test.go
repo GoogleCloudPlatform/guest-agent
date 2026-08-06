@@ -890,6 +890,21 @@ func TestSetupUsrEtcOSLoginDirs(t *testing.T) {
 			dstShouldExist: true,
 			prevSetup:      true,
 		},
+		{
+			name:           "sle-micro-no-copy",
+			info:           osinfo.OSInfo{OS: "sle-micro", Version: osinfo.Ver{Major: 5}},
+			createSrc:      true,
+			createDst:      false,
+			dstShouldExist: false,
+		},
+		{
+			name:           "sl-micro-copy",
+			info:           osinfo.OSInfo{OS: "sl-micro", Version: osinfo.Ver{Major: 6}},
+			createSrc:      true,
+			createDst:      false,
+			dstShouldExist: true,
+			dstContent:     "test",
+		},
 	}
 
 	for _, tt := range tests {
