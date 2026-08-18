@@ -83,6 +83,25 @@ func TestReadAndWriteRootCACertError(t *testing.T) {
 	}
 }
 
+func TestWriteClientCredentialsPermissions(t *testing.T) {
+	dir := t.TempDir()
+	out := filepath.Join(dir, "client.key")
+	j := &CredsJob{}
+
+	if err := j.writeClientCredentials([]byte("private-key-and-cert"), out); err != nil {
+		t.Fatalf("writeClientCredentials(%s) failed unexpectedly with error: %v", out, err)
+	}
+
+	info, err := os.Stat(out)
+	if err != nil {
+		t.Fatalf("Failed to stat client credentials file: %v", err)
+	}
+
+	if got := info.Mode().Perm(); got != 0600 {
+		t.Errorf("writeClientCredentials(%s) wrote mode %o, want %o", out, got, 0600)
+	}
+}
+
 func TestGetClientCredentials(t *testing.T) {
 	ctx := context.WithValue(context.Background(), fakes.MDSOverride, "succeed")
 	j := &CredsJob{
