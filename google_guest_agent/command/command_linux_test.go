@@ -25,6 +25,29 @@ import (
 	"testing"
 )
 
+func TestMorePermissive(t *testing.T) {
+	testcases := []struct {
+		name string
+		have int
+		want int
+		res  bool
+	}{
+		{name: "world writable vs 0770", have: 0712, want: 0770, res: true},
+		{name: "world exec vs 0770", have: 0713, want: 0770, res: true},
+		{name: "world read vs 0770", have: 0714, want: 0770, res: true},
+		{name: "equal 0770", have: 0770, want: 0770, res: false},
+		{name: "stricter than 0770", have: 0700, want: 0770, res: false},
+		{name: "all bits vs 0770", have: 0777, want: 0770, res: true},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := morePermissive(tc.have, tc.want); got != tc.res {
+				t.Errorf("morePermissive(%o, %o) = %v, want %v", tc.have, tc.want, got, tc.res)
+			}
+		})
+	}
+}
+
 func TestMkdirpWithPerms(t *testing.T) {
 	self, err := user.Current()
 	if err != nil {
