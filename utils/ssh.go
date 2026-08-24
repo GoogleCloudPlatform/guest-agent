@@ -83,7 +83,11 @@ func CheckExpired(expireOn string) (bool, error) {
 // ValidateUser checks for the presence of a characters which should not be
 // allowed in a username string, returns an error if any such characters are
 // detected, nil otherwise.
-// Currently, the only banned characters are whitespace characters.
+// Whitespace is banned to keep the name a single token, a leading hyphen is
+// banned because the name is passed as an argument to the useradd/gpasswd/userdel
+// commands where it would otherwise be parsed as an option, and path separators
+// and bare '.'/'..' names are banned because the name is also interpolated into
+// the "/home/<user>" path used for home directory reuse.
 func ValidateUser(user string) error {
 	if user == "" {
 		return errors.New("invalid username - it is empty")
@@ -94,6 +98,15 @@ func ValidateUser(user string) error {
 	if whiteSpaceRegexp.MatchString(user) {
 		return errors.New("invalid username - whitespace detected")
 	}
+
+	if strings.HasPrefix(user, "-") {
+		return errors.New("invalid username - leading hyphen detected")
+	}
+
+	if strings.ContainsRune(user, '/') || user == "." || user == ".." {
+		return errors.New("invalid username - path separator or traversal detected")
+	}
+
 	return nil
 }
 
