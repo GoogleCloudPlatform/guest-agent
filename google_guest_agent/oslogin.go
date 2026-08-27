@@ -211,17 +211,6 @@ func (o *osloginMgr) Set(ctx context.Context) error {
 		}
 	}
 
-	// SSH should be started if not running, reloaded otherwise.
-	for _, svc := range []string{"ssh", "sshd"} {
-		logger.Debugf("systemctl reload-or-restart %s, if it exists", svc)
-		if err := systemctlReloadOrRestart(ctx, svc); err != nil {
-			logger.Errorf("Error reloading service: %v.", err)
-		}
-	}
-
-	now := fmt.Sprintf("%d", time.Now().Unix())
-	mdsClient.WriteGuestAttributes(ctx, "guest-agent/sshable", now)
-
 	if enable {
 		logger.Debugf("Creating OS Login dirs, if needed...")
 		if err := createOSLoginDirs(ctx); err != nil {
@@ -241,6 +230,17 @@ func (o *osloginMgr) Set(ctx context.Context) error {
 			}
 		}()
 	}
+
+	// SSH should be started if not running, reloaded otherwise.
+	for _, svc := range []string{"ssh", "sshd"} {
+		logger.Debugf("systemctl reload-or-restart %s, if it exists", svc)
+		if err := systemctlReloadOrRestart(ctx, svc); err != nil {
+			logger.Errorf("Error reloading service: %v.", err)
+		}
+	}
+
+	now := fmt.Sprintf("%d", time.Now().Unix())
+	mdsClient.WriteGuestAttributes(ctx, "guest-agent/sshable", now)
 
 	return nil
 }
