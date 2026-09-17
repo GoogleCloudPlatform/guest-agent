@@ -117,6 +117,11 @@ func TestValidateUser(t *testing.T) {
 		{"user\t-g", false},
 		{"user\n-g", false},
 		{"username\t-g\n27", false},
+		{"user\u00a0-g", false},
+		{"user\u2000-g", false},
+		{"user\u2009-g", false},
+		{"user\u202f-g", false},
+		{"user\u3000-g", false},
 	}
 	for _, tt := range table {
 		err := ValidateUser(tt.user)
