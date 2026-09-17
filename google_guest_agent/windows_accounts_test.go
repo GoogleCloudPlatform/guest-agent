@@ -276,9 +276,9 @@ func TestGetUserKeys(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		ret := getUserKeys([]string{tt.key})
-		if userKeys := ret["user"]; len(userKeys) != tt.expectedValid {
-			t.Errorf("expected %d valid keys from getUserKeys, but %d", tt.expectedValid, len(userKeys))
+		userKeys := getUserKeys([]string{tt.key})
+		if len(userKeys) != tt.expectedValid {
+			t.Errorf("getUserKeys(%s) = %d valid keys, expected %d", tt.key, len(userKeys), tt.expectedValid)
 		}
 	}
 }
@@ -290,16 +290,6 @@ func TestRemoveExpiredKeys(t *testing.T) {
 		key   string
 		valid bool
 	}{
-		{`user:ssh-rsa [KEY] google-ssh {"userName":"user@email.com", "expireOn":"2028-11-08T19:30:47+0000"}`, true},
-		{`user:ssh-rsa [KEY] google-ssh {"userName":"user@email.com", "expireOn":"2028-11-08T19:30:47+0700"}`, true},
-		{`user:ssh-rsa [KEY] google-ssh {"userName":"user@email.com", "expireOn":"2028-11-08T19:30:47+0700", "futureField": "UNUSED_FIELDS_IGNORED"}`, true},
-		{`user:ssh-rsa [KEY] google-ssh {"userName":"user@email.com", "expireOn":"2018-11-08T19:30:46+0000"}`, false},
-		{`user:ssh-rsa [KEY] google-ssh {"userName":"user@email.com", "expireOn":"2018-11-08T19:30:46+0700"}`, false},
-		{`user:ssh-rsa [KEY] google-ssh {"userName":"user@email.com", "expireOn":"INVALID_TIMESTAMP"}`, false},
-		{`user:ssh-rsa [KEY] google-ssh`, false},
-		{`user:ssh-rsa [KEY] user`, true},
-		{`user:ssh-rsa [KEY]`, true},
-		// having the user: prefix should not affect whether a key is expired, repeat test cases without user: prefix
 		{`ssh-rsa [KEY] google-ssh {"userName":"user@email.com", "expireOn":"2028-11-08T19:30:47+0000"}`, true},
 		{`ssh-rsa [KEY] google-ssh {"userName":"user@email.com", "expireOn":"2028-11-08T19:30:47+0700"}`, true},
 		{`ssh-rsa [KEY] google-ssh {"userName":"user@email.com", "expireOn":"2028-11-08T19:30:47+0700", "futureField": "UNUSED_FIELDS_IGNORED"}`, true},

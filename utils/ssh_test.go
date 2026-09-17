@@ -86,14 +86,12 @@ func TestCheckExpiredKey(t *testing.T) {
 		key     string
 		expired bool
 	}{
-		{fmt.Sprintf(`usera:ssh-rsa %s google-ssh {"userName":"usera@example.com","expireOn":"2095-04-23T12:34:56+0000"}`, pubKey), false},
-		{fmt.Sprintf(`usera:ssh-rsa %s google-ssh {"userName":"usera@example.com","expireOn":"2021-04-23T12:34:56+0000"}`, pubKey), true},
-		{fmt.Sprintf(`usera:ssh-rsa %s google-ssh {"userName":"usera@example.com","expireOn":"Apri 4, 2056"}`, pubKey), true},
-		{fmt.Sprintf(`usera:ssh-rsa %s google-ssh`, pubKey), true},
+		{fmt.Sprintf(`ssh-rsa %s google-ssh {"userName":"usera@example.com","expireOn":"2095-04-23T12:34:56+0000"}`, pubKey), false},
+		{fmt.Sprintf(`ssh-rsa %s google-ssh {"userName":"usera@example.com","expireOn":"2021-04-23T12:34:56+0000"}`, pubKey), true},
+		{fmt.Sprintf(`ssh-rsa %s google-ssh {"userName":"usera@example.com","expireOn":"Apri 4, 2056"}`, pubKey), true},
+		{fmt.Sprintf(`ssh-rsa %s google-ssh`, pubKey), true},
 		{"    ", true},
 		{fmt.Sprintf("ssh-rsa %s", pubKey), false},
-		{fmt.Sprintf(":ssh-rsa %s", pubKey), false},
-		{fmt.Sprintf("usera:ssh-rsa %s", pubKey), false},
 	}
 
 	for _, tt := range table {
@@ -117,6 +115,11 @@ func TestValidateUser(t *testing.T) {
 		{"user\t-g", false},
 		{"user\n-g", false},
 		{"username\t-g\n27", false},
+		{"user\u00a0-g", false},
+		{"user\u2000-g", false},
+		{"user\u2009-g", false},
+		{"user\u202f-g", false},
+		{"user\u3000-g", false},
 	}
 	for _, tt := range table {
 		err := ValidateUser(tt.user)

@@ -19,9 +19,9 @@ package utils
 import (
 	"encoding/json"
 	"errors"
-	"regexp"
 	"strings"
 	"time"
+	"unicode"
 
 	"golang.org/x/crypto/ssh"
 )
@@ -89,11 +89,12 @@ func ValidateUser(user string) error {
 		return errors.New("invalid username - it is empty")
 	}
 
-	whiteSpaceRegexp, _ := regexp.Compile(`\s`)
-
-	if whiteSpaceRegexp.MatchString(user) {
-		return errors.New("invalid username - whitespace detected")
+	for _, r := range user {
+		if unicode.IsSpace(r) {
+			return errors.New("invalid username -- whitespace detected")
+		}
 	}
+
 	return nil
 }
 
