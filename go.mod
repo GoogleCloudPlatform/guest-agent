@@ -4,6 +4,14 @@ go 1.26.0
 
 replace github.com/GoogleCloudPlatform/guest-agent/metadata => ../metadata
 
+// These transitive dependencies brought in by github.com/google/go-tpm-tools were
+// patched to support FreeBSD builds. We can remove this replace block if they cut
+// new releases.
+replace (
+	github.com/google/go-sev-guest => github.com/google/go-sev-guest v0.15.1-0.20260714230530-c930ed67bebf
+	github.com/google/go-tdx-guest => github.com/google/go-tdx-guest v0.3.2-0.20260720181514-d0438ad17937
+)
+
 require (
 	cloud.google.com/go/storage v1.66.0
 	github.com/GoogleCloudPlatform/guest-logging-go v0.0.0-20260611222439-02d6ddff2dfb
