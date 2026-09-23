@@ -28,6 +28,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
 	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/run"
@@ -356,11 +357,63 @@ func createGoogleUser(ctx context.Context, config *cfg.Sections, user string) er
 	if err := createUser(ctx, user, uid, gid); err != nil {
 		return err
 	}
+
+	// The account database (e.g. an NSS cache such as nscd) is not always
+	// consistent with the just-run useradd immediately; on a busy or
+	// just-booted system a lookup for the new user can transiently fail,
+	// which in turn makes the gpasswd calls below fail with "user does not
+	// exist" even though useradd succeeded. Wait for the account to
+	// actually resolve before touching group membership.
+	if err := waitForUserVisible(ctx, user); err != nil {
+		return fmt.Errorf("user %s was created but did not become visible: %v", user, err)
+	}
+
 	groups := config.Accounts.Groups
 	for _, group := range strings.Split(groups, ",") {
 		addUserToGroup(ctx, user, group)
 	}
 	return addUserToGroup(ctx, user, "google-sudoers")
+}
+
+// userExistsFunc is a seam for testing waitForUserVisible without touching
+// the real user database.
+var userExistsFunc = userExists
+
+// userVisiblePollInterval and userVisiblePollAttempts bound how long
+// waitForUserVisible will wait for a freshly created account to become
+// visible. Five attempts at 200ms cover the nscd-restart window observed in
+// practice while keeping worst case added boot latency small (~1s).
+var (
+	userVisiblePollInterval = 200 * time.Millisecond
+	userVisiblePollAttempts = 5
+)
+
+// waitForUserVisible polls userExistsFunc until it reports the account
+// exists, up to userVisiblePollAttempts times, sleeping
+// userVisiblePollInterval between attempts. It returns nil as soon as the
+// user is visible, or the last error/state seen if it never becomes visible
+// or ctx is done first.
+func waitForUserVisible(ctx context.Context, user string) error {
+	var lastErr error
+	for attempt := 0; attempt < userVisiblePollAttempts; attempt++ {
+		exists, err := userExistsFunc(user)
+		if exists {
+			return nil
+		}
+		lastErr = err
+		if attempt == userVisiblePollAttempts-1 {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(userVisiblePollInterval):
+		}
+	}
+	if lastErr == nil {
+		lastErr = fmt.Errorf("user lookup did not succeed")
+	}
+	return lastErr
 }
 
 // removeGoogleUser removes Google managed users. If deprovision_remove is true, the
