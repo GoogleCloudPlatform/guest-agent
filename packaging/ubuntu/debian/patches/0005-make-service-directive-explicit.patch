@@ -1,0 +1,19 @@
+Description: Make the [Unit] section options more explicit 
+Author: Chloé 'kajiya' Smith <chloe.smith@canonical.com>
+Origin: vendor
+Bug-Ubuntu: https://bugs.launchpad.net/ubuntu/+source/google-guest-agent/+bug/1998864
+Bug-Ubuntu: https://bugs.launchpad.net/ubuntu/+source/google-guest-agent/+bug/2004606
+Forwarded: not-needed
+Last-Updated: 2023-02-01
+
+--- a/google-startup-scripts.service
++++ b/google-startup-scripts.service
+@@ -3,7 +3,7 @@
+ Wants=network-online.target rsyslog.service
+ After=network-online.target rsyslog.service google-guest-agent.service
+ Before=apt-daily.service
+-After=cloud-final.service multi-user.target
++After=multi-user.target
+ Wants=cloud-final.service
+ After=snapd.seeded.service
+ Wants=snapd.seeded.service

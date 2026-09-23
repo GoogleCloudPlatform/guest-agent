@@ -1,0 +1,25 @@
+#!/usr/bin/make -f
+
+export DH_GOLANG_BUILDPKG := github.com/GoogleCloudPlatform/guest-agent/google_guest_agent github.com/GoogleCloudPlatform/guest-agent/google_metadata_script_runner github.com/GoogleCloudPlatform/guest-agent/gce_workload_cert_refresh
+export DH_GOLANG_INSTALL_EXTRA := vendor/google.golang.org/protobuf/internal/editiondefaults/editions_defaults.binpb
+
+%:
+	dh $@ --builddirectory=_build --buildsystem=golang --with=golang
+
+override_dh_auto_configure:
+	cp -r debian/extra/vendor ./
+	dh_auto_configure
+
+override_dh_auto_build:
+	dh_auto_build -O--buildsystem=golang -- -ldflags="-s -w -X main.version=$(shell dpkg-parsechangelog -S Version)"
+
+override_dh_auto_install:
+	dh_auto_install -- --no-source
+
+override_dh_installsystemd:
+	dh_installsystemd google-guest-agent.service
+	dh_installsystemd gce-workload-cert-refresh.timer
+	dh_installsystemd --no-start --no-restart-after-upgrade --no-stop-on-upgrade google-startup-scripts.service google-shutdown-scripts.service gce-workload-cert-refresh.timer
+
+override_dh_clean:
+	dh_clean vendor/
