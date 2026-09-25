@@ -158,8 +158,8 @@ func addLocalRoute(ctx context.Context, config *cfg.Sections, ip, ifname string)
 		ip = ip + "/32"
 	}
 	protoID := config.IPForwarding.EthernetProtoID
-	args := fmt.Sprintf("route add to local %s scope host dev %s proto %s", ip, ifname, protoID)
-	return run.Quiet(ctx, "ip", strings.Split(args, " ")...)
+	args := []string{"route", "add", "to", "local", ip, "scope", "host", "dev", ifname, "proto", protoID}
+	return run.Quiet(ctx, "ip", args...)
 }
 
 // TODO: removeLocalRoute should be changed to removeIPForwardEntry and match getIPForwardEntries.
@@ -173,8 +173,8 @@ func removeLocalRoute(ctx context.Context, config *cfg.Sections, ip, ifname stri
 		ip = ip + "/32"
 	}
 	protoID := config.IPForwarding.EthernetProtoID
-	args := fmt.Sprintf("route delete to local %s scope host dev %s proto %s", ip, ifname, protoID)
-	return run.Quiet(ctx, "ip", strings.Split(args, " ")...)
+	args := []string{"route", "delete", "to", "local", ip, "scope", "host", "dev", ifname, "proto", protoID}
+	return run.Quiet(ctx, "ip", args...)
 }
 
 // Filter out forwarded ips based on WSFC (Windows Failover Cluster Settings).
