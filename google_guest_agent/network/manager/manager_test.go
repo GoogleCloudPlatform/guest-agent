@@ -327,19 +327,19 @@ func TestReformatVlanNics(t *testing.T) {
 	mds := &metadata.Descriptor{Instance: metadata.Instance{
 		VlanNetworkInterfaces: map[int]map[int]metadata.VlanInterface{
 			0: {
-				5: {Mac: "a", ParentInterface: "/computeMetadata/v1/instance/network-interfaces/0/", Vlan: 5},
-				6: {Mac: "b", Vlan: 6, IP: "1.2.3.4"},
+				5: {Mac: "00:00:5e:00:53:01", ParentInterface: "/computeMetadata/v1/instance/network-interfaces/0/", Vlan: 5},
+				6: {Mac: "00:00:5e:00:53:02", Vlan: 6, IP: "1.2.3.4"},
 			},
 			1: {
-				7: {Mac: "c", Vlan: 7, DHCPv6Refresh: "123456"},
+				7: {Mac: "00:00:5e:00:53:03", Vlan: 7, DHCPv6Refresh: "123456"},
 			},
 		},
 	}}
 	nics := &Interfaces{VlanInterfaces: map[string]VlanInterface{}}
 	want := &Interfaces{VlanInterfaces: map[string]VlanInterface{
-		"0-5": {VlanInterface: metadata.VlanInterface{Mac: "a", ParentInterface: "/computeMetadata/v1/instance/network-interfaces/0/", Vlan: 5}, ParentInterfaceID: "eth0"},
-		"0-6": {VlanInterface: metadata.VlanInterface{Mac: "b", Vlan: 6, IP: "1.2.3.4"}, ParentInterfaceID: "eth0"},
-		"1-7": {VlanInterface: metadata.VlanInterface{Mac: "c", Vlan: 7, DHCPv6Refresh: "123456"}, ParentInterfaceID: "eth1"},
+		"0-5": {VlanInterface: metadata.VlanInterface{Mac: "00:00:5e:00:53:01", ParentInterface: "/computeMetadata/v1/instance/network-interfaces/0/", Vlan: 5}, ParentInterfaceID: "eth0"},
+		"0-6": {VlanInterface: metadata.VlanInterface{Mac: "00:00:5e:00:53:02", Vlan: 6, IP: "1.2.3.4"}, ParentInterfaceID: "eth0"},
+		"1-7": {VlanInterface: metadata.VlanInterface{Mac: "00:00:5e:00:53:03", Vlan: 7, DHCPv6Refresh: "123456"}, ParentInterfaceID: "eth1"},
 	}}
 
 	ethernetInterfaces := []string{"eth0", "eth1"}
@@ -387,6 +387,38 @@ func TestReformatVlanNicsError(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			if err := reformatVlanNics(mds, nics, test.ethernetInterfaces); err == nil {
 				t.Fatalf("reformatVlanNics(%+v, %+v, %+v) succeeded, want error", mds, nics, test.ethernetInterfaces)
+			}
+		})
+	}
+}
+
+func TestReformatVlanNicsMac(t *testing.T) {
+	tests := []struct {
+		name    string
+		mac     string
+		wantErr bool
+	}{
+		{name: "valid", mac: "00:00:5e:00:53:01"},
+		{name: "empty", mac: ""},
+		{name: "malformed", mac: "not-a-mac", wantErr: true},
+		{name: "newline_injection", mac: "00:00:5e:00:53:01\nLLADDR=00:00:5e:00:53:ff\nPOST_UP_SCRIPT=/tmp/evil.sh", wantErr: true},
+		{name: "space_injection", mac: "00:00:5e:00:53:01 up", wantErr: true},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			mds := &metadata.Descriptor{Instance: metadata.Instance{
+				VlanNetworkInterfaces: map[int]map[int]metadata.VlanInterface{
+					0: {5: {Mac: test.mac, Vlan: 5}},
+				},
+			}}
+			nics := &Interfaces{VlanInterfaces: map[string]VlanInterface{}}
+			err := reformatVlanNics(mds, nics, []string{"eth0"})
+			if test.wantErr && err == nil {
+				t.Errorf("reformatVlanNics(mac=%q) = nil, want error", test.mac)
+			}
+			if !test.wantErr && err != nil {
+				t.Errorf("reformatVlanNics(mac=%q) = %v, want nil", test.mac, err)
 			}
 		})
 	}
