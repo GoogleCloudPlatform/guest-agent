@@ -305,8 +305,13 @@ func setupRoutes(ctx context.Context, metadata *metadata.Descriptor, config *cfg
 			}
 			continue
 		}
-		wantIPs := ni.ForwardedIps
-		wantIPs = append(wantIPs, ni.ForwardedIpv6s...)
+		wantIPs := []string{}
+		if config.IPForwarding.ForwardedIPs {
+			wantIPs = append(wantIPs, ni.ForwardedIps...)
+		}
+		if config.IPForwarding.ForwardedIpv6s {
+			wantIPs = append(wantIPs, ni.ForwardedIpv6s...)
+		}
 		if config.IPForwarding.TargetInstanceIPs {
 			wantIPs = append(wantIPs, ni.TargetInstanceIps...)
 		}
