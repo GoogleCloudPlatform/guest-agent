@@ -213,7 +213,7 @@ func (n *systemdNetworkd) IsManaging(ctx context.Context, iface string) (bool, e
 	}
 
 	// Check systemd network configuration.
-	res = run.WithOutput(ctx, "/bin/sh", "-c", fmt.Sprintf("networkctl status %s --json=short", iface))
+	res = run.WithOutput(ctx, "networkctl", "status", iface, "--json=short")
 	if res.ExitCode != 0 {
 		return false, fmt.Errorf("failed to check systemd-networkd network status: %v", res.StdErr)
 	}

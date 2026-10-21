@@ -137,7 +137,7 @@ func (s systemdMockRunner) WithOutput(ctx context.Context, name string, args ...
 		}
 		return &run.Result{}
 	}
-	if name == "/bin/sh" && slices.Contains(args, "networkctl status iface --json=short") {
+	if name == "networkctl" && slices.Contains(args, "status") {
 		statusOpts := s.statusOpts
 
 		if statusOpts.returnErr {
@@ -425,6 +425,80 @@ func TestSystemdNetworkdIsManaging(t *testing.T) {
 
 			dhclientTestTearDown(t)
 		})
+	}
+}
+
+// capturingRunner records every command it is asked to run so a test can assert
+// on the exact argv passed to the runner, in particular that no shell is used.
+type capturingRunner struct {
+	cmds [][]string
+}
+
+func (c *capturingRunner) record(name string, args []string) {
+	c.cmds = append(c.cmds, append([]string{name}, args...))
+}
+
+func (c *capturingRunner) Quiet(ctx context.Context, name string, args ...string) error {
+	c.record(name, args)
+	return nil
+}
+
+func (c *capturingRunner) WithOutput(ctx context.Context, name string, args ...string) *run.Result {
+	c.record(name, args)
+	switch {
+	case name == "networkctl" && slices.Contains(args, "--version"):
+		return &run.Result{StdOut: "systemd 300 (300-1.0)\n+TEST"}
+	case name == "systemctl" && slices.Contains(args, "is-active"):
+		return &run.Result{}
+	case name == "networkctl" && slices.Contains(args, "status"):
+		return &run.Result{StdOut: `{"Name": "iface", "SetupState": "configured"}`}
+	}
+	return &run.Result{ExitCode: 1, StdErr: "unexpected command"}
+}
+
+func (c *capturingRunner) WithOutputTimeout(ctx context.Context, timeout time.Duration, name string, args ...string) *run.Result {
+	c.record(name, args)
+	return &run.Result{}
+}
+
+func (c *capturingRunner) WithCombinedOutput(ctx context.Context, name string, args ...string) *run.Result {
+	c.record(name, args)
+	return &run.Result{}
+}
+
+// TestSystemdNetworkdIsManagingNoShell verifies IsManaging runs networkctl
+// directly rather than through /bin/sh. An interface name can carry a raw,
+// invalid MDS MAC (interfaceNames names it "invalid-<mac>" when net.ParseMAC
+// fails), so a shell would interpret metacharacters in that name as commands.
+func TestSystemdNetworkdIsManagingNoShell(t *testing.T) {
+	execLookPath = func(name string) (string, error) { return name, nil }
+	runner := &capturingRunner{}
+	run.Client = runner
+	defer func() {
+		execLookPath = exec.LookPath
+		run.Client = &run.Runner{}
+	}()
+
+	iface := "invalid-x; touch pwned #"
+	if _, err := mockSystemd.IsManaging(context.Background(), iface); err != nil {
+		t.Fatalf("IsManaging(%q) returned unexpected error: %v", iface, err)
+	}
+
+	var sawStatus bool
+	for _, cmd := range runner.cmds {
+		if cmd[0] == "/bin/sh" || cmd[0] == "/bin/bash" || slices.Contains(cmd, "-c") {
+			t.Errorf("IsManaging invoked a shell (%v); interface names must not reach a shell", cmd)
+		}
+		if cmd[0] == "networkctl" && slices.Contains(cmd, "status") {
+			sawStatus = true
+			want := []string{"networkctl", "status", iface, "--json=short"}
+			if !slices.Equal(cmd, want) {
+				t.Errorf("networkctl status argv = %v, want %v (iface must be a single argument)", cmd, want)
+			}
+		}
+	}
+	if !sawStatus {
+		t.Fatalf("IsManaging never ran networkctl status; recorded commands: %v", runner.cmds)
 	}
 }
 
