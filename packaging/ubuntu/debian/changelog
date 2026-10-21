@@ -1,0 +1,281 @@
+google-guest-agent (20240716.00-0ubuntu1) oracular; urgency=medium
+
+  [ Utkarsh Gupta ]
+  * New upstream version 20240716.00. (LP: #2073163)
+  * Update vendored dependencies.
+  * Set DH_GOLANG_INSTALL_EXTRA to editions_defaults.binpb.
+
+  [ Chloé Smith ]
+  * d/p/0006-add-after-cloud-config-service.patch: add patch
+    to force ordering between cloud-init and the guest agent.
+    (LP: #2057965)
+
+ -- Utkarsh Gupta <utkarsh@ubuntu.com>  Thu, 18 Jul 2024 23:47:17 +0530
+
+google-guest-agent (20240213.00-0ubuntu4) oracular; urgency=medium
+
+  * SECURITY UPDATE: Denial of service
+    - debian/extra/vendor/googgle.golang.org/protobuf was
+      patched with a backport of f01a588e5810b90996452eec4a28f22a0afae023
+      in files encoding/protojson/well_known_types.go,
+      internal/encoding/json/decode.go.
+    - debian/extra/vendor adding patches-applied and README.txt for
+      track/documentation propose about patches applied in vendored sources.
+    - CVE-2024-24786
+
+ -- Leonidas Da Silva Barbosa <leo.barbosa@canonical.com>  Wed, 12 Jun 2024 10:15:12 -0300
+
+google-guest-agent (20240213.00-0ubuntu3) noble; urgency=medium
+
+  * No-change rebuild against Go 1.22.
+
+ -- Vladimir Petko <vladimir.petko@canonical.com>  Mon, 08 Apr 2024 14:53:33 +1200
+
+google-guest-agent (20240213.00-0ubuntu2) noble; urgency=medium
+
+  * No-change rebuild for CVE-2024-3094
+
+ -- William Grant <wgrant@ubuntu.com>  Mon, 01 Apr 2024 16:50:39 +1100
+
+google-guest-agent (20240213.00-0ubuntu1) noble; urgency=medium
+
+  [ Utkarsh Gupta ]
+  * Add a reason to include include-binaries file.
+
+  [ Chloé 'kajiya' Smith ]
+  * New upstream version, v20240213.00. (LP: #2054484)
+  * d/extra/vendor: Update the vendored dependencies.
+  * d/source/include-binaries: add new file.
+
+ -- Chloé 'kajiya' Smith <chloe.smith@canonical.com>  Wed, 21 Feb 2024 00:25:47 +0000
+
+google-guest-agent (20231004.02-0ubuntu3) noble; urgency=medium
+
+  * d/control: Fix dependency version of `google-compute-engine-oslogin`
+    to match archive (LP: #2050956)
+
+ -- Chloé 'kajiya' Smith <chloe.smith@canonical.com>  Fri, 26 Jan 2024 15:12:02 +0000
+
+google-guest-agent (20231004.02-0ubuntu2) noble; urgency=medium
+
+  * d/control: There should b a dependency on `google-compute-engine-oslogin`
+    to match the Google managed control file (LP: #2050956)
+    * Also updated the `Vcs-` fields and removed the `Uploaders` field.
+
+ -- Chloé 'kajiya' Smith <chloe.smith@canonical.com>  Tue, 23 Jan 2024 13:43:24 +0000
+
+google-guest-agent (20231004.02-0ubuntu1) noble; urgency=medium
+
+  * New upstream version 20231004.02. (LP: #2040945)
+  * d/extra/vendor: Update vendored dependencies.
+
+ -- Utkarsh Gupta <utkarsh@ubuntu.com>  Thu, 26 Oct 2023 03:12:14 +0100
+
+google-guest-agent (20230426.00-0ubuntu2) mantic; urgency=medium
+
+  * d/rules: Add --no-stop-on-upgrade for upgrade path
+    to enforce no stop of the services on package upgrade.
+    This has the desired side-effect of not stopping, starting or
+    restarting the services as a part of the upgrade (LP: #2019089)
+  * d/{rules,install}: ship gce-workload-cert-refresh.timer.
+
+ -- Utkarsh Gupta <utkarsh@ubuntu.com>  Tue, 16 May 2023 11:11:11 +0530
+
+google-guest-agent (20230426.00-0ubuntu1) mantic; urgency=medium
+
+  * New upstream version 20230426.00. (LP: #2018272)
+    - update mod: update golang.org/x/net to 0.7.0 and its
+      dependencies.
+    - Fix compilation directives.
+  * d/extra/vendor: Update vendored dependencies.
+    (Fixes: CVE-2022-41723)
+
+ -- Utkarsh Gupta <utkarsh@ubuntu.com>  Tue, 02 May 2023 08:51:38 +0200
+
+google-guest-agent (20230330.00-0ubuntu1) lunar; urgency=high
+
+  * New upstream version 20230330.00. (LP: #2016593)
+    - correct expired key handling (#175)
+    - Expired key tests (#176)
+    - add members to OWNERS (#178)
+    - Workload certs (#177)
+    - Workload certificate refresh (#182)
+    - update workload_cert permissions (#180)
+    - write workload cert status file (#184)
+    - add workload cert refresh to preset (#185)
+    - Updates to gce-workload-cert-refresh (#186)
+    - Fix typo with wsfc agent (#189)
+    - Validate user key for whitespace chars (#188)
+    - Windows: retry adding MDS route (#194)
+    - Updating logging module so cloud logs are flushed prior to exit
+      (#196)
+    - Update owners file (#199)
+    - Update OWNERS (#201)
+    - Allow a comment part of a pub ssh key to have an arbitrary format
+      (#198)
+  * d/extra/vendor: Update vendored dependencies.
+
+ -- Utkarsh Gupta <utkarsh.gupta@canonical.com>  Tue, 11 Apr 2023 20:17:10 +0530
+
+google-guest-agent (20220622.00-0ubuntu5) lunar; urgency=medium
+
+  * d/p/0005-make-service-directive-explicit.patch: restructure directives
+    so services run in the correct order. (LP: #2004606)
+
+ -- Chloé 'kajiya' Smith <chloe.smith@canonical.com>  Fri, 03 Feb 2023 00:14:03 +0000
+
+google-guest-agent (20220622.00-0ubuntu4) lunar; urgency=medium
+
+  * d/p/0005-remove-dupe-multi-user-target.patch: fix breaking typo
+    in the service file. (LP: #1998864)
+
+ -- Chloé 'kajiya' Smith <chloe.smith@canonical.com>  Thu, 08 Dec 2022 7:19:31 +0000
+
+google-guest-agent (20220622.00-0ubuntu3) lunar; urgency=medium
+
+  * d/p/0005-remove-dupe-multi-user-target.patch: Add patch to
+    fix duplicate `multi-user.target` entries. (LP: #1998864)
+
+ -- Chloé 'kajiya' Smith <chloe.smith@canonical.com>  Mon, 05 Dec 2022 19:52:50 +0000
+
+google-guest-agent (20220622.00-0ubuntu2) kinetic; urgency=medium
+
+  * d/rules: don't build google_authorized_keys as it
+    conflicts with the same binary shipped by
+    src:google-compute-engine-oslogin. (LP: #1980725)
+
+ -- Utkarsh Gupta <utkarsh@ubuntu.com>  Tue, 05 Jul 2022 14:43:54 +0530
+
+google-guest-agent (20220622.00-0ubuntu1) kinetic; urgency=medium
+
+  * New upstream version 20220622.00. (LP: #1959392)
+    - Remove extra slash from metadata URL. (#151)
+    - Remove han from owners. (#154)
+    - Enable routes for ipv6. (#160)
+    - Enable goproxy during build. (#163)
+    - Move some functionality to a utils module. (#162)
+    - Support .exe as an option for scripts and refactor runScript. (#165)
+    - Restore double slash metadata url. (#166)
+    - Support for Windows SSH. (#164)
+    - Add authorized keys command to the Windows agent package. (#167)
+    - No authorized keys on debian. (#168)
+    - Repeat fix for arm. (#169)
+    - Remove log that can break startup scripts. (#170)
+    - Update for golang 1.16. (#171)
+    - Try restoring module mode. (#172)
+
+ -- Utkarsh Gupta <utkarsh@ubuntu.com>  Fri, 24 Jun 2022 13:26:57 +0530
+
+google-guest-agent (20220104.00-0ubuntu1) jammy; urgency=medium
+
+  * New upstream version 20220104.00. (LP: #1959392)
+    - Use IP address for calling the metadata server. (#116)
+    - Debug logging. (#122)
+    - Support enable-oslogin-sk key. (#120)
+    - New integ test. (#124)
+    - Restore line. (#127)
+    - Correct linux startup script order. (#135)
+    - Add WantedBy network dependencies to google-guest-agent
+      service. (#136) (LP: #1938299)
+    - Don't open ssh tempfile exclusively. (#137)
+    - Enable ipv6 on secondary interfaces (#133)
+    - Enforce script ordering. (#138)
+    - Handle comm errors in script runner. (#140)
+    - Integration test: test create and remove google user. (#128)
+    - Integration tests: instance setup. (#143)
+    - Don't duplicate logs. (#146)
+    - Add malformed ssh key unit test. (#142)
+    - Add or remove route integration test, utils. (#147)
+    - List IPv6 routes. (#150)
+
+ -- Utkarsh Gupta <utkarsh.gupta@canonical.com>  Fri, 28 Jan 2022 17:36:04 +0530
+
+google-guest-agent (20210629.00-0ubuntu1) impish; urgency=medium
+
+  * New upstream version 20210629.00. (LP: #1938286)
+    - start sshd (#106).
+    - more granular service restarts (#111).
+    - systemd-notify in agentInit (#113).
+    - use IP for MDS (#115).
+
+ -- Utkarsh Gupta <utkarsh.gupta@canonical.com>  Wed, 28 Jul 2021 17:03:35 +0530
+
+google-guest-agent (20210414.00-0ubuntu1) hirsute; urgency=medium
+
+  * New upstream release (LP: #1924589)
+    - call restorecon on ssh host keys (#98)
+    - add ipv6 forwarded ip support (#101)
+    - add a match block to sshd_config for SAs (#99)
+    - Update error message for handleHealthCheckRequest. (#105)
+    - Add systemd-networkd.service restart dependency
+    - start sshd
+
+ -- Balint Reczey <rbalint@ubuntu.com>  Thu, 15 Apr 2021 18:18:15 +0200
+
+google-guest-agent (20201217.02-0ubuntu1) hirsute; urgency=medium
+
+  * New upstream release (LP: #1911448)
+  * debian/watch: Fix version handing in the download URL
+  * Update vendored files
+
+ -- Balint Reczey <rbalint@ubuntu.com>  Wed, 13 Jan 2021 19:13:59 +0100
+
+google-guest-agent (20200617.00-0ubuntu8) hirsute; urgency=medium
+
+  * debian/rules: Build the package as preferred by upstream
+    - Strip the binary
+    - Set main.version (LP: #1900897)
+  * Declare Breaks: on python3-google-compute-engine
+    to force conscious removal of the Python libraries that are not maintained
+    and this package make obsolete. (LP: #1905986)
+
+ -- Balint Reczey <rbalint@ubuntu.com>  Wed, 13 Jan 2021 13:24:40 +0100
+
+google-guest-agent (20200617.00-0ubuntu7) hirsute; urgency=medium
+
+  * No-change rebuild using new golang
+
+ -- Steve Langasek <steve.langasek@ubuntu.com>  Wed, 11 Nov 2020 22:16:15 +0000
+
+google-guest-agent (20200617.00-0ubuntu6) groovy; urgency=medium
+
+  * Import relevant patches from earlier gce-compute-image-packages package
+    (LP: #1901033)
+
+ -- Balint Reczey <rbalint@ubuntu.com>  Thu, 22 Oct 2020 17:29:37 +0200
+
+google-guest-agent (20200617.00-0ubuntu5) groovy; urgency=medium
+
+  * debian/rules: Don't stop or start google-startup-scripts and
+    google-shutdown-scripts services
+
+ -- Balint Reczey <rbalint@ubuntu.com>  Sat, 03 Oct 2020 00:47:33 +0200
+
+google-guest-agent (20200617.00-0ubuntu4) groovy; urgency=medium
+
+  * debian/gbp.conf: Use Ubuntu tags
+  * Don't ship /etc/default/instance_configs.cfg.
+    Also don't remove it when it exists according to upstream's request.
+  * debian/extra/vendor/*: Add vendored module sources
+  * debian/control: Drop unused Go build dependencies
+
+ -- Balint Reczey <rbalint@ubuntu.com>  Wed, 30 Sep 2020 15:01:51 +0200
+
+google-guest-agent (20200617.00-0ubuntu3) groovy; urgency=medium
+
+  * debian/copyright: Use "Google Inc" as copyright holder
+    instead of Google Cloud Platform
+
+ -- Balint Reczey <rbalint@ubuntu.com>  Tue, 25 Aug 2020 19:41:08 +0200
+
+google-guest-agent (20200617.00-0ubuntu2) groovy; urgency=medium
+
+  * Install /etc/default/instance_configs.cfg to the right path
+
+ -- Balint Reczey <rbalint@ubuntu.com>  Thu, 13 Aug 2020 23:51:12 +0200
+
+google-guest-agent (20200617.00-0ubuntu1) groovy; urgency=medium
+
+  * Initial release (LP: #1870314)
+
+ -- Balint Reczey <rbalint@ubuntu.com>  Thu, 23 Jul 2020 15:53:14 +0200

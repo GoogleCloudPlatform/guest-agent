@@ -1,0 +1,20 @@
+From: Daniel Watkins <daniel.watkins@canonical.com>
+Date: Fri, 12 Apr 2019 13:23:42 +0200
+Subject: Ensure that snaps have been seeded before startup scripts run
+
+Last-Update: 2018-05-15
+---
+ .../google-startup-scripts.service               | 2 ++
+ 1 file changed, 2 insertions(+)
+
+--- a/google-startup-scripts.service
++++ b/google-startup-scripts.service
+@@ -5,6 +5,8 @@
+ Before=apt-daily.service
+ After=cloud-final.service multi-user.target
+ Wants=cloud-final.service
++After=snapd.seeded.service
++Wants=snapd.seeded.service
+ 
+ [Service]
+ Type=oneshot

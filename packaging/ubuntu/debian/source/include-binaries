@@ -1,0 +1,9 @@
+# add test data binaries that are shipped in the vendored code
+debian/extra/vendor/github.com/google/s2a-go/internal/v2/certverifier/testdata/server_leaf_cert.der
+debian/extra/vendor/github.com/google/s2a-go/internal/v2/certverifier/testdata/client_root_cert.der
+debian/extra/vendor/github.com/google/s2a-go/internal/v2/certverifier/testdata/server_intermediate_cert.der
+debian/extra/vendor/github.com/google/s2a-go/internal/v2/certverifier/testdata/server_root_cert.der
+debian/extra/vendor/github.com/google/s2a-go/internal/v2/certverifier/testdata/client_intermediate_cert.der
+debian/extra/vendor/github.com/google/s2a-go/internal/v2/certverifier/testdata/client_leaf_cert.der
+debian/extra/vendor/github.com/google/s2a-go/internal/v2/remotesigner/testdata/server_cert.der
+debian/extra/vendor/github.com/google/s2a-go/internal/v2/remotesigner/testdata/client_cert.der
