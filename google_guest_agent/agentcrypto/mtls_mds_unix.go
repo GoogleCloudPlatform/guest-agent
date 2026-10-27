@@ -65,7 +65,9 @@ func (j *CredsJob) writeClientCredentials(plaintext []byte, outputFile string) e
 	if err := os.MkdirAll(filepath.Dir(outputFile), 0655); err != nil {
 		return err
 	}
-	return utils.SaferWriteFile(plaintext, outputFile, 0644)
+	// This file holds the EC private key, restrict it to the owner so other
+	// local users cannot read it and impersonate the instance to the MDS.
+	return utils.SaferWriteFile(plaintext, outputFile, 0600)
 }
 
 // getCAStoreUpdater interates over known system trust store updaters and returns the first found.
