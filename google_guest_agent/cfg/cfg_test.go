@@ -31,6 +31,10 @@ func TestLoad(t *testing.T) {
 	if cfg.Accounts.DeprovisionRemove == true {
 		t.Errorf("Expected Accounts.deprovision_remove to be: false, got: true")
 	}
+
+	if cfg.Accounts.AllowOnDomainController == true {
+		t.Errorf("Expected Accounts.allow_on_domain_controller to be: false, got: true")
+	}
 }
 
 func TestInvalidConfig(t *testing.T) {

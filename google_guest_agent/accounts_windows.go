@@ -16,12 +16,26 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"syscall"
 	"unsafe"
 
+	"github.com/GoogleCloudPlatform/guest-agent/google_guest_agent/cfg"
 	"golang.org/x/sys/windows"
 )
+
+// verNTDomainController is the VER_NT_DOMAIN_CONTROLLER product type, reported
+// by both writable and read-only domain controllers.
+// https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/ns-wdm-_osversioninfoexw
+const verNTDomainController = 0x2
+
+// ErrDomainController is returned when an account change is refused because the
+// machine is an Active Directory domain controller. On a domain controller the
+// local account APIs change domain accounts instead of local ones. The message
+// is written to the serial port for password reset clients, so it says how to
+// opt in.
+var ErrDomainController = errors.New("refusing to change Windows accounts on an Active Directory domain controller, where they would change domain accounts; to allow it, set allow_on_domain_controller = true in the [Accounts] section of instance_configs.cfg and restart the guest agent")
 
 var (
 	netAPI32                    = windows.NewLazySystemDLL("netapi32.dll")
@@ -89,7 +103,24 @@ const (
 	UF_USE_AES_KEYS                           = 0x8000000
 )
 
+// checkDomainController returns ErrDomainController if version reports an
+// Active Directory domain controller and config doesn't allow account changes
+// on it. RtlGetVersion always succeeds, so non-DC machines have no error path
+// that could block account changes.
+func checkDomainController(version *windows.OsVersionInfoEx, config *cfg.Sections) error {
+	if version.ProductType != verNTDomainController {
+		return nil
+	}
+	if config.Accounts.AllowOnDomainController {
+		return nil
+	}
+	return ErrDomainController
+}
+
 func resetPwd(username, pwd string) error {
+	if err := checkDomainController(windows.RtlGetVersion(), cfg.Get()); err != nil {
+		return err
+	}
 	uPtr, err := syscall.UTF16PtrFromString(username)
 	if err != nil {
 		return fmt.Errorf("error encoding username to UTF16: %v", err)
@@ -112,6 +143,9 @@ func resetPwd(username, pwd string) error {
 }
 
 func addUserToGroup(_ context.Context, username, group string) error {
+	if err := checkDomainController(windows.RtlGetVersion(), cfg.Get()); err != nil {
+		return err
+	}
 	gPtr, err := syscall.UTF16PtrFromString(group)
 	if err != nil {
 		return fmt.Errorf("error encoding group to UTF16: %v", err)
@@ -139,6 +173,9 @@ func addUserToGroup(_ context.Context, username, group string) error {
 }
 
 func createUser(_ context.Context, username, pwd, _ string) error {
+	if err := checkDomainController(windows.RtlGetVersion(), cfg.Get()); err != nil {
+		return err
+	}
 	uPtr, err := syscall.UTF16PtrFromString(username)
 	if err != nil {
 		return fmt.Errorf("error encoding username to UTF16: %v", err)
