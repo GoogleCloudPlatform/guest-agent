@@ -1,0 +1,26 @@
+From: Ubuntu Developers <ubuntu-devel-discuss@lists.ubuntu.com>
+Date: Fri, 12 Apr 2019 13:23:42 +0200
+Subject: Fix where GCE startup scripts are run during boot
+
+ This fixes:
+  * GCE mirrors not in place before startup scripts are run (LP: #1436846)
+  * Run google-startup-scripts.service after multi-user.target (LP: #1627436)
+Author: Phil Roche <phil.roche@canonical.com>
+Bug-Ubuntu: https://bugs.launchpad.net/bugs/1436846
+Bug-Ubuntu: https://bugs.launchpad.net/bugs/1627436
+Last-Update: 2016-11-23
+---
+ .../google-startup-scripts.service               | 2 ++
+ 1 file changed, 2 insertions(+)
+
+--- a/google-startup-scripts.service
++++ b/google-startup-scripts.service
+@@ -3,6 +3,8 @@
+ Wants=network-online.target rsyslog.service
+ After=network-online.target rsyslog.service google-guest-agent.service
+ Before=apt-daily.service
++After=cloud-final.service multi-user.target
++Wants=cloud-final.service
+ 
+ [Service]
+ Type=oneshot

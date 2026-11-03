@@ -1,0 +1,19 @@
+Description: Fix race condition where cloud-config.service does not finish
+before google-startup-scripts.service starts, causing APT to fail (as
+cloud-init reconfigures APT sources to use the GCE archives).
+Author: Chloé 'kajiya' Smith <chloe.smith@canonical.com>
+Origin: vendor
+Bug: LP: #2057965
+Last-Update: 2024-07-08
+---
+This patch header follows DEP-3: http://dep.debian.net/deps/dep3/
+--- a/google-startup-scripts.service
++++ b/google-startup-scripts.service
+@@ -7,6 +7,7 @@
+ Wants=cloud-final.service
+ After=snapd.seeded.service
+ Wants=snapd.seeded.service
++After=cloud-config.service
+ 
+ [Service]
+ Type=oneshot
