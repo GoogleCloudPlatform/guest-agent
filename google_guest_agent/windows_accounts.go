@@ -125,21 +125,21 @@ func createOrResetPwd(ctx context.Context, k metadata.WindowsKey) (*credsJSON, e
 	if _, err := userExists(k.UserName); err == nil {
 		logger.Infof("Resetting password for user %s", k.UserName)
 		if err := resetPwd(k.UserName, pwd); err != nil {
-			return nil, fmt.Errorf("error running resetPwd: %v", err)
+			return nil, fmt.Errorf("error running resetPwd: %w", err)
 		}
 		if k.AddToAdministrators != nil && *k.AddToAdministrators {
 			if err := addUserToGroup(ctx, k.UserName, "Administrators"); err != nil {
-				return nil, fmt.Errorf("error running addUserToGroup: %v", err)
+				return nil, fmt.Errorf("error running addUserToGroup: %w", err)
 			}
 		}
 	} else {
 		logger.Infof("Creating user %s", k.UserName)
 		if err := createUser(ctx, k.UserName, pwd, ""); err != nil {
-			return nil, fmt.Errorf("error running createUser: %v", err)
+			return nil, fmt.Errorf("error running createUser: %w", err)
 		}
 		if k.AddToAdministrators == nil || *k.AddToAdministrators {
 			if err := addUserToGroup(ctx, k.UserName, "Administrators"); err != nil {
-				return nil, fmt.Errorf("error running addUserToGroup: %v", err)
+				return nil, fmt.Errorf("error running addUserToGroup: %w", err)
 			}
 		}
 	}
@@ -157,11 +157,11 @@ func createSSHUser(ctx context.Context, user string) error {
 	}
 	logger.Infof("Creating user %s", user)
 	if err := createUser(ctx, user, pwd, ""); err != nil {
-		return fmt.Errorf("error running createUser: %v", err)
+		return fmt.Errorf("error running createUser: %w", err)
 	}
 
 	if err := addUserToGroup(ctx, user, "Administrators"); err != nil {
-		return fmt.Errorf("error running addUserToGroup: %v", err)
+		return fmt.Errorf("error running addUserToGroup: %w", err)
 	}
 	return nil
 }

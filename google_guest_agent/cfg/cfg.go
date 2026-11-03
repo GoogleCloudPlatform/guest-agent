@@ -45,6 +45,7 @@ const (
 cloud_logging_enabled = true
 
 [Accounts]
+allow_on_domain_controller = false
 deprovision_remove = false
 gpasswd_add_cmd = gpasswd -a {user} {group}
 gpasswd_remove_cmd = gpasswd -d {user} {group}
@@ -124,6 +125,7 @@ systemd_config_dir = /usr/lib/systemd/network
 cloud_logging_enabled = true
 
 [Accounts]
+allow_on_domain_controller = false
 deprovision_remove = false
 gpasswd_add_cmd = pw groupmod {group} -m {user}
 gpasswd_remove_cmd = pw groupmod {group} -d {user}
@@ -217,7 +219,9 @@ type Sections struct {
 	// pointer is nil or not.
 	AccountManager *AccountManager `ini:"accountManager,omitempty"`
 
-	// Accounts defines the non windows account management options, behaviors and commands.
+	// Accounts defines the non windows account management options, behaviors and commands,
+	// plus the Windows allow_on_domain_controller option. The default configuration always
+	// defines this section.
 	Accounts *Accounts `ini:"Accounts,omitempty"`
 
 	// AddressManager defines the address management configurations. It takes precedence over instance's
@@ -282,14 +286,18 @@ type AccountManager struct {
 
 // Accounts contains the configurations of Accounts section.
 type Accounts struct {
-	DeprovisionRemove bool   `ini:"deprovision_remove,omitempty"`
-	GPasswdAddCmd     string `ini:"gpasswd_add_cmd,omitempty"`
-	GPasswdRemoveCmd  string `ini:"gpasswd_remove_cmd,omitempty"`
-	GroupAddCmd       string `ini:"groupadd_cmd,omitempty"`
-	Groups            string `ini:"groups,omitempty"`
-	ReuseHomedir      bool   `ini:"reuse_homedir,omitempty"`
-	UserAddCmd        string `ini:"useradd_cmd,omitempty"`
-	UserDelCmd        string `ini:"userdel_cmd,omitempty"`
+	// AllowOnDomainController allows Windows account changes on an Active
+	// Directory domain controller, where they change domain accounts. It is only
+	// read from the config file, so it can't be turned on through metadata.
+	AllowOnDomainController bool   `ini:"allow_on_domain_controller,omitempty"`
+	DeprovisionRemove       bool   `ini:"deprovision_remove,omitempty"`
+	GPasswdAddCmd           string `ini:"gpasswd_add_cmd,omitempty"`
+	GPasswdRemoveCmd        string `ini:"gpasswd_remove_cmd,omitempty"`
+	GroupAddCmd             string `ini:"groupadd_cmd,omitempty"`
+	Groups                  string `ini:"groups,omitempty"`
+	ReuseHomedir            bool   `ini:"reuse_homedir,omitempty"`
+	UserAddCmd              string `ini:"useradd_cmd,omitempty"`
+	UserDelCmd              string `ini:"userdel_cmd,omitempty"`
 }
 
 // AddressManager contains the configuration of addressManager section.
