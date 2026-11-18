@@ -163,6 +163,16 @@ func reformatVlanNics(mds *metadata.Descriptor, nics *Interfaces, ethernetInterf
 		}
 
 		for vlanID, vlan := range vlans {
+			// The vlan's mac comes straight from MDS and is later written into
+			// backend network configuration (e.g. wicked's LLADDR ifcfg line and
+			// systemd-networkd's MACAddress key) and passed to `ip link set`. Reject
+			// anything that isn't a well-formed hardware address so a value carrying
+			// newlines or spaces can't inject extra config directives or arguments.
+			if vlan.Mac != "" {
+				if _, err := net.ParseMAC(vlan.Mac); err != nil {
+					return fmt.Errorf("invalid vlan interface(%d-%d) mac address %q: %w", parentID, vlanID, vlan.Mac, err)
+				}
+			}
 			mapID := fmt.Sprintf("%d-%d", parentID, vlanID)
 			nics.VlanInterfaces[mapID] = VlanInterface{VlanInterface: vlan, ParentInterfaceID: ethernetInterfaces[parentID]}
 		}
