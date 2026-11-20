@@ -5,7 +5,7 @@ go 1.26.2
 replace github.com/GoogleCloudPlatform/guest-agent/metadata => ../metadata
 
 require (
-	cloud.google.com/go/storage v1.69.0
+	cloud.google.com/go/storage v1.70.0
 	github.com/GoogleCloudPlatform/guest-logging-go v0.0.0-20260611222439-02d6ddff2dfb
 	github.com/Microsoft/go-winio v0.6.4
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8
@@ -16,12 +16,12 @@ require (
 	github.com/kardianos/service v1.3.0
 	github.com/robfig/cron/v3 v3.0.1
 	go.bug.st/serial v1.8.0
-	golang.org/x/crypto v0.58.0
-	golang.org/x/sys v0.49.0
-	google.golang.org/api v0.306.0
-	google.golang.org/grpc v1.84.0
+	golang.org/x/crypto v0.59.0
+	golang.org/x/sys v0.50.0
+	google.golang.org/api v0.307.0
+	google.golang.org/grpc v1.85.0
 	google.golang.org/protobuf v1.36.12
-	gopkg.in/ini.v1 v1.67.3
+	gopkg.in/ini.v1 v1.68.0
 	gopkg.in/yaml.v3 v3.0.1
 	software.sslmate.com/src/go-pkcs12 v0.7.4
 )
@@ -69,10 +69,10 @@ require (
 	go.opentelemetry.io/otel/sdk/metric v1.47.0 // indirect
 	go.opentelemetry.io/otel/trace v1.47.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	golang.org/x/net v0.61.0 // indirect
+	golang.org/x/net v0.62.0 // indirect
 	golang.org/x/oauth2 v0.37.0 // indirect
-	golang.org/x/sync v0.24.0 // indirect
-	golang.org/x/text v0.43.0 // indirect
+	golang.org/x/sync v0.25.0 // indirect
+	golang.org/x/text v0.44.0 // indirect
 	golang.org/x/time v0.16.0 // indirect
 	google.golang.org/genproto v0.0.0-20261019180522-ce908d29299b // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20261019180522-ce908d29299b // indirect
