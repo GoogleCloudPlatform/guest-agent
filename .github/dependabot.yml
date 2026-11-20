@@ -1,0 +1,18 @@
+version: 2
+updates:
+  - package-ecosystem: "gomod"
+    directories:
+      - "/"
+    schedule:
+      interval: "daily"
+    cooldown:
+      default-days: 7
+    groups:
+      go-version-updates:
+        applies-to: version-updates
+        patterns:
+          - "*"
+      go-security-updates:
+        applies-to: security-updates
+        patterns:
+          - "*"
