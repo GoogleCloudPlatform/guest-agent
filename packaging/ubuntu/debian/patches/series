@@ -1,0 +1,5 @@
+fix-startup-script-ordering.patch
+0003-order-startup-scripts-after-snap-seeding.service
+0004-order-shutdown-scripts-after-snapd.patch
+0005-make-service-directive-explicit.patch
+0006-add-after-cloud-config-service.patch

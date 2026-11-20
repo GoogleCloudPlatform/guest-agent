@@ -1,0 +1,27 @@
+Source: google-guest-agent
+Maintainer: Ubuntu Developers <ubuntu-devel-discuss@lists.ubuntu.com>
+Uploaders: Balint Reczey <rbalint@ubuntu.com>
+Section: devel
+Testsuite: autopkgtest-pkg-go
+Priority: optional
+Build-Depends: debhelper-compat (= 12),
+               dh-golang,
+               golang-any
+Standards-Version: 4.5.0
+Vcs-Browser: https://code.launchpad.net/~ubuntu-core-dev/+git/google-guest-agent
+Vcs-Git: https://git.launchpad.net/~ubuntu-core-dev/+git/google-guest-agent -b ubuntu/master
+Homepage: https://github.com/GoogleCloudPlatform/guest-agent
+Rules-Requires-Root: no
+XS-Go-Import-Path: github.com/GoogleCloudPlatform/guest-agent
+
+Package: google-guest-agent
+Architecture: any
+Depends: ${misc:Depends},
+         ${shlibs:Depends},
+         google-compute-engine-oslogin (>= 20231004.00-0ubuntu1)
+Built-Using: ${misc:Built-Using}
+Breaks: gce-compute-image-packages (<< 20191115),
+        python3-google-compute-engine
+Replaces: gce-compute-image-packages (<< 20191115)
+Description: Google Compute Engine Guest Agent
+ Contains the guest agent and metadata script runner binaries.

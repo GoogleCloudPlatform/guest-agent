@@ -1,0 +1,4 @@
+version=4
+opts="filenamemangle=s%(?:.*?)?v?(\d[\d.]*)\.tar\.gz%guest-agent-$1.tar.gz%,\
+      uversionmangle=s/(\d)[_\.\-\+]?(RC|rc|pre|dev|beta|alpha)[.]?(\d*)$/\$1~\$2\$3/" \
+  https://github.com/GoogleCloudPlatform/guest-agent/tags .*/([\d\.]+)\.tar\.gz debian
