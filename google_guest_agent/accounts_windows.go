@@ -229,3 +229,7 @@ func userExists(name string) (bool, error) {
 func getUIDAndGID(_ string) (string, string) {
 	return "", ""
 }
+
+func writeAuthorizedKeysFile(_ *passwdEntry, _ []string, _ string) (bool, error) {
+	return false, errors.New("writeAuthorizedKeysFile is not supported on windows")
+}

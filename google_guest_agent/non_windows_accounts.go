@@ -18,6 +18,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -426,12 +427,10 @@ func removeGoogleUser(ctx context.Context, config *cfg.Sections, user string) er
 		name, args := createUserGroupCmd(userdel, user, "")
 		return run.Quiet(ctx, name, args...)
 	}
-	if err := updateAuthorizedKeysFile(ctx, user, []string{}); err != nil {
-		return err
-	}
+	keysErr := updateAuthorizedKeysFile(ctx, user, []string{})
 	gpasswddel := config.Accounts.GPasswdRemoveCmd
 	name, args := createUserGroupCmd(gpasswddel, user, "google-sudoers")
-	return run.Quiet(ctx, name, args...)
+	return errors.Join(keysErr, run.Quiet(ctx, name, args...))
 }
 
 // createSudoersFile creates the google_sudoers configuration file if it does
@@ -476,10 +475,29 @@ func createSudoersGroup(ctx context.Context, config *cfg.Sections) error {
 	return nil
 }
 
-// updateAuthorizedKeysFile adds provided keys to the user's SSH
-// AuthorizedKeys file. The file and containing directory are created if it
-// does not exist. Uses a temporary file to avoid partial updates in case of
-// errors.
+func parseUserKeys(contents []byte, gcomment string) []string {
+	var isgoogle bool
+	var userKeys []string
+	for _, key := range strings.Split(string(contents), "\n") {
+		if key == "" {
+			continue
+		}
+		if isgoogle {
+			isgoogle = false
+			continue
+		}
+		if key == gcomment {
+			isgoogle = true
+			continue
+		}
+		userKeys = append(userKeys, key)
+	}
+	return userKeys
+}
+
+// updateAuthorizedKeysFile reconciles provided SSH keys into the user's
+// ~/.ssh/authorized_keys file using directory-pinned file descriptors and
+// atomic temporary-file replacement.
 func updateAuthorizedKeysFile(ctx context.Context, user string, keys []string) error {
 	gcomment := "# Added by Google"
 
@@ -495,70 +513,24 @@ func updateAuthorizedKeysFile(ctx context.Context, user string, keys []string) e
 		return nil
 	}
 
-	sshpath := path.Join(passwd.HomeDir, ".ssh")
-	if _, err := os.Stat(sshpath); err != nil {
-		if os.IsNotExist(err) {
-			if err = os.Mkdir(sshpath, 0700); err != nil {
-				return err
-			}
-			if err = os.Chown(sshpath, passwd.UID, passwd.GID); err != nil {
-				return err
-			}
-		} else {
-			return err
-		}
-	}
-	akpath := path.Join(sshpath, "authorized_keys")
-	tempPath := akpath + ".google"
-	akcontents, err := os.ReadFile(akpath)
-	if err != nil && !os.IsNotExist(err) {
-		return err
-	}
-
-	var isgoogle bool
-	var userKeys []string
-	for _, key := range strings.Split(string(akcontents), "\n") {
-		if key == "" {
-			continue
-		}
-		if isgoogle {
-			isgoogle = false
-			continue
-		}
-		if key == gcomment {
-			isgoogle = true
-			continue
-		}
-		userKeys = append(userKeys, key)
-	}
-
-	newfile, err := os.OpenFile(tempPath, os.O_WRONLY|os.O_CREATE, 0600)
+	updated, err := writeAuthorizedKeysFile(passwd, keys, gcomment)
 	if err != nil {
 		return err
 	}
-	defer newfile.Close()
-
-	for _, key := range userKeys {
-		fmt.Fprintf(newfile, "%s\n", key)
-	}
-	for _, key := range keys {
-		fmt.Fprintf(newfile, "%s\n%s\n", gcomment, key)
-	}
-	err = os.Chown(tempPath, passwd.UID, passwd.GID)
-	if err != nil {
-		// Existence of temp file will block further updates for this user.
-		// Don't catch remove error, nothing we can do. Return the
-		// chown error which caused the issue.
-		os.Remove(tempPath)
-		return fmt.Errorf("error setting ownership of new keys file: %v", err)
+	if !updated {
+		return nil
 	}
 
-	_, err = exec.LookPath("restorecon")
-	if err == nil {
-		if err := run.Quiet(ctx, "restorecon", tempPath); err != nil {
+	if _, err := exec.LookPath("restorecon"); err == nil {
+		sshpath := path.Join(passwd.HomeDir, ".ssh")
+		if err := run.Quiet(ctx, "restorecon", sshpath); err != nil {
+			return fmt.Errorf("error setting selinux context: %+v", err)
+		}
+		akpath := path.Join(sshpath, "authorized_keys")
+		if err := run.Quiet(ctx, "restorecon", akpath); err != nil {
 			return fmt.Errorf("error setting selinux context: %+v", err)
 		}
 	}
 
-	return os.Rename(tempPath, akpath)
+	return nil
 }
